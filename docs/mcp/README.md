@@ -56,7 +56,7 @@ claude mcp add --scope user openrevers -- "C:\Program Files\OpenRevers\bin\openr
 `--lang es` o `--lang en` fija el idioma de las descripciones; por defecto se
 usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 
-## Herramientas (versión 0.1)
+## Herramientas (versión 0.2)
 
 | Herramienta | Qué hace | Cambia el proyecto |
 | --- | --- | --- |
@@ -71,7 +71,9 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `mesh_smooth` | Suavizado laplaciano (implícito o explícito) | Sí |
 | `mesh_decimate` | Reduce triángulos con un error máximo | Sí |
 | `mesh_remesh` | Remallado uniforme o adaptativo que conserva las aristas vivas | Sí |
-| `mesh_export` | Escribe STL, OBJ o PLY (no sobrescribe sin `overwrite`) | No |
+| `mesh_remesh_quads` | Remallado en quads que siguen la forma y las aristas vivas (QuadriFlow); dice si sirve para T-Spline | Sí |
+| `mesh_export` | Escribe STL, OBJ o PLY (no sobrescribe sin `overwrite`); una malla de quads sale en quads en OBJ y PLY | No |
+| `mesh_export_tsm` | Escribe una malla de quads cerrada como T-Spline `.tsm` para Fusion | No |
 | `project_save` · `project_open` · `project_new` | Proyecto `.orvp` | — |
 | `body_list` · `body_rename` · `body_duplicate` · `body_delete` · `body_set_visible` | Cuerpos | — |
 | `history_undo` · `history_redo` | Deshacer y rehacer | — |

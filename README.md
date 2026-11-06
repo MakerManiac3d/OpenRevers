@@ -12,22 +12,23 @@ compatible con MCP) puede manejar paso a paso, delante de ti.
 
 ![La ventana de OpenRevers con un escaneo reparado](docs/images/ventana-es.png)
 
-> **Estado: versión 0.1, fase 1 de 5.** Hoy prepara mallas: análisis,
-> reparación, relleno de agujeros, suavizado, diezmado y remallado que conserva
-> las aristas vivas, con proyecto, deshacer y servidor MCP. Las primitivas, el
+> **Estado: versión 0.2, fase 1 de 5.** Hoy prepara mallas: análisis,
+> reparación, relleno de agujeros, suavizado, diezmado, remallado que conserva
+> las aristas vivas y remallado en quads con exportación T-Spline, con proyecto, deshacer y servidor MCP. Las primitivas, el
 > sólido paramétrico (STEP), las superficies libres y la inspección llegan en
 > las fases siguientes: consulta la [hoja de ruta](docs/hoja-de-ruta.md).
 
-## Qué hace (versión 0.1)
+## Qué hace (versión 0.2)
 
 | Área | Funciones |
 | --- | --- |
 | Archivos | Importar STL (binario y texto), OBJ y PLY (texto y binario); exportar STL, OBJ y PLY; proyecto `.orvp` con todos los cuerpos |
 | Análisis | Agujeros y su tamaño, bordes abiertos y no manifold, caras degeneradas, duplicadas e invertidas, piezas sueltas, área, volumen, longitud media de arista |
 | Reparación | Unir vértices, quitar caras defectuosas y piezas sueltas, orientar las caras hacia fuera, rellenar agujeros con un parche suave |
-| Procesado | Suavizado laplaciano, diezmado con error máximo, remallado uniforme o adaptativo conservando las aristas vivas |
+| Procesado | Suavizado laplaciano, diezmado con error máximo, remallado uniforme o adaptativo conservando las aristas vivas, remallado en quads |
+| Superficies | Exportar una malla de quads cerrada como T-Spline (`.tsm`) para Autodesk Fusion |
 | Trabajo | Deshacer y rehacer de cada operación, historial, registro, visor 3D con bordes abiertos marcados |
-| IA (MCP) | 24 herramientas, capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
+| IA (MCP) | 26 herramientas, capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
 | Idiomas | Español e inglés |
 
 ## Instalación
@@ -107,8 +108,9 @@ a native desktop program (C++ and Qt) that runs **entirely on your computer**,
 and that an AI agent (Claude or any MCP client) can drive step by step, in
 front of you.
 
-**Status: version 0.1, phase 1 of 5** — mesh preparation: analysis, repair,
-hole filling, smoothing, decimation and edge-preserving remeshing, with
+**Status: version 0.2, phase 1 of 5** — mesh preparation: analysis, repair,
+hole filling, smoothing, decimation, edge-preserving remeshing, and quad
+remeshing with T-Spline export, with
 projects, undo and an MCP server. Primitives, parametric solids (STEP),
 freeform surfaces and inspection follow ([roadmap](docs/hoja-de-ruta.md)).
 

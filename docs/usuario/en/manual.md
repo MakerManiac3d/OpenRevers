@@ -1,4 +1,4 @@
-# OpenRevers manual (version 0.1)
+# OpenRevers manual (version 0.2)
 
 OpenRevers prepares scanned meshes for reverse engineering. This version
 covers **phase 1**: open the scan, see what is wrong with it, repair it and
@@ -58,8 +58,19 @@ Z is up, as in most CAD programs.
      *featureAngle* (30° by default) stay sharp.
    - **Decimate** makes a lighter mesh, with *maxError* as the deviation
      limit.
+   - **Quad remesh** rebuilds the surface as quads that follow its shape and
+     sharp edges, for subdivision or T-Spline modelling. *targetFaces* is the
+     approximate number of quads. *View → Mesh edges* shows them. Any later
+     operation on the mesh (repair, smooth, remesh…) turns it back into
+     triangles.
 6. **Save or export.** *File → Save project* (`.orvp`, every body), or
-   *Export mesh* to STL, OBJ or PLY.
+   *Export mesh* to STL, OBJ or PLY. A quad mesh is written as quads in OBJ
+   and PLY.
+7. **Take it to Fusion as a T-Spline** (optional). With a **closed** quad
+   mesh, *File → Export T-Spline for Fusion (.tsm)*. In Fusion, open the file
+   as a Form body from a script (`TSplineBodies.addByTSMFile`). If the mesh is
+   open, fill its holes before quad remeshing: the program says what stops the
+   export.
 
 Try an operation on a copy first (*Body → Duplicate body*) and compare.
 
@@ -99,4 +110,5 @@ openrevers-cli mcp         # MCP server for an agent
 | "The file has no triangles" | The file is a point cloud or empty. Point-cloud reconstruction comes in a later version |
 | Holes are left open | They are larger than *maxEdges*: raise it, or use 0 for all |
 | Remeshing rounds an edge | Lower *featureAngle* so the edge counts as sharp |
+| "The quad mesh cannot be a T-Spline: it is open" | Fill the holes (maxEdges 0) and quad remesh again |
 | "AI agent: port … busy" | Another program uses the port; change it in *Settings → AI agent* |

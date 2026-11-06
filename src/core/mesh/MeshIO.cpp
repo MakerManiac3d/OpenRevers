@@ -65,6 +65,28 @@ void addFace(TriMesh& m, std::uint32_t a, std::uint32_t b, std::uint32_t c) {
     if (a != b && b != c && a != c) m.faces.push_back({a, b, c});
 }
 
+/// Collects the polygons of an OBJ or PLY file: triangulated as they come,
+/// and kept as quads too while every polygon is a quad.
+struct PolygonSink {
+    TriMesh& m;
+    std::vector<Quad> quads;
+    bool allQuads{true};
+    void add(const std::vector<long>& poly) {
+        bool quad = poly.size() == 4;
+        for (std::size_t a = 0; a < poly.size() && quad; ++a)
+            for (std::size_t b = a + 1; b < poly.size() && quad; ++b) quad = poly[a] != poly[b];
+        if (quad && allQuads)
+            quads.push_back({static_cast<std::uint32_t>(poly[0]), static_cast<std::uint32_t>(poly[1]),
+                             static_cast<std::uint32_t>(poly[2]), static_cast<std::uint32_t>(poly[3])});
+        else allQuads = false;
+        for (std::size_t i = 1; i + 1 < poly.size(); ++i)
+            addFace(m, static_cast<std::uint32_t>(poly[0]), static_cast<std::uint32_t>(poly[i]), static_cast<std::uint32_t>(poly[i + 1]));
+    }
+    void finish() {
+        if (allQuads && !quads.empty()) m.setQuads(std::move(quads));
+    }
+};
+
 // ---------------------------------------------------------------- STL -----
 bool looksBinaryStl(const std::string& d) {
     if (d.size() < 84) return false;
@@ -116,6 +138,7 @@ TriMesh readAsciiStl(const std::string& d) {
 // ---------------------------------------------------------------- OBJ -----
 TriMesh readObj(const std::string& d) {
     TriMesh m;
+    PolygonSink sink{m, {}, true};
     std::istringstream in(d);
     std::string line;
     std::vector<long> poly;
@@ -138,10 +161,10 @@ TriMesh readObj(const std::string& d) {
                 if (v < 0 || v >= n) throw IoError("OBJ face refers to a vertex that does not exist");
                 poly.push_back(v);
             }
-            for (std::size_t i = 1; i + 1 < poly.size(); ++i)
-                addFace(m, static_cast<std::uint32_t>(poly[0]), static_cast<std::uint32_t>(poly[i]), static_cast<std::uint32_t>(poly[i + 1]));
+            sink.add(poly);
         }
     }
+    sink.finish();
     return m;
 }
 
@@ -260,6 +283,7 @@ TriMesh readPly(const std::string& d) {
     PlyReader r(d, pos, binary, format == "binary_big_endian");
 
     TriMesh m;
+    PolygonSink sink{m, {}, true};
     for (const auto& e : elements) {
         if (e.name == "vertex") {
             int ix = -1, iy = -1, iz = -1;
@@ -294,8 +318,7 @@ TriMesh readPly(const std::string& d) {
                     if (p.name != "vertex_indices" && p.name != "vertex_index") continue;
                     for (long v : poly)
                         if (v < 0 || static_cast<std::size_t>(v) >= m.vertices.size()) throw IoError("PLY face refers to a vertex that does not exist");
-                    for (std::size_t j = 1; j + 1 < poly.size(); ++j)
-                        addFace(m, static_cast<std::uint32_t>(poly[0]), static_cast<std::uint32_t>(poly[j]), static_cast<std::uint32_t>(poly[j + 1]));
+                    sink.add(poly);
                 }
             }
         } else {
@@ -308,6 +331,7 @@ TriMesh readPly(const std::string& d) {
                 }
         }
     }
+    sink.finish();
     return m;
 }
 
@@ -348,21 +372,36 @@ void writeObj(const TriMesh& m, std::ofstream& out) {
     out << "# OpenRevers OBJ (mm)\n";
     out.precision(9);
     for (const auto& p : m.vertices) out << "v " << p.x() << ' ' << p.y() << ' ' << p.z() << '\n';
+    if (m.hasQuads()) {
+        for (const auto& q : m.quads) out << "f " << q[0] + 1 << ' ' << q[1] + 1 << ' ' << q[2] + 1 << ' ' << q[3] + 1 << '\n';
+        return;
+    }
     for (const auto& t : m.faces) out << "f " << t[0] + 1 << ' ' << t[1] + 1 << ' ' << t[2] + 1 << '\n';
 }
 
 void writePly(const TriMesh& m, std::ofstream& out, bool ascii) {
     out << "ply\nformat " << (ascii ? "ascii" : "binary_little_endian") << " 1.0\ncomment OpenRevers (mm)\n"
         << "element vertex " << m.vertices.size() << "\nproperty float x\nproperty float y\nproperty float z\n"
-        << "element face " << m.faces.size() << "\nproperty list uchar uint vertex_indices\nend_header\n";
+        << "element face " << (m.hasQuads() ? m.quads.size() : m.faces.size()) << "\nproperty list uchar uint vertex_indices\nend_header\n";
     if (ascii) {
         out.precision(9);
         for (const auto& p : m.vertices) out << p.x() << ' ' << p.y() << ' ' << p.z() << '\n';
-        for (const auto& t : m.faces) out << "3 " << t[0] << ' ' << t[1] << ' ' << t[2] << '\n';
+        if (m.hasQuads())
+            for (const auto& q : m.quads) out << "4 " << q[0] << ' ' << q[1] << ' ' << q[2] << ' ' << q[3] << '\n';
+        else
+            for (const auto& t : m.faces) out << "3 " << t[0] << ' ' << t[1] << ' ' << t[2] << '\n';
         return;
     }
     static_assert(std::endian::native == std::endian::little, "PLY writer assumes a little-endian machine");
     for (const auto& p : m.vertices) out.write(reinterpret_cast<const char*>(p.data()), 12);
+    if (m.hasQuads()) {
+        for (const auto& q : m.quads) {
+            const std::uint8_t four = 4;
+            out.write(reinterpret_cast<const char*>(&four), 1);
+            out.write(reinterpret_cast<const char*>(q.data()), 16);
+        }
+        return;
+    }
     for (const auto& t : m.faces) {
         const std::uint8_t three = 3;
         out.write(reinterpret_cast<const char*>(&three), 1);

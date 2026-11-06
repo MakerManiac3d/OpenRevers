@@ -14,6 +14,7 @@ namespace orv {
 using Vec3f = Eigen::Vector3f;
 using Vec3d = Eigen::Vector3d;
 using Tri = std::array<std::uint32_t, 3>;
+using Quad = std::array<std::uint32_t, 4>;
 
 /// Axis-aligned box. Empty until a point is added.
 struct Box3 {
@@ -28,9 +29,20 @@ struct Box3 {
 
 /// An indexed triangle mesh in millimetres: shared vertices, faces of three
 /// vertex indices, counter-clockwise seen from outside.
+///
+/// A quad mesh (from quad remeshing, or read from a file of quads) also keeps
+/// its `quads`; `faces` then holds their triangulation, two triangles per
+/// quad, so that everything that works on triangles works on it too. An
+/// operation that changes the triangles drops the quads (see dropQuads).
 struct TriMesh {
     std::vector<Vec3f> vertices;
     std::vector<Tri> faces;
+    std::vector<Quad> quads;
+
+    bool hasQuads() const { return !quads.empty(); }
+    /// Set the quads and rebuild `faces` from them.
+    void setQuads(std::vector<Quad> q);
+    void dropQuads() { quads.clear(); }
 
     std::size_t vertexCount() const { return vertices.size(); }
     std::size_t faceCount() const { return faces.size(); }

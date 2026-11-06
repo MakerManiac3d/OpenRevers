@@ -23,7 +23,7 @@ mismo deshacer.
 
 | Carpeta | Contenido | Depende de |
 | --- | --- | --- |
-| `src/core/mesh` | `TriMesh`, lectura y escritura, análisis, reparación y procesado | Eigen, PMP |
+| `src/core/mesh` | `TriMesh` (con quads opcionales), lectura y escritura, análisis, reparación, procesado, remallado en quads y T-Spline | Eigen, PMP, QuadriFlow |
 | `src/core/util` | Ajustes, carpeta de configuración, política de rutas del agente | nlohmann/json |
 | `src/doc` | `Document` (cuerpos, deshacer, rehacer) y el formato `.orvp` | core |
 | `src/commands` | Registro de comandos, validación de entradas, comandos del núcleo, guía | doc |

@@ -54,6 +54,7 @@ private:
 
     void importMesh();
     void exportMesh();
+    void exportTsm();
     void openProject();
     bool saveProject(bool saveAs);
     bool confirmDiscard();

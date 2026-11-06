@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // OpenRevers — cleaning and processing a scanned mesh. Every function changes
-// the mesh it is given and says, in its result, what it did.
+// the mesh it is given and says, in its result, what it did. They work on the
+// triangles: on a quad mesh, all but flipNormals leave the quads out of date,
+// and the caller drops them (TriMesh::dropQuads).
 #pragma once
 
 #include "core/mesh/TriMesh.h"
@@ -26,7 +28,7 @@ std::size_t removeSmallComponents(TriMesh& mesh, std::size_t minFaces, bool keep
 /// each closed piece outward. Returns the number of faces flipped.
 std::size_t orientConsistently(TriMesh& mesh);
 
-/// Reverse every face (normals point the other way).
+/// Reverse every face, and every quad (normals point the other way).
 void flipNormals(TriMesh& mesh);
 
 struct FillHolesResult {

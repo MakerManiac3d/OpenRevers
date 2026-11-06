@@ -48,6 +48,9 @@ target_include_directories(pmp SYSTEM INTERFACE $<BUILD_INTERFACE:${pmp_SOURCE_D
 set(LIBRARY_OUTPUT_PATH "")
 set(EXECUTABLE_OUTPUT_PATH "")
 
+# --- QuadriFlow (BSD-3) with LEMON (Boost licence): quad remeshing ------------
+include(QuadriFlow)
+
 # --- GoogleTest 1.14 (BSD-3): unit tests ------------------------------------
 if(ORV_BUILD_TESTS)
   find_package(GTest 1.14 QUIET)

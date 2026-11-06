@@ -15,7 +15,7 @@ void registerAppCommands(CommandRegistry& R, Viewport& vp) {
     R.add({"view.set", "view", {"Set view", "Cambiar vista"},
            {"Turn the view to a standard direction and fit the visible bodies.", "Gira la vista a una dirección estándar y encuadra los cuerpos visibles."},
            object({{"view", choice({"Direction", "Dirección"}, {"iso", "front", "back", "left", "right", "top", "bottom"}, "iso")},
-                   {"wireframe", boolean({"Show the triangles' edges", "Mostrar las aristas de los triángulos"}, false)},
+                   {"wireframe", boolean({"Show the mesh edges (the quads' on a quad mesh)", "Mostrar las aristas de la malla (las de los quads en una malla de quads)"}, false)},
                    {"openEdges", boolean({"Show open and non-manifold edges", "Mostrar bordes abiertos y no manifold"}, true)}}),
            false, true,
            [v](CommandContext&, const json& in) {

@@ -1,5 +1,22 @@
 # Cambios · Changelog
 
+## 0.2.0 — 6 de noviembre de 2026
+
+- **Remallado en quads** (*Malla → Remallado en quads*, `mesh.remesh_quads`)
+  con QuadriFlow: quads que siguen la forma y las aristas vivas, cerca del
+  número pedido. QuadriFlow se compila sin Boost y sin llamadas a otros
+  programas.
+- **Exportar T-Spline** (`.tsm`, formato TS0200) para Autodesk Fusion
+  (`mesh.export_tsm`), con comprobación de malla cerrada, manifold y sin
+  vértices de valencia 2, y orientación hacia fuera.
+- Las mallas guardan sus quads: OBJ y PLY los leen y escriben, el proyecto
+  pasa al formato 2 (lee los de formato 1) y el visor dibuja las aristas de
+  los quads.
+- `openrevers-cli` reserva la salida estándar para el protocolo MCP y el JSON
+  de `run`; lo que imprima una biblioteca va a la salida de errores.
+- El instalador incluye las licencias de los componentes compilados.
+- 26 herramientas MCP.
+
 ## 0.1.0 — 6 de noviembre de 2026
 
 Primera versión: la fase 1, preparación de mallas.

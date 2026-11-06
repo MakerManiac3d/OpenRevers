@@ -173,6 +173,7 @@ std::size_t orientConsistently(TriMesh& mesh) {
 
 void flipNormals(TriMesh& mesh) {
     for (Tri& t : mesh.faces) std::swap(t[1], t[2]);
+    for (Quad& q : mesh.quads) std::swap(q[1], q[3]);
 }
 
 FillHolesResult fillHoles(TriMesh& mesh, std::size_t maxEdges) {

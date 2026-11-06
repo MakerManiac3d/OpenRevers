@@ -3,6 +3,8 @@
 
 #include "core/mesh/EdgeMap.h"
 
+#include <unordered_set>
+
 #include <QMouseEvent>
 #include <QOpenGLContext>
 #include <QPainter>
@@ -172,6 +174,35 @@ void Viewport::upload(GpuMesh& g, const TriMesh& m) {
     g.vao.release();
     g.indexCount = static_cast<int>(m.faces.size() * 3);
     g.edgeVertexCount = -1;
+
+    g.wireIndexCount = 0;
+    if (m.hasQuads()) {
+        std::unordered_set<std::uint64_t> twin;  // directed edges b->a present
+        twin.reserve(m.quads.size() * 4);
+        for (const Quad& q : m.quads)
+            for (std::size_t k = 0; k < 4; ++k) twin.insert((std::uint64_t{q[(k + 1) % 4]} << 32) | q[k]);
+        std::vector<std::uint32_t> lines;
+        lines.reserve(m.quads.size() * 4);
+        for (const Quad& q : m.quads)
+            for (std::size_t k = 0; k < 4; ++k) {
+                // Each inner edge belongs to two quads; draw it from one side only
+                // (an open rim's edge, from its only quad).
+                const auto a = q[k], b = q[(k + 1) % 4];
+                if (a < b || !twin.count((std::uint64_t{a} << 32) | b)) { lines.push_back(a); lines.push_back(b); }
+            }
+        if (!g.wireVao.isCreated()) g.wireVao.create();
+        g.wireVao.bind();
+        g.vbo.bind();
+        if (!g.wireIbo.isCreated()) g.wireIbo.create();
+        g.wireIbo.bind();
+        g.wireIbo.allocate(lines.data(), static_cast<int>(lines.size() * sizeof(std::uint32_t)));
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, nullptr);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, reinterpret_cast<void*>(12));
+        g.wireVao.release();
+        g.wireIndexCount = static_cast<int>(lines.size());
+    }
 }
 
 void Viewport::uploadOpenEdges(GpuMesh& g, const TriMesh& m) {
@@ -367,11 +398,17 @@ void Viewport::paintGL() {
             lineProg_.setUniformValue("uTint", QVector4D(0.12f, 0.14f, 0.16f, 0.6f));
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            g.vao.bind();
-            glDrawElements(GL_TRIANGLES, g.indexCount, GL_UNSIGNED_INT, nullptr);
-            g.vao.release();
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            if (g.wireIndexCount > 0) {
+                g.wireVao.bind();
+                glDrawElements(GL_LINES, g.wireIndexCount, GL_UNSIGNED_INT, nullptr);
+                g.wireVao.release();
+            } else {
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                g.vao.bind();
+                glDrawElements(GL_TRIANGLES, g.indexCount, GL_UNSIGNED_INT, nullptr);
+                g.vao.release();
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            }
             glDisable(GL_BLEND);
         }
         if (openEdges_) {

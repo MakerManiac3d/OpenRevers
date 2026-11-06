@@ -48,10 +48,30 @@ double TriMesh::signedVolume() const {
     return v / 6.0;
 }
 
+void TriMesh::setQuads(std::vector<Quad> q) {
+    quads = std::move(q);
+    faces.clear();
+    faces.reserve(quads.size() * 2);
+    for (const Quad& x : quads) {
+        // Split along the shorter diagonal: the better-shaped pair of triangles.
+        const float d02 = (vertices[x[0]] - vertices[x[2]]).squaredNorm();
+        const float d13 = (vertices[x[1]] - vertices[x[3]]).squaredNorm();
+        if (d02 <= d13) {
+            faces.push_back({x[0], x[1], x[2]});
+            faces.push_back({x[0], x[2], x[3]});
+        } else {
+            faces.push_back({x[0], x[1], x[3]});
+            faces.push_back({x[1], x[2], x[3]});
+        }
+    }
+}
+
 std::size_t TriMesh::removeUnusedVertices() {
     std::vector<std::uint32_t> remap(vertices.size(), UINT32_MAX);
     for (const Tri& t : faces)
         for (auto i : t) remap[i] = 0;
+    for (const Quad& q : quads)
+        for (auto i : q) remap[i] = 0;
     std::uint32_t next = 0;
     std::vector<Vec3f> kept;
     kept.reserve(vertices.size());
@@ -63,6 +83,8 @@ std::size_t TriMesh::removeUnusedVertices() {
     const std::size_t removed = vertices.size() - kept.size();
     for (Tri& t : faces)
         for (auto& i : t) i = remap[i];
+    for (Quad& q : quads)
+        for (auto& i : q) i = remap[i];
     vertices = std::move(kept);
     return removed;
 }

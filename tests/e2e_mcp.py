@@ -169,6 +169,17 @@ def main() -> int:
         check(r["undone"] == "Remallar", "undo takes the remesh back")
         err, r, _ = agent.call("session_state")
         check(r["undo"] == ["Importar malla", "Reparar malla", "Rellenar agujeros"], "the history shows every step")
+        err, r, _ = agent.call("mesh_remesh_quads", {"body": "b1", "targetFaces": 1500})
+        check(not err and r["quads"] > 800 and r["tsmReady"] is False, f"quad remesh: {r.get('quads')} quads, open so not a T-Spline yet")
+        err, _, content = agent.call("mesh_export_tsm", {"body": "b1", "path": str(work / "part.tsm")})
+        check(err and "abierta" in content[0]["text"], "the T-Spline export explains why it cannot go on")
+        if a.picture:
+            agent.call("view_set", {"view": "iso", "wireframe": True})
+            err, r, content = agent.call("view_capture", {"width": 800, "height": 600})
+            images = [c for c in content if c.get("type") == "image"]
+            if images:
+                p = Path(a.picture)
+                p.with_name(p.stem + "-quads" + p.suffix).write_bytes(base64.b64decode(images[0]["data"]))
         agent.close()
     finally:
         app.terminate()

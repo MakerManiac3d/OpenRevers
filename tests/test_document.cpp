@@ -100,6 +100,33 @@ TEST(Commands, ImportRepairExportUndo) {
     EXPECT_TRUE(std::filesystem::exists(dir / "p.orvp"));
 }
 
+TEST(Commands, QuadRemeshToTSplineAndProject) {
+    const auto dir = tempDir("quads");
+    writeMesh(sphere(10, 4), dir / "ball.stl");
+    Fixture f;
+    f.run("mesh.import", {{"path", (dir / "ball.stl").string()}});
+    const json q = f.run("mesh.remesh_quads", {{"body", "b1"}, {"targetFaces", 500}});
+    EXPECT_GT(q["quads"].get<int>(), 300);
+    EXPECT_EQ(q["tsmReady"], true);
+    EXPECT_EQ(f.run("body.list")["bodies"][0]["quads"], q["quads"]);
+    const json t = f.run("mesh.export_tsm", {{"body", "b1"}, {"path", (dir / "ball.tsm").string()}});
+    EXPECT_EQ(t["faces"], q["quads"]);
+    EXPECT_THROW(f.run("mesh.export_tsm", {{"body", "b1"}, {"path", (dir / "ball.tsm").string()}}), CommandError);  // no overwrite
+
+    // The project keeps the quads (format 2).
+    f.run("project.save", {{"path", (dir / "q.orvp").string()}});
+    Document e;
+    loadProject(e, dir / "q.orvp");
+    EXPECT_EQ(e.bodies()[0].mesh->quads.size(), q["quads"].get<std::size_t>());
+
+    // A triangle operation drops the quads, and the T-Spline export says why it cannot go on.
+    f.run("mesh.smooth", {{"body", "b1"}});
+    EXPECT_EQ(f.run("body.list")["bodies"][0]["quads"], 0);
+    EXPECT_THROW(f.run("mesh.export_tsm", {{"body", "b1"}, {"path", (dir / "again.tsm").string()}}), CommandError);
+    f.run("history.undo");
+    EXPECT_EQ(f.run("body.list")["bodies"][0]["quads"], q["quads"]);
+}
+
 TEST(Commands, InputIsChecked) {
     Fixture f;
     try {

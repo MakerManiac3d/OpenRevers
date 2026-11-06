@@ -5,6 +5,7 @@
 #include "commands/Guide.h"
 #include "core/mesh/MeshAnalysis.h"
 #include "core/mesh/MeshIO.h"
+#include "core/mesh/MeshQuad.h"
 #include "core/mesh/MeshRepair.h"
 #include "core/util/Version.h"
 #include "doc/Project.h"
@@ -33,7 +34,7 @@ double round4(double v) { return std::round(v * 1e4) / 1e4; }
 
 json bodyJson(const Body& b) {
     return {{"ref", b.ref()}, {"name", b.name}, {"vertices", b.mesh->vertexCount()}, {"faces", b.mesh->faceCount()},
-            {"visible", b.visible}, {"bounds", boxJson(b.mesh->bounds())}, {"source", b.source}};
+            {"quads", b.mesh->quads.size()}, {"visible", b.visible}, {"bounds", boxJson(b.mesh->bounds())}, {"source", b.source}};
 }
 
 json reportJson(const MeshReport& r, std::size_t maxLoops = 20) {
@@ -61,10 +62,13 @@ json reportJson(const MeshReport& r, std::size_t maxLoops = 20) {
 }
 
 /// Run `op` on a copy of the body's mesh and put the result in its place.
+/// An operation on the triangles makes the quads out of date: they are
+/// dropped unless `keepQuads` (the operation keeps them right itself).
 template <class Op>
-std::shared_ptr<TriMesh> editMesh(CommandContext& ctx, const Body& b, Op&& op) {
+std::shared_ptr<TriMesh> editMesh(CommandContext& ctx, const Body& b, Op&& op, bool keepQuads = false) {
     auto m = std::make_shared<TriMesh>(*b.mesh);
     op(*m);
+    if (!keepQuads) m->dropQuads();
     if (m->faces.empty()) throw CommandError("failed", ctx.say("The operation left no triangles; nothing was changed.", "La operación no dejó ningún triángulo; no se ha cambiado nada."));
     ctx.doc.setMesh(b.id, m);
     return m;
@@ -76,6 +80,15 @@ json changeSummary(const Body& b, const TriMesh& before, const TriMesh& after, j
     extra["facesAfter"] = after.faceCount();
     extra["verticesAfter"] = after.vertexCount();
     return extra;
+}
+
+/// tsmProblem() in the user's language.
+std::string tsmProblemText(CommandContext& ctx, const std::string& p) {
+    if (p == "not a quad mesh") return ctx.say("it is not a quad mesh", "no es una malla de quads");
+    if (p == "open: the mesh has boundary edges") return ctx.say("it is open (it has boundary edges); close it before quad remeshing", "está abierta (tiene aristas de borde); ciérrala antes del remallado en quads");
+    if (p == "a vertex has only two edges") return ctx.say("a vertex has only two edges", "un vértice tiene solo dos aristas");
+    if (p == "non-manifold or inconsistently oriented edges") return ctx.say("it has non-manifold or inconsistently oriented edges", "tiene aristas no manifold o mal orientadas");
+    return p;
 }
 
 std::string extensionOf(const fs::path& p) {
@@ -279,7 +292,7 @@ void registerCoreCommands(CommandRegistry& R) {
            [](CommandContext& ctx, const json& in) {
                const Body b = ctx.doc.body(in["body"]);
                auto before = b.mesh;
-               auto after = editMesh(ctx, b, [&](TriMesh& m) { flipNormals(m); });
+               auto after = editMesh(ctx, b, [&](TriMesh& m) { flipNormals(m); }, true);
                json out = changeSummary(b, *before, *after, json::object());
                out["summary"] = ctx.say("Normals flipped.", "Normales invertidas.");
                return out;
@@ -367,6 +380,74 @@ void registerCoreCommands(CommandRegistry& R) {
                if (used > 0) out["edgeLength"] = round4(used);
                out["summary"] = ctx.say("Remeshed: " + std::to_string(after->faceCount()) + " triangles.", "Remallada: " + std::to_string(after->faceCount()) + " triángulos.");
                return out;
+           }});
+
+    R.add({"mesh.remesh_quads", "mesh", {"Quad remesh", "Remallado en quads"},
+           {"Rebuild the surface as quads that follow the part's shape and sharp edges (QuadriFlow). The result is ready for subdivision surfaces and T-Splines (see mesh.export_tsm). Decimate or remesh a very dense scan first: the time grows with its size.",
+            "Reconstruye la superficie con quads que siguen la forma de la pieza y sus aristas vivas (QuadriFlow). El resultado sirve para superficies de subdivisión y T-Splines (ver mesh.export_tsm). Diezma o remalla antes un escaneo muy denso: el tiempo crece con su tamaño."},
+           object({{"body", body(kBody)},
+                   {"targetFaces", integer({"Quads wanted (approximate)", "Quads deseados (aproximado)"}, 2000, 6, 2000000)},
+                   {"preserveSharp", boolean({"Follow sharp edges", "Seguir las aristas vivas"}, true)},
+                   {"preserveBoundary", boolean({"Follow open rims", "Seguir los bordes abiertos"}, true)},
+                   {"adaptive", boolean({"Smaller quads where the surface curves", "Quads más pequeños donde la superficie se curva"}, false)},
+                   {"minimumCostFlow", boolean({"Slower solver, sometimes cleaner", "Resolución más lenta, a veces más limpia"}, false)},
+                   {"seed", integer({"Random seed (same seed, same result)", "Semilla (misma semilla, mismo resultado)"}, 0, 0, 1000000)}},
+                  {"body"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = ctx.doc.body(in["body"]);
+               auto before = b.mesh;
+               QuadRemeshOptions o;
+               o.targetFaces = static_cast<std::size_t>(in["targetFaces"].get<long long>());
+               o.preserveSharp = in["preserveSharp"].get<bool>();
+               o.preserveBoundary = in["preserveBoundary"].get<bool>();
+               o.adaptive = in["adaptive"].get<bool>();
+               o.minimumCostFlow = in["minimumCostFlow"].get<bool>();
+               o.seed = static_cast<int>(in["seed"].get<long long>());
+               QuadRemeshResult r;
+               const auto t0 = std::chrono::steady_clock::now();
+               auto after = editMesh(ctx, b, [&](TriMesh& m) {
+                   try {
+                       r = remeshQuads(m, o);
+                   } catch (const std::runtime_error& e) {
+                       if (std::string(e.what()) == "non-manifold edges")
+                           throw CommandError("failed", ctx.say("The mesh has non-manifold edges; repair it first (mesh.repair).",
+                                                                "La malla tiene aristas no manifold; repárala antes (mesh.repair)."));
+                       throw CommandError("failed", ctx.say("Quad remeshing gave no result for this mesh (" + std::string(e.what()) + ").",
+                                                            "El remallado en quads no ha dado resultado con esta malla (" + std::string(e.what()) + ")."));
+                   }
+               }, true);
+               const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+               json out = changeSummary(b, *before, *after, {{"quads", r.quads}, {"droppedDegenerate", r.droppedDegenerate}, {"seconds", round4(secs)}});
+               const std::string problem = tsmProblem(*after);
+               out["tsmReady"] = problem.empty();
+               if (!problem.empty()) out["tsmProblem"] = tsmProblemText(ctx, problem);
+               out["summary"] = ctx.say("Remeshed into " + std::to_string(r.quads) + " quads.", "Remallada en " + std::to_string(r.quads) + " quads.");
+               return out;
+           }});
+
+    R.add({"mesh.export_tsm", "file", {"Export T-Spline (.tsm)", "Exportar T-Spline (.tsm)"},
+           {"Write a quad body as an Autodesk Fusion T-Spline file (.tsm) to open as a Form body. The quad mesh must be closed, manifold and have no vertex with only two edges; it is turned outward if needed. Refuses to overwrite unless overwrite is true.",
+            "Escribe un cuerpo de quads como archivo T-Spline de Autodesk Fusion (.tsm) para abrirlo como cuerpo de Forma. La malla de quads debe ser cerrada, manifold y sin vértices de solo dos aristas; se orienta hacia fuera si hace falta. No sobrescribe salvo con overwrite."},
+           object({{"body", body(kBody)},
+                   {"path", path({"File to write", "Archivo a escribir"}, true, "T-Spline (*.tsm)")},
+                   {"overwrite", boolean({"Replace the file if it exists", "Reemplazar el archivo si existe"}, false)}},
+                  {"body", "path"}),
+           false, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = ctx.doc.body(in["body"]);
+               const fs::path p = ctx.paths.check(in["path"].get<std::string>(), true);
+               if (fs::exists(p) && !in["overwrite"].get<bool>())
+                   throw CommandError("refused", ctx.say(p.string() + " already exists; pass overwrite: true to replace it.", p.string() + " ya existe; usa overwrite: true para reemplazarlo."));
+               if (!b.mesh->hasQuads())
+                   throw CommandError("failed", ctx.say("This body has no quads; run mesh.remesh_quads first.", "Este cuerpo no tiene quads; usa antes mesh.remesh_quads."));
+               if (const std::string problem = tsmProblem(*b.mesh); !problem.empty())
+                   throw CommandError("failed", ctx.say("The quad mesh cannot be a T-Spline: " + tsmProblemText(ctx, problem) + ".", "La malla de quads no puede ser un T-Spline: " + tsmProblemText(ctx, problem) + "."));
+               const TsmResult r = writeTsm(*b.mesh, p);
+               return json{{"path", p.string()}, {"faces", r.faces}, {"edges", r.edges}, {"vertices", r.vertices}, {"flipped", r.flipped},
+                           {"bytes", fs::file_size(p)},
+                           {"summary", ctx.say("Wrote " + p.filename().string() + ": " + std::to_string(r.faces) + " T-Spline faces.",
+                                               "Escrito " + p.filename().string() + ": " + std::to_string(r.faces) + " caras T-Spline.")}};
            }});
 
     // ----------------------------------------------------------- bodies --

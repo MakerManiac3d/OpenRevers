@@ -10,8 +10,14 @@ licence; all are GPL-3.0 compatible.*
 | [PMP Library](https://www.pmp-library.org) | 3.0.0 | MIT | Relleno de agujeros, suavizado, diezmado, remallado | Compilado de su código fuente |
 | [Eigen](https://eigen.tuxfamily.org) | 3.4 | MPL-2.0 | Álgebra lineal, vectores | Solo cabeceras |
 | [nlohmann/json](https://github.com/nlohmann/json) | 3.11 | MIT | Comandos, proyecto, MCP | Solo cabeceras |
+| [QuadriFlow](https://github.com/hjwdzh/QuadriFlow) | commit `810b7a0` | BSD-3-Clause | Remallado en quads | Compilado de su código fuente, con los cambios de `cmake/PatchQuadriFlow.cmake` (sin Boost, sin llamadas a otros programas) |
+| [LEMON](https://lemon.cs.elte.hu) | 1.3.1 (incluido en QuadriFlow) | Boost Software License 1.0 | Grafos y flujos para QuadriFlow | Solo cabeceras |
+| [PCG32](https://www.pcg-random.org) (incluido en QuadriFlow) | — | Apache-2.0 | Números aleatorios de QuadriFlow | Solo cabeceras |
 | [GoogleTest](https://github.com/google/googletest) | 1.14 | BSD-3-Clause | Tests (no se distribuye) | Solo para compilar los tests |
 | Runtime de Microsoft Visual C++ | el de la compilación | Licencia redistribuible de Microsoft | Ejecución en Windows | Copiado junto al ejecutable |
+
+El instalador copia los textos de licencia de los componentes compilados en
+`share/doc/openrevers/licenses`.
 
 Las referencias bibliográficas de los algoritmos están en
 [docs/algoritmos](docs/algoritmos/mallas.md).
@@ -27,7 +33,6 @@ Las referencias bibliográficas de los algoritmos están en
 | [libigl](https://libigl.github.io) | MPL-2.0 | Curvatura, parametrización |
 | [Manifold](https://github.com/elalish/manifold) | Apache-2.0 | Booleanas de malla |
 | [Open3D](https://www.open3d.org) | MIT | Registro ICP, nubes de puntos |
-| [QuadriFlow](https://github.com/hjwdzh/QuadriFlow) | BSD-3-Clause | Remallado en quads |
 | [Instant Meshes](https://github.com/wjakob/instant-meshes) | BSD-3-Clause | Remallado en quads alineado con la curvatura |
 | [nanoflann](https://github.com/jlblancoc/nanoflann) | BSD-2-Clause | Búsqueda de vecinos |
 

@@ -5,7 +5,7 @@ namespace orv {
 
 namespace {
 
-const char* kWorkflowEn = R"(## Workflow (version 0.1: mesh preparation)
+const char* kWorkflowEn = R"(## Workflow (version 0.2: mesh preparation)
 1. `session_state` — what is open. Never discard someone's unsaved work: save it first.
 2. `mesh_import` with the full path of the scan. Units are millimetres.
 3. `mesh_analyze` — read holes, pieces, non-manifold edges, flipped faces and the mean edge length before changing anything. Tell the person what you found.
@@ -13,10 +13,11 @@ const char* kWorkflowEn = R"(## Workflow (version 0.1: mesh preparation)
 5. `mesh_fill_holes` with `maxEdges` a little above the size of the holes you mean to close; the scan's outer rim is usually the longest loop: leave it open unless the part is closed.
 6. Optional: `mesh_smooth` (little: it rounds sharp edges), `mesh_remesh` (even triangles, needed later for surfacing), `mesh_decimate` (lighter mesh for CAD) with `maxError` to stay close to the scan.
 7. `view_capture` (desktop app) to look at the result; `mesh_export` or `project_save` to hand it over.
+8. For a freeform part going to Fusion as a T-Spline: close every hole (`mesh_fill_holes` with `maxEdges` 0), bring a dense scan down to a few hundred thousand triangles (`mesh_decimate` or `mesh_remesh`), then `mesh_remesh_quads` (a few thousand quads is usual for a skin) and `mesh_export_tsm`. Its answer says `tsmReady` and, if not, why. A later triangle operation drops the quads.
 Every changing step is one undo step: `history_undo` takes it back. Report numbers, not impressions.
 )";
 
-const char* kWorkflowEs = R"(## Flujo de trabajo (versión 0.1: preparación de mallas)
+const char* kWorkflowEs = R"(## Flujo de trabajo (versión 0.2: preparación de mallas)
 1. `session_state`: qué hay abierto. Nunca descartes trabajo sin guardar de otra persona: guárdalo antes.
 2. `mesh_import` con la ruta completa del escaneo. Las unidades son milímetros.
 3. `mesh_analyze`: lee agujeros, piezas, aristas no manifold, caras invertidas y la longitud media de arista antes de cambiar nada. Cuéntale a la persona lo que has encontrado.
@@ -24,6 +25,7 @@ const char* kWorkflowEs = R"(## Flujo de trabajo (versión 0.1: preparación de 
 5. `mesh_fill_holes` con `maxEdges` algo mayor que el tamaño de los agujeros que quieres cerrar; el borde exterior del escaneo suele ser el lazo más largo: déjalo abierto salvo que la pieza sea cerrada.
 6. Opcional: `mesh_smooth` (poco: redondea aristas vivas), `mesh_remesh` (triángulos regulares, necesarios después para superficies), `mesh_decimate` (malla más ligera para CAD) con `maxError` para no alejarse del escaneo.
 7. `view_capture` (aplicación de escritorio) para ver el resultado; `mesh_export` o `project_save` para entregarlo.
+8. Para una pieza de forma libre que irá a Fusion como T-Spline: cierra todos los agujeros (`mesh_fill_holes` con `maxEdges` 0), baja un escaneo denso a unos cientos de miles de triángulos (`mesh_decimate` o `mesh_remesh`), después `mesh_remesh_quads` (unos miles de quads suelen bastar para una piel) y `mesh_export_tsm`. La respuesta dice `tsmReady` y, si no, por qué. Una operación posterior sobre los triángulos quita los quads.
 Cada paso que cambia algo es un paso de deshacer: `history_undo` lo revierte. Da números, no impresiones.
 )";
 

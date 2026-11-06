@@ -65,6 +65,10 @@ private:
         QOpenGLBuffer vbo{QOpenGLBuffer::VertexBuffer};
         QOpenGLBuffer ibo{QOpenGLBuffer::IndexBuffer};
         int indexCount{0};
+        // A quad mesh draws its wireframe as the quads' edges, not the triangles'.
+        QOpenGLVertexArrayObject wireVao;
+        QOpenGLBuffer wireIbo{QOpenGLBuffer::IndexBuffer};
+        int wireIndexCount{0};
         QOpenGLVertexArrayObject edgeVao;
         QOpenGLBuffer edgeVbo{QOpenGLBuffer::VertexBuffer};
         int edgeVertexCount{-1};  // -1: not computed yet

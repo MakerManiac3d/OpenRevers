@@ -18,6 +18,21 @@ endif()
 install(FILES LICENSE README.md THIRD_PARTY.md DESTINATION share/doc/openrevers)
 install(DIRECTORY docs/ DESTINATION share/doc/openrevers/docs)
 
+# The licences of the libraries built into the executables, as their terms ask.
+set(_lic share/doc/openrevers/licenses)
+install(FILES ${pmp_SOURCE_DIR}/LICENSE.txt DESTINATION ${_lic} RENAME PMP-LICENSE.txt)
+install(FILES ${quadriflow_SOURCE_DIR}/LICENSE.txt DESTINATION ${_lic} RENAME QuadriFlow-LICENSE.txt)
+install(FILES ${quadriflow_SOURCE_DIR}/3rd/lemon-1.3.1/LICENSE DESTINATION ${_lic} RENAME LEMON-LICENSE.txt)
+install(FILES ${quadriflow_SOURCE_DIR}/3rd/pcg32/pcg32/pcg32.h DESTINATION ${_lic} RENAME pcg32-NOTICE.h)
+foreach(_f IN ITEMS "${eigen_SOURCE_DIR}/COPYING.MPL2" "${json_SOURCE_DIR}/LICENSE.MIT")
+  if(EXISTS "${_f}")
+    get_filename_component(_n "${_f}" NAME)
+    get_filename_component(_d "${_f}" DIRECTORY)
+    get_filename_component(_d "${_d}" NAME)
+    install(FILES "${_f}" DESTINATION ${_lic} RENAME "${_d}-${_n}.txt")
+  endif()
+endforeach()
+
 # The Microsoft C++ runtime beside the executables, so nothing else needs installing.
 set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION bin)
 include(InstallRequiredSystemLibraries)

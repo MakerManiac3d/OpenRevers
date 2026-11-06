@@ -1,4 +1,4 @@
-# Manual de OpenRevers (versión 0.1)
+# Manual de OpenRevers (versión 0.2)
 
 OpenRevers prepara mallas escaneadas para la ingeniería inversa. Esta versión
 cubre la **fase 1**: abrir el escaneo, ver qué le pasa, repararlo y dejarlo
@@ -61,8 +61,21 @@ El eje Z es el vertical, como en la mayoría de programas de CAD.
      aristas más vivas que *featureAngle* (30° por defecto) se conservan.
    - **Diezmar**: menos triángulos para una malla más ligera, con *maxError*
      como límite de desviación.
+   - **Remallado en quads**: reconstruye la superficie con quads que siguen
+     la forma y las aristas vivas, para modelar con superficies de
+     subdivisión o T-Splines. *targetFaces* es el número aproximado de quads.
+     Con *Ver → Aristas de la malla* se ven los quads. Cualquier operación
+     posterior sobre la malla (reparar, suavizar, remallar…) la devuelve a
+     triángulos.
 6. **Guardar o exportar.** *Archivo → Guardar proyecto* (`.orvp`, con todos
-   los cuerpos), o *Exportar malla* a STL, OBJ o PLY.
+   los cuerpos), o *Exportar malla* a STL, OBJ o PLY. Una malla de quads sale
+   en quads en OBJ y PLY.
+7. **Pasar a Fusion como T-Spline** (opcional). Con una malla de quads
+   **cerrada**, *Archivo → Exportar T-Spline para Fusion (.tsm)*. En Fusion, el
+   archivo se abre como cuerpo de Forma desde un script
+   (`TSplineBodies.addByTSMFile`). Si la malla está abierta, rellena los
+   agujeros antes del remallado en quads: el programa te dice qué impide la
+   exportación.
 
 Prueba una operación sobre una copia con *Cuerpo → Duplicar cuerpo*, y compara.
 
@@ -104,4 +117,5 @@ openrevers-cli mcp         # servidor MCP para un agente
 | «The file has no triangles» | El archivo es una nube de puntos o está vacío. La reconstrucción de nubes llega en una versión próxima |
 | El relleno deja agujeros abiertos | Son más grandes que *maxEdges*; súbelo, o pon 0 para rellenarlos todos |
 | El remallado redondea una arista | Baja *featureAngle* para que esa arista cuente como viva |
+| «La malla de quads no puede ser un T-Spline: está abierta» | Rellena los agujeros (maxEdges 0) y repite el remallado en quads |
 | «AI agent: port … busy» | Otro programa usa el puerto; cámbialo en *Ajustes → Agente IA* |

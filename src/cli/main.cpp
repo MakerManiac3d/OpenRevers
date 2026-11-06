@@ -19,9 +19,41 @@
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
+#else
+#include <unistd.h>
 #endif
 
 using namespace orv;
+
+namespace {
+
+/// Keep standard output for our own replies. Some libraries (QuadriFlow)
+/// print progress with printf; on stdout that would break the MCP stream or
+/// the JSON of `run`. The real stdout gets a private handle, and the process'
+/// stdout is pointed at stderr, where the progress is harmless.
+FILE* reserveStdout() {
+    std::fflush(stdout);
+#ifdef _WIN32
+    const int fd = _dup(_fileno(stdout));
+    if (fd < 0) return stdout;
+    _dup2(_fileno(stderr), _fileno(stdout));
+    FILE* f = _fdopen(fd, "wb");
+#else
+    const int fd = dup(fileno(stdout));
+    if (fd < 0) return stdout;
+    dup2(fileno(stderr), fileno(stdout));
+    FILE* f = fdopen(fd, "w");
+#endif
+    return f ? f : stdout;
+}
+
+void emit(FILE* out, const std::string& text) {
+    std::fwrite(text.data(), 1, text.size(), out);
+    std::fputc('\n', out);
+    std::fflush(out);
+}
+
+}  // namespace
 
 namespace {
 
@@ -71,6 +103,7 @@ int runMcp(const std::vector<std::string>& args) {
     _setmode(_fileno(stdin), _O_BINARY);
     _setmode(_fileno(stdout), _O_BINARY);
 #endif
+    FILE* const out = reserveStdout();
     const AgentSettings settings = loadAgentSettings();
     CommandRegistry registry;
     registerCoreCommands(registry);
@@ -86,10 +119,7 @@ int runMcp(const std::vector<std::string>& args) {
     McpServer server(*backend, lang);
     std::string line;
     while (std::getline(std::cin, line)) {
-        if (auto reply = server.handleLine(line)) {
-            std::cout << *reply << '\n';
-            std::cout.flush();
-        }
+        if (auto reply = server.handleLine(line)) emit(out, *reply);
     }
     return 0;
 }
@@ -99,6 +129,7 @@ int runCommands(const std::vector<std::string>& args) {
     registerCoreCommands(registry);
     Document doc;
     CommandContext ctx{doc, PathPolicy::unrestricted(), systemLang(), "script", nullptr};
+    FILE* const out = reserveStdout();
     for (std::size_t i = 0; i < args.size(); ++i) {
         const std::string name = args[i];
         json params = json::object();
@@ -112,7 +143,7 @@ int runCommands(const std::vector<std::string>& args) {
         }
         try {
             const json r = registry.run(name, params, ctx);
-            std::cout << json{{"command", name}, {"result", r}}.dump(2) << '\n';
+            emit(out, json{{"command", name}, {"result", r}}.dump(2));
         } catch (const CommandError& e) {
             std::cerr << name << ": " << e.code() << ": " << e.what() << '\n';
             return 1;

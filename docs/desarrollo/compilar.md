@@ -9,7 +9,9 @@ Requisitos / Requirements:
 
 Las demás librerías (Eigen, nlohmann/json, PMP, GoogleTest) se usan del
 sistema si están instaladas; si no, CMake las descarga en una versión fija
-(`cmake/Dependencies.cmake`). / *Other libraries are taken from the system or
+(`cmake/Dependencies.cmake`). QuadriFlow siempre se descarga en una versión
+fija y se modifica al configurar (`cmake/QuadriFlow.cmake`); no hace falta
+Boost. / *Other libraries are taken from the system or
 fetched at a pinned version.*
 
 ## Windows

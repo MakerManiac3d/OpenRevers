@@ -1,11 +1,11 @@
-# Formato de proyecto `.orvp` (versión 1)
+# Formato de proyecto `.orvp` (versión 2)
 
 Un proyecto es un único archivo binario, en orden little endian:
 
 | Desplazamiento | Tamaño | Contenido |
 | --- | --- | --- |
 | 0 | 8 | `ORVPROJ\0` |
-| 8 | 4 | Versión del formato, `uint32` = 1 |
+| 8 | 4 | Versión del formato, `uint32` = 2 |
 | 12 | 8 | Longitud *N* del manifiesto, `uint64` |
 | 20 | *N* | Manifiesto JSON (UTF-8) |
 | 20 + *N* | … | Bloques de datos de las mallas |
@@ -15,14 +15,14 @@ Un proyecto es un único archivo binario, en orden little endian:
 ```json
 {
   "application": "OpenRevers",
-  "applicationVersion": "0.1.0",
+  "applicationVersion": "0.2.0",
   "units": "mm",
   "nextId": 3,
   "bodies": [
     {
       "id": 1, "name": "soporte", "kind": "mesh", "visible": true,
       "color": [0.62, 0.70, 0.78], "source": "C:/escaneos/soporte.stl",
-      "vertices": 120345, "faces": 240686, "offset": 0
+      "vertices": 120345, "faces": 240686, "quads": 0, "offset": 0
     }
   ]
 }
@@ -34,7 +34,15 @@ Cada malla empieza en su `offset`, contado desde el final del manifiesto:
 
 - `vertices × 3 × float32`: las coordenadas x, y, z en milímetros;
 - `faces × 3 × uint32`: los índices de vértice de cada triángulo, en sentido
-  antihorario visto desde fuera.
+  antihorario visto desde fuera;
+- `quads × 4 × uint32`: los quads de una malla de quads, en el mismo sentido.
+  Los triángulos son entonces su triangulación (dos por quad). `quads` es 0
+  en una malla de triángulos.
+
+| Versión | Cambio |
+| --- | --- |
+| 1 | Vértices y triángulos |
+| 2 | Añade `quads`. Un archivo de la versión 1 se lee igual, sin quads |
 
 ## Garantías
 
@@ -45,4 +53,4 @@ Cada malla empieza en su `offset`, contado desde el final del manifiesto:
   que ningún índice apunte a un vértice inexistente.
 - **Nada se ejecuta.** Un proyecto solo contiene datos.
 - **Compatibilidad.** Un formato más nuevo que el que conoce el programa se
-  rechaza con un mensaje claro. Las versiones futuras sabrán leer la 1.
+  rechaza con un mensaje claro. Cada versión lee las anteriores.

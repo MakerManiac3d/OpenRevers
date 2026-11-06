@@ -129,6 +129,7 @@ void MainWindow::buildActions() {
     fileMenu->addSeparator();
     add(fileMenu, tr("&Import mesh…"), &MainWindow::importMesh, QKeySequence(Qt::CTRL | Qt::Key_I), QStyle::SP_ArrowDown, true);
     add(fileMenu, tr("&Export mesh…"), &MainWindow::exportMesh, QKeySequence(Qt::CTRL | Qt::Key_E), QStyle::SP_ArrowUp, true);
+    add(fileMenu, tr("Export &T-Spline for Fusion (.tsm)…"), &MainWindow::exportTsm);
     fileMenu->addSeparator();
     add(fileMenu, tr("&Quit"), &QWidget::close, QKeySequence::Quit);
     tb->addSeparator();
@@ -139,7 +140,7 @@ void MainWindow::buildActions() {
     redo->setObjectName("redo");
     tb->addSeparator();
 
-    for (const char* name : {"mesh.analyze", "mesh.repair", "mesh.fill_holes", "mesh.remove_pieces", "mesh.flip_normals", "mesh.smooth", "mesh.decimate", "mesh.remesh"}) {
+    for (const char* name : {"mesh.analyze", "mesh.repair", "mesh.fill_holes", "mesh.remove_pieces", "mesh.flip_normals", "mesh.smooth", "mesh.decimate", "mesh.remesh", "mesh.remesh_quads"}) {
         const bool onTb = std::string(name) != "mesh.flip_normals" && std::string(name) != "mesh.remove_pieces";
         auto* a = add(meshMenu, cmdText(name), [this, name]() { runFromUi(name); }, {}, QStyle::SP_CustomBase, onTb);
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
@@ -161,7 +162,7 @@ void MainWindow::buildActions() {
         viewMenu->addAction(a);
         return a;
     };
-    toggle(tr("Triangle edges"), false, [this](bool on) { viewport_->setWireframe(on); });
+    toggle(tr("Mesh edges"), false, [this](bool on) { viewport_->setWireframe(on); });
     toggle(tr("Open edges"), true, [this](bool on) { viewport_->setOpenEdges(on); });
     toggle(tr("Flat shading"), false, [this](bool on) { viewport_->setFlatShading(on); });
     viewMenu->addSeparator();
@@ -273,6 +274,7 @@ void MainWindow::refreshProperties() {
     row(tr("Reference"), QString::fromStdString(b->ref()));
     row(tr("Triangles"), loc.toString(static_cast<qlonglong>(b->mesh->faceCount())));
     row(tr("Vertices"), loc.toString(static_cast<qlonglong>(b->mesh->vertexCount())));
+    if (b->mesh->hasQuads()) row(tr("Quads"), loc.toString(static_cast<qlonglong>(b->mesh->quads.size())));
     row(tr("Size X × Y × Z (mm)"), mm(bb.size().x()) + " × " + mm(bb.size().y()) + " × " + mm(bb.size().z()));
     row(tr("Minimum (mm)"), mm(bb.min.x()) + ", " + mm(bb.min.y()) + ", " + mm(bb.min.z()));
     row(tr("Maximum (mm)"), mm(bb.max.x()) + ", " + mm(bb.max.y()) + ", " + mm(bb.max.z()));
@@ -384,6 +386,18 @@ void MainWindow::exportMesh() {
     s.setValue("dirs/export", QFileInfo(f).absolutePath());
     // The file dialog has already asked about replacing an existing file.
     run("mesh.export", {{"body", selectedRef().toStdString()}, {"path", f.toStdString()}, {"overwrite", true}});
+}
+
+void MainWindow::exportTsm() {
+    if (selectedRef().isEmpty()) {
+        QMessageBox::information(this, tr("OpenRevers"), tr("Select a body to export."));
+        return;
+    }
+    QSettings s;
+    const QString f = QFileDialog::getSaveFileName(this, tr("Export T-Spline"), s.value("dirs/export").toString(), tr("T-Spline (*.tsm)"));
+    if (f.isEmpty()) return;
+    s.setValue("dirs/export", QFileInfo(f).absolutePath());
+    run("mesh.export_tsm", {{"body", selectedRef().toStdString()}, {"path", f.toStdString()}, {"overwrite", true}});
 }
 
 void MainWindow::openProject() {

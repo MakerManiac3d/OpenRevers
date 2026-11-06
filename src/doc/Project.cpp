@@ -16,7 +16,8 @@ using nlohmann::json;
 
 namespace {
 constexpr char kMagic[8] = {'O', 'R', 'V', 'P', 'R', 'O', 'J', '\0'};
-constexpr std::uint32_t kVersion = 1;
+// 1: vertices and triangles. 2: adds the quads of a quad mesh ("quads", may be 0).
+constexpr std::uint32_t kVersion = 2;
 static_assert(std::endian::native == std::endian::little, "project files are little endian");
 }  // namespace
 
@@ -38,8 +39,9 @@ void saveProject(const Document& doc, const fs::path& path) {
         jb["kind"] = "mesh";
         jb["vertices"] = b.mesh->vertices.size();
         jb["faces"] = b.mesh->faces.size();
+        jb["quads"] = b.mesh->quads.size();
         jb["offset"] = offset;
-        offset += b.mesh->vertices.size() * 12 + b.mesh->faces.size() * 12;
+        offset += b.mesh->vertices.size() * 12 + b.mesh->faces.size() * 12 + b.mesh->quads.size() * 16;
         manifest["bodies"].push_back(jb);
     }
     if (!manifest.contains("bodies")) manifest["bodies"] = json::array();
@@ -58,6 +60,7 @@ void saveProject(const Document& doc, const fs::path& path) {
         for (const auto& b : bodies) {
             out.write(reinterpret_cast<const char*>(b.mesh->vertices.data()), static_cast<std::streamsize>(b.mesh->vertices.size() * 12));
             out.write(reinterpret_cast<const char*>(b.mesh->faces.data()), static_cast<std::streamsize>(b.mesh->faces.size() * 12));
+            out.write(reinterpret_cast<const char*>(b.mesh->quads.data()), static_cast<std::streamsize>(b.mesh->quads.size() * 16));
         }
         if (!out) throw IoError("Failed while writing " + path.string());
     }
@@ -105,17 +108,23 @@ void loadProject(Document& doc, const fs::path& path) {
         b.source = jb.value("source", "");
         const auto nv = jb.at("vertices").get<std::uint64_t>();
         const auto nf = jb.at("faces").get<std::uint64_t>();
+        const auto nq = jb.value("quads", std::uint64_t{0});
         const auto off = jb.at("offset").get<std::uint64_t>();
-        if (dataStart + off + nv * 12 + nf * 12 > fileSize) throw IoError(path.filename().string() + ": body \"" + b.name + "\" is truncated");
+        if (nv > fileSize || nf > fileSize || nq > fileSize || dataStart + off + nv * 12 + nf * 12 + nq * 16 > fileSize) throw IoError(path.filename().string() + ": body \"" + b.name + "\" is truncated");
         auto mesh = std::make_shared<TriMesh>();
         mesh->vertices.resize(nv);
         mesh->faces.resize(nf);
         in.seekg(static_cast<std::streamoff>(dataStart + off));
         in.read(reinterpret_cast<char*>(mesh->vertices.data()), static_cast<std::streamsize>(nv * 12));
         in.read(reinterpret_cast<char*>(mesh->faces.data()), static_cast<std::streamsize>(nf * 12));
+        mesh->quads.resize(nq);
+        in.read(reinterpret_cast<char*>(mesh->quads.data()), static_cast<std::streamsize>(nq * 16));
+        bool bad = false;
         for (const auto& t : mesh->faces)
-            for (auto v : t)
-                if (v >= nv) throw IoError(path.filename().string() + ": body \"" + b.name + "\" refers to a vertex that does not exist");
+            for (auto v : t) bad |= v >= nv;
+        for (const auto& q : mesh->quads)
+            for (auto v : q) bad |= v >= nv;
+        if (bad) throw IoError(path.filename().string() + ": body \"" + b.name + "\" refers to a vertex that does not exist");
         b.mesh = std::move(mesh);
         bodies.push_back(std::move(b));
     }
