@@ -6,7 +6,7 @@ project(OpenRevers
   VERSION 0.2.0
   DESCRIPTION "Reverse engineering of scanned meshes into parametric solids"
   HOMEPAGE_URL "https://github.com/MakerManiac3d/OpenRevers"
-  LANGUAGES CXX)
+  LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

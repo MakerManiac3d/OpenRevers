@@ -14,6 +14,8 @@
   los quads.
 - `openrevers-cli` reserva la salida estándar para el protocolo MCP y el JSON
   de `run`; lo que imprima una biblioteca va a la salida de errores.
+- **3MF**: importar (unidad del archivo, transformaciones, componentes,
+  varios objetos) y exportar.
 - El instalador incluye las licencias de los componentes compilados.
 - 26 herramientas MCP.
 

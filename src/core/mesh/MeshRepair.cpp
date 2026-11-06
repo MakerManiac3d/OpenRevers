@@ -61,36 +61,48 @@ std::size_t removeDuplicateFaces(TriMesh& mesh) {
 
 std::size_t weldVertices(TriMesh& mesh, float tolerance) {
     if (tolerance <= 0.f || mesh.vertices.empty()) return 0;
-    // Grid hashing: a vertex merges into the first earlier vertex within tolerance
-    // in its own or a neighbouring cell.
-    const float inv = 1.f / tolerance;
+    // Grid hashing with cells twice the tolerance: a vertex can only be within
+    // tolerance of vertices in its own cell or in the 7 neighbours on the sides
+    // it is closest to. It merges into the earliest such kept vertex.
+    const double inv = 0.5 / static_cast<double>(tolerance);
     struct CellHash {
         std::size_t operator()(const std::array<long long, 3>& c) const noexcept {
             return static_cast<std::size_t>(c[0] * 73856093ll ^ c[1] * 19349663ll ^ c[2] * 83492791ll);
         }
     };
-    std::unordered_map<std::array<long long, 3>, std::vector<std::uint32_t>, CellHash> grid;
-    grid.reserve(mesh.vertices.size());
+    // Each cell holds a chain of kept vertices: head[cell] -> next[] -> ...
+    std::unordered_map<std::array<long long, 3>, std::uint32_t, CellHash> head;
+    head.reserve(mesh.vertices.size());
+    std::vector<std::uint32_t> next;
+    next.reserve(mesh.vertices.size());
     std::vector<std::uint32_t> remap(mesh.vertices.size());
     std::vector<Vec3f> kept;
     kept.reserve(mesh.vertices.size());
     const float tol2 = tolerance * tolerance;
     for (std::size_t i = 0; i < mesh.vertices.size(); ++i) {
         const Vec3f& p = mesh.vertices[i];
-        const std::array<long long, 3> c{std::llround(std::floor(p.x() * inv)), std::llround(std::floor(p.y() * inv)), std::llround(std::floor(p.z() * inv))};
+        std::array<long long, 3> c{};
+        std::array<long long, 3> side{};
+        for (int k = 0; k < 3; ++k) {
+            const double g = static_cast<double>(p[k]) * inv;
+            const double fl = std::floor(g);
+            c[static_cast<std::size_t>(k)] = static_cast<long long>(fl);
+            side[static_cast<std::size_t>(k)] = g - fl < 0.5 ? -1 : 1;
+        }
         std::uint32_t found = UINT32_MAX;
-        for (long long dx = -1; dx <= 1 && found == UINT32_MAX; ++dx)
-            for (long long dy = -1; dy <= 1 && found == UINT32_MAX; ++dy)
-                for (long long dz = -1; dz <= 1 && found == UINT32_MAX; ++dz) {
-                    auto it = grid.find({c[0] + dx, c[1] + dy, c[2] + dz});
-                    if (it == grid.end()) continue;
-                    for (std::uint32_t j : it->second)
-                        if ((kept[j] - p).squaredNorm() <= tol2) { found = j; break; }
-                }
+        for (int m = 0; m < 8; ++m) {
+            const std::array<long long, 3> n{c[0] + (m & 1 ? side[0] : 0), c[1] + (m & 2 ? side[1] : 0), c[2] + (m & 4 ? side[2] : 0)};
+            auto it = head.find(n);
+            if (it == head.end()) continue;
+            for (std::uint32_t j = it->second; j != UINT32_MAX; j = next[j])
+                if (j < found && (kept[j] - p).squaredNorm() <= tol2) found = j;
+        }
         if (found == UINT32_MAX) {
             found = static_cast<std::uint32_t>(kept.size());
             kept.push_back(p);
-            grid[c].push_back(found);
+            auto [it, isNew] = head.try_emplace(c, found);
+            next.push_back(isNew ? UINT32_MAX : it->second);
+            it->second = found;
         }
         remap[i] = found;
     }
@@ -142,15 +154,17 @@ std::size_t orientConsistently(TriMesh& mesh) {
             const std::uint32_t f = stack.back();
             stack.pop_back();
             piece.push_back(f);
-            const Tri t = mesh.faces[f];
-            for (int k = 0; k < 3; ++k) {
-                const std::uint32_t a = t[k], b = t[(k + 1) % 3];
-                const auto fs = em.facesOf(a, b);
+            for (std::size_t k = 0; k < 3; ++k) {
+                const std::uint32_t id = em.edgeOf(f, k);
+                if (id == EdgeMap::kNone) continue;
+                const auto& e = em.edge(id);
+                const auto fs = em.faces(e);
                 if (fs.size() != 2) continue;  // boundary or non-manifold: do not propagate across
                 const std::uint32_t g = fs[0] == f ? fs[1] : fs[0];
                 if (visited[g]) continue;
                 visited[g] = 1;
-                if (runs(mesh.faces[g], a, b)) {  // same direction as f: g is wound against f
+                // f may have been flipped already: compare the directions as they are now.
+                if (runs(mesh.faces[g], e.a, e.b) == runs(mesh.faces[f], e.a, e.b)) {  // g is wound against f
                     std::swap(mesh.faces[g][1], mesh.faces[g][2]);
                     ++flipped;
                 }
@@ -219,7 +233,7 @@ void smooth(TriMesh& mesh, bool implicitScheme, unsigned iterations, float times
 void decimate(TriMesh& mesh, const DecimateOptions& o) {
     pmp::SurfaceMesh pm = toPmp(mesh);
     const auto target = static_cast<unsigned>(std::max<std::size_t>(4, o.targetVertices));
-    pmp::decimate(pm, target, o.aspectRatio, 0.f, 0, o.normalDeviationDeg, o.maxError, 0.01f, 1.f);
+    pmp::decimate(pm, target, o.aspectRatio, 0.f, o.maxValence, o.normalDeviationDeg, o.maxError, 0.01f, 1.f);
     mesh = fromPmp(pm);
 }
 

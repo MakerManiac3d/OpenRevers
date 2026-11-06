@@ -48,6 +48,25 @@ target_include_directories(pmp SYSTEM INTERFACE $<BUILD_INTERFACE:${pmp_SOURCE_D
 set(LIBRARY_OUTPUT_PATH "")
 set(EXECUTABLE_OUTPUT_PATH "")
 
+# --- miniz 3.0.2 (MIT): ZIP for 3MF packages ---------------------------------
+FetchContent_Declare(miniz
+  URL https://github.com/richgel999/miniz/releases/download/3.0.2/miniz-3.0.2.zip
+  URL_HASH SHA256=ada38db0b703a56d3dd6d57bf84a9c5d664921d870d8fea4db153979fb5332c5
+  DOWNLOAD_EXTRACT_TIMESTAMP ON
+  SOURCE_SUBDIR _not_a_cmake_project_here)
+FetchContent_MakeAvailable(miniz)
+add_library(orv_miniz STATIC ${miniz_SOURCE_DIR}/miniz.c)
+target_include_directories(orv_miniz SYSTEM PUBLIC ${miniz_SOURCE_DIR})
+# Only memory archives are used: no file or time functions.
+target_compile_definitions(orv_miniz PUBLIC MINIZ_NO_STDIO MINIZ_NO_TIME)
+set_target_properties(orv_miniz PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+  target_compile_options(orv_miniz PRIVATE /W0)
+  target_compile_definitions(orv_miniz PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+  target_compile_options(orv_miniz PRIVATE -w)
+endif()
+
 # --- QuadriFlow (BSD-3) with LEMON (Boost licence): quad remeshing ------------
 include(QuadriFlow)
 

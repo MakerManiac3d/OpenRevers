@@ -10,6 +10,7 @@ add_library(orv_core STATIC
   core/mesh/MeshRepair.cpp
   core/mesh/PmpBridge.cpp
   core/mesh/MeshQuad.cpp
+  core/mesh/ThreeMf.cpp
   core/util/Config.cpp
   doc/Document.cpp
   doc/Project.cpp
@@ -22,7 +23,7 @@ add_library(orv_core STATIC
 target_include_directories(orv_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(orv_core PUBLIC Eigen3::Eigen nlohmann_json::nlohmann_json PRIVATE pmp quadriflow)
+target_link_libraries(orv_core PUBLIC Eigen3::Eigen nlohmann_json::nlohmann_json PRIVATE pmp quadriflow orv_miniz)
 if(WIN32)
   target_link_libraries(orv_core PRIVATE ws2_32)
 endif()

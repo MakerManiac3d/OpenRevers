@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-add_executable(orv_tests test_mesh.cpp test_document.cpp test_quads.cpp)
-target_link_libraries(orv_tests PRIVATE orv_core GTest::gtest_main)
+add_executable(orv_tests test_mesh.cpp test_document.cpp test_quads.cpp test_3mf.cpp)
+target_link_libraries(orv_tests PRIVATE orv_core orv_miniz GTest::gtest_main)
 target_include_directories(orv_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 include(GoogleTest)
 gtest_discover_tests(orv_tests DISCOVERY_TIMEOUT 60)
@@ -14,3 +14,7 @@ add_test(NAME cli_list COMMAND openrevers-cli list)
 add_test(NAME cli_quads_tsm
   COMMAND ${CMAKE_COMMAND} -DCLI=$<TARGET_FILE:openrevers-cli> -DWORK=${CMAKE_CURRENT_BINARY_DIR}/cli_quads
           -P ${CMAKE_CURRENT_SOURCE_DIR}/cli_quads.cmake)
+
+# Large-mesh benchmark, run by hand: see docs/desarrollo/rendimiento.md.
+add_executable(orv_bench bench_large.cpp)
+target_link_libraries(orv_bench PRIVATE orv_core)

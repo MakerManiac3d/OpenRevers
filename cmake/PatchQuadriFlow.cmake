@@ -54,6 +54,9 @@ function(orv_patch_quadriflow src dst)
   endif()
   file(WRITE ${S}/localsat.cpp "${text}")
 
+  # 3. Standard C++17: std::unary_function was removed (MSVC enforces it).
+  _orv_replace(${S}/loader.cpp "struct obj_vertexHash : std::unary_function<obj_vertex, size_t> {" "struct obj_vertexHash {")
+
   file(MAKE_DIRECTORY ${dst}/src)
   file(GLOB staged RELATIVE ${S} ${S}/*)
   foreach(f IN LISTS staged)

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // OpenRevers — reading and writing meshes: STL (binary and ASCII), OBJ, PLY
-// (ASCII and binary little/big endian). Coordinates are kept as written in the
-// file; the caller says what unit they are in.
+// (ASCII and binary little/big endian) and 3MF. Coordinates are kept as written
+// in the file (millimetres assumed), except 3MF, which states its unit and is
+// converted to millimetres.
 #pragma once
 
 #include "core/mesh/TriMesh.h"
@@ -18,13 +19,14 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-enum class MeshFormat { Stl, StlAscii, Obj, Ply, PlyAscii };
+enum class MeshFormat { Stl, StlAscii, Obj, Ply, PlyAscii, ThreeMf };
 
 /// The format a file name's extension names; throws IoError for one it does not.
 MeshFormat formatFromPath(const std::filesystem::path& path);
 
 /// Read a mesh. STL vertices are welded (exactly coincident corners become one
-/// vertex). Polygons in OBJ and PLY are fan-triangulated.
+/// vertex). Polygons in OBJ and PLY are fan-triangulated (kept as quads too
+/// when every polygon is a quad). 3MF: every build item, in millimetres.
 TriMesh readMesh(const std::filesystem::path& path);
 
 /// Write a mesh. `.stl` writes binary STL; `.ply` binary little endian.

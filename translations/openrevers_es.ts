@@ -373,8 +373,13 @@
     </message>
     <message>
         <location filename="../src/app/MainWindow.cpp" line="361"/>
-        <source>Meshes (*.stl *.obj *.ply);;All files (*)</source>
-        <translation>Mallas (*.stl *.obj *.ply);;Todos los archivos (*)</translation>
+        <source>Meshes (*.stl *.obj *.ply *.3mf);;All files (*)</source>
+        <translation>Mallas (*.stl *.obj *.ply *.3mf);;Todos los archivos (*)</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="384"/>
+        <source>STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf)</source>
+        <translation>STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf)</translation>
     </message>
     <message>
         <location filename="../src/app/MainWindow.cpp" line="380"/>
@@ -386,11 +391,6 @@
         <location filename="../src/app/MainWindow.cpp" line="384"/>
         <source>Export mesh</source>
         <translation>Exportar malla</translation>
-    </message>
-    <message>
-        <location filename="../src/app/MainWindow.cpp" line="384"/>
-        <source>STL (*.stl);;OBJ (*.obj);;PLY (*.ply)</source>
-        <translation>STL (*.stl);;OBJ (*.obj);;PLY (*.ply)</translation>
     </message>
     <message>
         <location filename="../src/app/MainWindow.cpp" line="397"/>

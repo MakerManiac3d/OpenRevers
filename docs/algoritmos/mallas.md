@@ -6,6 +6,7 @@ Cada operación, qué hace, en qué se basa y sus límites. El código está en
 | Operación | Método | Implementación | Referencia |
 | --- | --- | --- | --- |
 | Lectura STL | Unión exacta de esquinas coincidentes (hash de los bits del `float`) | Propia | — |
+| 3MF | Paquete ZIP (miniz) con el modelo XML; se sigue `_rels/.rels`, se convierten las unidades a mm y se aplican las transformaciones de la construcción y de los componentes (también en otros archivos del paquete, extensión de producción). Lector XML propio, sin DTD ni entidades externas | Propia + [miniz](https://github.com/richgel999/miniz) | 3MF Consortium, *3MF Core Specification* 1.3 |
 | Análisis | Mapa de aristas no dirigidas; recorrido de bordes con la cara a la izquierda; componentes por búsqueda en profundidad; volumen por el teorema de la divergencia | Propia | — |
 | Unir vértices | Rejilla espacial de lado = tolerancia, búsqueda en las 27 celdas vecinas | Propia | — |
 | Orientar | Propagación por aristas de dos caras; cada pieza cerrada se orienta con volumen positivo | Propia | — |

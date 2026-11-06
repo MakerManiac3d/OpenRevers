@@ -21,6 +21,7 @@ install(DIRECTORY docs/ DESTINATION share/doc/openrevers/docs)
 # The licences of the libraries built into the executables, as their terms ask.
 set(_lic share/doc/openrevers/licenses)
 install(FILES ${pmp_SOURCE_DIR}/LICENSE.txt DESTINATION ${_lic} RENAME PMP-LICENSE.txt)
+install(FILES ${miniz_SOURCE_DIR}/LICENSE DESTINATION ${_lic} RENAME miniz-LICENSE.txt)
 install(FILES ${quadriflow_SOURCE_DIR}/LICENSE.txt DESTINATION ${_lic} RENAME QuadriFlow-LICENSE.txt)
 install(FILES ${quadriflow_SOURCE_DIR}/3rd/lemon-1.3.1/LICENSE DESTINATION ${_lic} RENAME LEMON-LICENSE.txt)
 install(FILES ${quadriflow_SOURCE_DIR}/3rd/pcg32/pcg32/pcg32.h DESTINATION ${_lic} RENAME pcg32-NOTICE.h)

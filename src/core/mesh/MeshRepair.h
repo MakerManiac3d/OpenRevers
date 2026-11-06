@@ -49,6 +49,10 @@ struct DecimateOptions {
     float maxError{0.f};              // mm, Hausdorff bound (0 = none)
     float normalDeviationDeg{0.f};    // limit on normal change (0 = none)
     float aspectRatio{0.f};           // limit on triangle aspect ratio (0 = none)
+    // Largest number of edges at a vertex after a collapse (0 = none). Without
+    // a limit, flat regions (every collapse free) gather into fans of
+    // thousands of triangles, and the time grows with the square of that.
+    unsigned maxValence{12};
 };
 /// Quadric edge-collapse decimation (Garland & Heckbert 1997, PMP).
 void decimate(TriMesh& mesh, const DecimateOptions& options);

@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     parser.setApplicationDescription("OpenRevers");
     parser.addHelpOption();
     parser.addVersionOption();
-    parser.addPositionalArgument("files", "Meshes (.stl .obj .ply) or a project (.orvp) to open");
+    parser.addPositionalArgument("files", "Meshes (.stl .obj .ply .3mf) or a project (.orvp) to open");
     parser.process(app);
 
     orv::MainWindow w(lang);

@@ -13,8 +13,9 @@
 
 namespace orv {
 
-std::size_t faceComponents(const TriMesh& mesh, std::vector<std::uint32_t>& comp) {
-    const EdgeMap em(mesh);
+namespace {
+
+std::size_t components(const TriMesh& mesh, const EdgeMap& em, std::vector<std::uint32_t>& comp) {
     const std::size_t n = mesh.faces.size();
     comp.assign(n, UINT32_MAX);
     std::uint32_t next = 0;
@@ -26,8 +27,10 @@ std::size_t faceComponents(const TriMesh& mesh, std::vector<std::uint32_t>& comp
         while (!stack.empty()) {
             const std::uint32_t f = stack.back();
             stack.pop_back();
-            for (int k = 0; k < 3; ++k) {
-                for (std::uint32_t g : em.facesOf(mesh.faces[f][k], mesh.faces[f][(k + 1) % 3])) {
+            for (std::size_t k = 0; k < 3; ++k) {
+                const std::uint32_t e = em.edgeOf(f, k);
+                if (e == EdgeMap::kNone) continue;
+                for (std::uint32_t g : em.faces(em.edge(e))) {
                     if (comp[g] == UINT32_MAX) {
                         comp[g] = next;
                         stack.push_back(g);
@@ -38,6 +41,12 @@ std::size_t faceComponents(const TriMesh& mesh, std::vector<std::uint32_t>& comp
         ++next;
     }
     return next;
+}
+
+}  // namespace
+
+std::size_t faceComponents(const TriMesh& mesh, std::vector<std::uint32_t>& comp) {
+    return components(mesh, EdgeMap(mesh), comp);
 }
 
 MeshReport analyze(const TriMesh& mesh) {
@@ -68,24 +77,25 @@ MeshReport analyze(const TriMesh& mesh) {
     const EdgeMap em(mesh);
     double lengthSum = 0.0;
     std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> boundaryNext;  // directed boundary half-edges
-    for (const auto& [key, e] : em.edges()) {
+    for (const auto& e : em.edges()) {
+        const auto ef = em.faces(e);
         ++r.edges;
         lengthSum += (mesh.vertices[e.a] - mesh.vertices[e.b]).cast<double>().norm();
-        if (e.faces.size() == 1) {
+        if (ef.size() == 1) {
             ++r.boundaryEdges;
             // Walk the rim in the direction that keeps the face on the left.
-            const Tri& t = mesh.faces[e.faces[0]];
+            const Tri& t = mesh.faces[ef[0]];
             for (int k = 0; k < 3; ++k) {
                 const std::uint32_t u = t[k], v = t[(k + 1) % 3];
                 if ((u == e.a && v == e.b) || (u == e.b && v == e.a)) boundaryNext[v].push_back(u);
             }
-        } else if (e.faces.size() > 2) {
+        } else if (ef.size() > 2) {
             ++r.nonManifoldEdges;
         } else {
             // Two faces: consistent when they traverse the edge in opposite directions.
             int dir[2];
             for (int i = 0; i < 2; ++i) {
-                const Tri& t = mesh.faces[e.faces[i]];
+                const Tri& t = mesh.faces[ef[static_cast<std::size_t>(i)]];
                 dir[i] = 0;
                 for (int k = 0; k < 3; ++k)
                     if (t[k] == e.a && t[(k + 1) % 3] == e.b) dir[i] = 1;
@@ -126,7 +136,7 @@ MeshReport analyze(const TriMesh& mesh) {
 
     // Components.
     std::vector<std::uint32_t> comp;
-    r.components = faceComponents(mesh, comp);
+    r.components = components(mesh, em, comp);
     std::vector<std::size_t> sizes(r.components, 0);
     for (auto c : comp) ++sizes[c];
     r.largestComponentFaces = sizes.empty() ? 0 : *std::max_element(sizes.begin(), sizes.end());

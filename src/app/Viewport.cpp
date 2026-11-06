@@ -5,7 +5,9 @@
 
 #include <unordered_set>
 
+#include <QFutureWatcher>
 #include <QMouseEvent>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QOpenGLContext>
 #include <QPainter>
 #include <QPalette>
@@ -174,6 +176,8 @@ void Viewport::upload(GpuMesh& g, const TriMesh& m) {
     g.vao.release();
     g.indexCount = static_cast<int>(m.faces.size() * 3);
     g.edgeVertexCount = -1;
+    g.edgePending = false;
+    g.edgeLines.reset();
 
     g.wireIndexCount = 0;
     if (m.hasQuads()) {
@@ -205,15 +209,40 @@ void Viewport::upload(GpuMesh& g, const TriMesh& m) {
     }
 }
 
-void Viewport::uploadOpenEdges(GpuMesh& g, const TriMesh& m) {
+namespace {
+
+/// Line vertices (position, colour) of the edges that are not shared by
+/// exactly two faces: open rims red, edges with three or more faces magenta.
+std::vector<float> openEdgeLines(const TriMesh& m) {
     const EdgeMap em(m);
     std::vector<float> buf;
-    for (const auto& [k, e] : em.edges()) {
-        if (e.faces.size() == 2) continue;
-        // Open rims red, edges with three or more faces magenta.
-        const float r = 0.92f, gr = e.faces.size() == 1 ? 0.22f : 0.10f, b = e.faces.size() == 1 ? 0.18f : 0.85f;
+    for (const auto& e : em.edges()) {
+        if (e.count == 2) continue;
+        const float r = 0.92f, gr = e.count == 1 ? 0.22f : 0.10f, b = e.count == 1 ? 0.18f : 0.85f;
         for (auto v : {e.a, e.b}) buf.insert(buf.end(), {m.vertices[v].x(), m.vertices[v].y(), m.vertices[v].z(), r, gr, b});
     }
+    return buf;
+}
+
+}  // namespace
+
+void Viewport::requestOpenEdges(GpuMesh& g) {
+    if (g.edgePending || !g.source) return;
+    g.edgePending = true;
+    std::shared_ptr<const TriMesh> src = g.source;
+    auto* watcher = new QFutureWatcher<std::vector<float>>(this);
+    connect(watcher, &QFutureWatcher<std::vector<float>>::finished, this, [this, watcher, src]() {
+        auto lines = std::make_shared<std::vector<float>>(watcher->result());
+        watcher->deleteLater();
+        for (auto& [id, gm] : gpu_)
+            if (gm->source == src && gm->edgePending) gm->edgeLines = lines;  // still the same mesh
+        update();
+    });
+    watcher->setFuture(QtConcurrent::run([src]() { return openEdgeLines(*src); }));
+}
+
+void Viewport::uploadOpenEdges(GpuMesh& g) {
+    const std::vector<float>& buf = *g.edgeLines;
     if (!g.edgeVao.isCreated()) g.edgeVao.create();
     g.edgeVao.bind();
     if (!g.edgeVbo.isCreated()) g.edgeVbo.create();
@@ -225,6 +254,8 @@ void Viewport::uploadOpenEdges(GpuMesh& g, const TriMesh& m) {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, reinterpret_cast<void*>(12));
     g.edgeVao.release();
     g.edgeVertexCount = static_cast<int>(buf.size() / 6);
+    g.edgeLines.reset();
+    g.edgePending = false;
 }
 
 void Viewport::setBodies(const std::vector<Body>& bodies) {
@@ -412,7 +443,8 @@ void Viewport::paintGL() {
             glDisable(GL_BLEND);
         }
         if (openEdges_) {
-            if (g.edgeVertexCount < 0) uploadOpenEdges(g, *b.mesh);
+            if (g.edgeLines) uploadOpenEdges(g);
+            else if (g.edgeVertexCount < 0) requestOpenEdges(g);
             if (g.edgeVertexCount > 0) {
                 lineProg_.setUniformValue("uTint", QVector4D(0, 0, 0, 0));
                 glLineWidth(2.f);

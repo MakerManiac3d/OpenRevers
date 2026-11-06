@@ -72,9 +72,14 @@ private:
         QOpenGLVertexArrayObject edgeVao;
         QOpenGLBuffer edgeVbo{QOpenGLBuffer::VertexBuffer};
         int edgeVertexCount{-1};  // -1: not computed yet
+        // The open edges are found on a worker thread (a large scan takes
+        // seconds) and uploaded at the next paint.
+        bool edgePending{false};
+        std::shared_ptr<std::vector<float>> edgeLines;
     };
     void upload(GpuMesh& g, const TriMesh& m);
-    void uploadOpenEdges(GpuMesh& g, const TriMesh& m);
+    void requestOpenEdges(GpuMesh& g);
+    void uploadOpenEdges(GpuMesh& g);
     QMatrix4x4 viewMatrix() const;
     QMatrix4x4 projMatrix() const;
     QVector3D eye() const;

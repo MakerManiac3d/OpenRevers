@@ -34,8 +34,9 @@ El eje Z es el vertical, como en la mayoría de programas de CAD.
 ## Flujo de trabajo recomendado
 
 1. **Importar.** *Archivo → Importar malla* (Ctrl+I) o arrastra el archivo a la
-   ventana. Formatos: STL (binario y texto), OBJ y PLY. Las unidades se toman
-   como milímetros.
+   ventana. Formatos: STL (binario y texto), OBJ y PLY, en milímetros; 3MF,
+   convertido desde la unidad que declara, con todos los objetos de su
+   construcción.
 2. **Analizar.** *Malla → Analizar malla*. El informe da:
    - **agujeros** y su longitud. Un escaneo de una sola cara tiene un borde
      exterior largo; los lazos pequeños son agujeros;
@@ -68,7 +69,7 @@ El eje Z es el vertical, como en la mayoría de programas de CAD.
      posterior sobre la malla (reparar, suavizar, remallar…) la devuelve a
      triángulos.
 6. **Guardar o exportar.** *Archivo → Guardar proyecto* (`.orvp`, con todos
-   los cuerpos), o *Exportar malla* a STL, OBJ o PLY. Una malla de quads sale
+   los cuerpos), o *Exportar malla* a STL, OBJ, PLY o 3MF. Una malla de quads sale
    en quads en OBJ y PLY.
 7. **Pasar a Fusion como T-Spline** (opcional). Con una malla de quads
    **cerrada**, *Archivo → Exportar T-Spline para Fusion (.tsm)*. En Fusion, el

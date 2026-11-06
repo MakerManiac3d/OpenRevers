@@ -34,7 +34,8 @@ Z is up, as in most CAD programs.
 ## Recommended workflow
 
 1. **Import.** *File → Import mesh* (Ctrl+I), or drop the file on the window.
-   STL (binary and text), OBJ and PLY, read as millimetres.
+   STL (binary and text), OBJ and PLY, read as millimetres; 3MF, converted
+   from the unit it states, with every object of its build.
 2. **Analyse.** *Mesh → Analyse mesh*. The report gives:
    - **holes** and their length. A one-sided scan has one long outer rim;
      small loops are holes;
@@ -64,7 +65,7 @@ Z is up, as in most CAD programs.
      operation on the mesh (repair, smooth, remesh…) turns it back into
      triangles.
 6. **Save or export.** *File → Save project* (`.orvp`, every body), or
-   *Export mesh* to STL, OBJ or PLY. A quad mesh is written as quads in OBJ
+   *Export mesh* to STL, OBJ, PLY or 3MF. A quad mesh is written as quads in OBJ
    and PLY.
 7. **Take it to Fusion as a T-Spline** (optional). With a **closed** quad
    mesh, *File → Export T-Spline for Fusion (.tsm)*. In Fusion, open the file

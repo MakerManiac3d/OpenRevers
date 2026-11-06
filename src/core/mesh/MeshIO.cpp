@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/mesh/MeshIO.h"
 
+#include "core/mesh/ThreeMf.h"
+
 #include <algorithm>
 #include <bit>
 #include <cctype>
@@ -416,7 +418,8 @@ MeshFormat formatFromPath(const fs::path& path) {
     if (ext == ".stl") return MeshFormat::Stl;
     if (ext == ".obj") return MeshFormat::Obj;
     if (ext == ".ply") return MeshFormat::Ply;
-    throw IoError("Unsupported mesh format: " + (ext.empty() ? path.filename().string() : ext) + " (use .stl, .obj or .ply)");
+    if (ext == ".3mf") return MeshFormat::ThreeMf;
+    throw IoError("Unsupported mesh format: " + (ext.empty() ? path.filename().string() : ext) + " (use .stl, .obj, .ply or .3mf)");
 }
 
 TriMesh readMesh(const fs::path& path) {
@@ -428,6 +431,7 @@ TriMesh readMesh(const fs::path& path) {
             case MeshFormat::Stl: case MeshFormat::StlAscii: m = looksBinaryStl(d) ? readBinaryStl(d) : readAsciiStl(d); break;
             case MeshFormat::Obj: m = readObj(d); break;
             case MeshFormat::Ply: case MeshFormat::PlyAscii: m = readPly(d); break;
+            case MeshFormat::ThreeMf: m = read3mf(d); break;
         }
     } catch (const IoError& e) {
         throw IoError(path.filename().string() + ": " + e.what());
@@ -442,6 +446,10 @@ TriMesh readMesh(const fs::path& path) {
 void writeMesh(const TriMesh& mesh, const fs::path& path) { writeMesh(mesh, path, formatFromPath(path)); }
 
 void writeMesh(const TriMesh& mesh, const fs::path& path, MeshFormat format) {
+    if (format == MeshFormat::ThreeMf) {
+        write3mf(mesh, path);
+        return;
+    }
     std::ofstream out(path, std::ios::binary);
     if (!out) throw IoError("Cannot write " + path.string());
     switch (format) {
@@ -450,6 +458,7 @@ void writeMesh(const TriMesh& mesh, const fs::path& path, MeshFormat format) {
         case MeshFormat::Obj: writeObj(mesh, out); break;
         case MeshFormat::Ply: writePly(mesh, out, false); break;
         case MeshFormat::PlyAscii: writePly(mesh, out, true); break;
+        case MeshFormat::ThreeMf: break;
     }
     if (!out) throw IoError("Failed while writing " + path.string());
 }

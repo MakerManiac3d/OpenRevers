@@ -358,7 +358,7 @@ void MainWindow::runFromUi(const QString& name) {
 
 void MainWindow::importMesh() {
     QSettings s;
-    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Import mesh"), s.value("dirs/import").toString(), tr("Meshes (*.stl *.obj *.ply);;All files (*)"));
+    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Import mesh"), s.value("dirs/import").toString(), tr("Meshes (*.stl *.obj *.ply *.3mf);;All files (*)"));
     if (files.isEmpty()) return;
     s.setValue("dirs/import", QFileInfo(files.first()).absolutePath());
     openPaths(files);
@@ -381,7 +381,7 @@ void MainWindow::exportMesh() {
         return;
     }
     QSettings s;
-    const QString f = QFileDialog::getSaveFileName(this, tr("Export mesh"), s.value("dirs/export").toString(), tr("STL (*.stl);;OBJ (*.obj);;PLY (*.ply)"));
+    const QString f = QFileDialog::getSaveFileName(this, tr("Export mesh"), s.value("dirs/export").toString(), tr("STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf)"));
     if (f.isEmpty()) return;
     s.setValue("dirs/export", QFileInfo(f).absolutePath());
     // The file dialog has already asked about replacing an existing file.

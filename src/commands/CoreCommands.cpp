@@ -104,9 +104,9 @@ void registerCoreCommands(CommandRegistry& R) {
 
     // ------------------------------------------------------------ files --
     R.add({"mesh.import", "file", {"Import mesh", "Importar malla"},
-           {"Read a mesh file (STL, OBJ or PLY, in millimetres) into a new body.",
-            "Lee un archivo de malla (STL, OBJ o PLY, en milímetros) en un cuerpo nuevo."},
-           object({{"path", path({"File to read", "Archivo a leer"}, false, "Mesh (*.stl *.obj *.ply)")},
+           {"Read a mesh file into a new body: STL, OBJ or PLY (read as millimetres), or 3MF (converted from its own unit; every build item with its transforms).",
+            "Lee un archivo de malla en un cuerpo nuevo: STL, OBJ o PLY (en milímetros), o 3MF (convertido desde su unidad; todos los elementos de su construcción con sus transformaciones)."},
+           object({{"path", path({"File to read", "Archivo a leer"}, false, "Mesh (*.stl *.obj *.ply *.3mf)")},
                    {"name", string({"Name for the body (default: the file name)", "Nombre del cuerpo (por defecto, el del archivo)"})}},
                   {"path"}),
            true, false,
@@ -125,10 +125,10 @@ void registerCoreCommands(CommandRegistry& R) {
            }});
 
     R.add({"mesh.export", "file", {"Export mesh", "Exportar malla"},
-           {"Write a body's mesh to a file: .stl (binary), .obj or .ply (binary). Refuses to overwrite unless overwrite is true.",
-            "Escribe la malla de un cuerpo en un archivo: .stl (binario), .obj o .ply (binario). No sobrescribe salvo con overwrite."},
+           {"Write a body's mesh to a file: .stl (binary), .obj, .ply (binary) or .3mf (millimetres). Refuses to overwrite unless overwrite is true.",
+            "Escribe la malla de un cuerpo en un archivo: .stl (binario), .obj, .ply (binario) o .3mf (en milímetros). No sobrescribe salvo con overwrite."},
            object({{"body", body(kBody)},
-                   {"path", path({"File to write", "Archivo a escribir"}, true, "STL (*.stl);;OBJ (*.obj);;PLY (*.ply)")},
+                   {"path", path({"File to write", "Archivo a escribir"}, true, "STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf)")},
                    {"ascii", boolean({"Text format (STL or PLY)", "Formato de texto (STL o PLY)"}, false)},
                    {"overwrite", boolean({"Replace the file if it exists", "Reemplazar el archivo si existe"}, false)}},
                   {"body", "path"}),
