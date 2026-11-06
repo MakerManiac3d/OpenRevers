@@ -113,6 +113,8 @@ ES = {
     "Add folder…": "Añadir carpeta…",
     "Remove": "Quitar",
     "Folder the agent may use": "Carpeta que puede usar el agente",
+    "The 3D view needs OpenGL 3.3, and this computer offers %1.%2. Update the graphics driver; on a computer without a graphics card, start OpenRevers with QT_OPENGL=software.":
+        "La vista 3D necesita OpenGL 3.3 y este equipo ofrece el %1.%2. Actualiza el controlador de la tarjeta gráfica; en un equipo sin tarjeta gráfica, abre OpenRevers con QT_OPENGL=software.",
 }
 
 

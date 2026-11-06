@@ -55,6 +55,9 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Install into a staging folder
         run: cmake --install build --config Release
+      - name: What was installed
+        shell: bash
+        run: ls stage/bin | head -60
       - name: End to end (the installed app driven through MCP)
         env:
           QT_OPENGL: software

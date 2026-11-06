@@ -42,6 +42,8 @@ public:
     QImage capture(int width = 0, int height = 0);
 
     static View viewFromName(const QString& name, bool* ok);
+    /// Empty when the 3D view works; otherwise why it does not.
+    QString glError() const { return glError_; }
 
 signals:
     void bodyClicked(std::uint64_t id);
@@ -80,6 +82,7 @@ private:
     std::map<std::uint64_t, std::unique_ptr<GpuMesh>> gpu_;
     std::uint64_t selected_{0};
     bool ready_{false};
+    QString glError_;  // set when OpenGL 3.3 is not available: the view shows it instead
 
     QOpenGLShaderProgram meshProg_, lineProg_, bgProg_;
     QOpenGLVertexArrayObject bgVao_, triadVao_;

@@ -4,6 +4,8 @@
 #include "core/mesh/EdgeMap.h"
 
 #include <QMouseEvent>
+#include <QOpenGLContext>
+#include <QPainter>
 #include <QPalette>
 #include <QWheelEvent>
 
@@ -102,7 +104,19 @@ Viewport::~Viewport() {
 }
 
 void Viewport::initializeGL() {
-    initializeOpenGLFunctions();
+    const QSurfaceFormat got = context()->format();
+    if (got.version() < qMakePair(3, 3) || !initializeOpenGLFunctions()) {
+        glError_ = tr("The 3D view needs OpenGL 3.3, and this computer offers %1.%2. Update the graphics driver; "
+                      "on a computer without a graphics card, start OpenRevers with QT_OPENGL=software.")
+                       .arg(got.majorVersion())
+                       .arg(got.minorVersion());
+        qWarning("OpenRevers: %s", qPrintable(glError_));
+        return;
+    }
+    {
+        auto str = [this](GLenum e) { return QString::fromLatin1(reinterpret_cast<const char*>(glGetString(e))); };
+        qInfo("OpenRevers: OpenGL %s, %s", qPrintable(str(GL_VERSION)), qPrintable(str(GL_RENDERER)));
+    }
     meshProg_.addShaderFromSourceCode(QOpenGLShader::Vertex, kMeshVs);
     meshProg_.addShaderFromSourceCode(QOpenGLShader::Fragment, kMeshFs);
     meshProg_.link();
@@ -312,6 +326,14 @@ void Viewport::drawTriad() {
 }
 
 void Viewport::paintGL() {
+    if (!glError_.isEmpty()) {
+        QPainter p(this);
+        p.fillRect(rect(), palette().color(QPalette::Window));
+        p.setPen(palette().color(QPalette::WindowText));
+        p.drawText(rect().adjusted(40, 40, -40, -40), Qt::AlignCenter | Qt::TextWordWrap, glError_);
+        return;
+    }
+    if (!ready_) return;
     const qreal dpr = devicePixelRatioF();
     glViewport(0, 0, static_cast<int>(width() * dpr), static_cast<int>(height() * dpr));
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
