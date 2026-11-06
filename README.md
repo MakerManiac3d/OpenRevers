@@ -22,13 +22,14 @@ compatible con MCP) puede manejar paso a paso, delante de ti.
 
 | Área | Funciones |
 | --- | --- |
-| Archivos | Importar STL (binario y texto), OBJ, PLY (texto y binario) y 3MF; exportar STL, OBJ, PLY y 3MF; proyecto `.orvp` con todos los cuerpos |
+| Archivos | Importar STL (binario y texto), OBJ, PLY (texto y binario) y 3MF; nubes de puntos XYZ, PTS, PLY y OBJ; exportar STL, OBJ, PLY, 3MF y XYZ; proyecto `.orvp` con todos los cuerpos |
 | Análisis | Agujeros y su tamaño, bordes abiertos y no manifold, caras degeneradas, duplicadas e invertidas, piezas sueltas, área, volumen, longitud media de arista |
 | Reparación | Unir vértices, quitar caras defectuosas y piezas sueltas, orientar las caras hacia fuera, rellenar agujeros con un parche suave |
 | Procesado | Suavizado laplaciano, diezmado con error máximo, remallado uniforme o adaptativo conservando las aristas vivas, remallado en quads |
+| Nubes de puntos | Aclarar, calcular y orientar normales, reconstruir una malla cerrada (Poisson apantallado) con recorte de lo que no estaba escaneado |
 | Superficies | Exportar una malla de quads cerrada como T-Spline (`.tsm`) para Autodesk Fusion |
 | Trabajo | Deshacer y rehacer de cada operación, historial, registro, visor 3D con bordes abiertos marcados |
-| IA (MCP) | 26 herramientas, capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
+| IA (MCP) | 29 herramientas, capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
 | Idiomas | Español e inglés |
 
 ## Instalación

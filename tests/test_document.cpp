@@ -127,6 +127,30 @@ TEST(Commands, QuadRemeshToTSplineAndProject) {
     EXPECT_EQ(f.run("body.list")["bodies"][0]["quads"], q["quads"]);
 }
 
+TEST(Commands, PointCloudToMesh) {
+    const auto dir = tempDir("points");
+    {
+        std::ofstream o(dir / "ball.xyz");
+        for (const auto& v : sphere(10, 4).vertices) o << v.x() << ' ' << v.y() << ' ' << v.z() << '\n';
+    }
+    Fixture f;
+    const json imp = f.run("mesh.import", {{"path", (dir / "ball.xyz").string()}});
+    EXPECT_EQ(imp["pointCloud"], true);
+    EXPECT_EQ(imp["normals"], false);
+    EXPECT_THROW(f.run("mesh.analyze", {{"body", "b1"}}), CommandError);         // a mesh command on a cloud
+    EXPECT_THROW(f.run("points.to_mesh", {{"body", "b1"}}), CommandError);       // no normals yet
+    const json n = f.run("points.estimate_normals", {{"body", "b1"}});
+    EXPECT_EQ(n["points"], 2562);
+    const json r = f.run("points.to_mesh", {{"body", "b1"}, {"depth", 6}});
+    EXPECT_EQ(r["ref"], "b2");
+    EXPECT_EQ(r["closed"], true);
+    EXPECT_GT(r["faces"].get<int>(), 1000);
+    EXPECT_NO_THROW(f.run("mesh.analyze", {{"body", "b2"}}));
+    EXPECT_THROW(f.run("points.thin", {{"body", "b2"}, {"spacing", 1.0}}), CommandError);  // a cloud command on a mesh
+    f.run("history.undo");  // takes the reconstruction back
+    EXPECT_EQ(f.run("body.list")["bodies"].size(), 1u);
+}
+
 TEST(Commands, InputIsChecked) {
     Fixture f;
     try {

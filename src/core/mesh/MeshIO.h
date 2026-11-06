@@ -19,17 +19,20 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-enum class MeshFormat { Stl, StlAscii, Obj, Ply, PlyAscii, ThreeMf };
+enum class MeshFormat { Stl, StlAscii, Obj, Ply, PlyAscii, ThreeMf, Xyz };
 
 /// The format a file name's extension names; throws IoError for one it does not.
 MeshFormat formatFromPath(const std::filesystem::path& path);
 
-/// Read a mesh. STL vertices are welded (exactly coincident corners become one
+/// Read a mesh or a point cloud (a PLY, OBJ or XYZ file without faces; its
+/// normals are kept when the file has them). STL vertices are welded (exactly coincident corners become one
 /// vertex). Polygons in OBJ and PLY are fan-triangulated (kept as quads too
 /// when every polygon is a quad). 3MF: every build item, in millimetres.
 TriMesh readMesh(const std::filesystem::path& path);
 
-/// Write a mesh. `.stl` writes binary STL; `.ply` binary little endian.
+/// Write a mesh or a point cloud. `.stl` writes binary STL; `.ply` binary
+/// little endian; `.xyz` points (and normals) as text. A point cloud cannot be
+/// written as STL or 3MF, nor a mesh as XYZ (IoError).
 void writeMesh(const TriMesh& mesh, const std::filesystem::path& path);
 void writeMesh(const TriMesh& mesh, const std::filesystem::path& path, MeshFormat format);
 

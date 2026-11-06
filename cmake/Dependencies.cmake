@@ -67,6 +67,26 @@ else()
   target_compile_options(orv_miniz PRIVATE -w)
 endif()
 
+# --- nanoflann 1.6.1 (BSD-2): nearest neighbours in point clouds -------------
+FetchContent_Declare(nanoflann
+  GIT_REPOSITORY https://github.com/jlblancoc/nanoflann.git
+  GIT_TAG        d2fdfed6bcb940a07d8b217ed589f1ff89aa7324 # v1.6.1
+  GIT_SHALLOW    FALSE
+  SOURCE_SUBDIR  _not_a_cmake_project_here)
+FetchContent_MakeAvailable(nanoflann)
+add_library(orv_nanoflann INTERFACE)
+target_include_directories(orv_nanoflann SYSTEM INTERFACE ${nanoflann_SOURCE_DIR}/include)
+
+# --- PoissonRecon 18.76 (MIT): screened Poisson surface reconstruction --------
+# Header-only use of its library interface (Src/Reconstructors.h), compiled in
+# one file of our own (src/core/points/PoissonBridge.cpp) as C++17.
+FetchContent_Declare(poissonrecon
+  GIT_REPOSITORY https://github.com/mkazhdan/PoissonRecon.git
+  GIT_TAG        262b0f539d404057d1f36e1adc07fc9388678899 # 18.76
+  GIT_SHALLOW    FALSE
+  SOURCE_SUBDIR  _not_a_cmake_project_here)
+FetchContent_MakeAvailable(poissonrecon)
+
 # --- QuadriFlow (BSD-3) with LEMON (Boost licence): quad remeshing ------------
 include(QuadriFlow)
 

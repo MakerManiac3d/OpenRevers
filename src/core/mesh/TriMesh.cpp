@@ -67,6 +67,7 @@ void TriMesh::setQuads(std::vector<Quad> q) {
 }
 
 std::size_t TriMesh::removeUnusedVertices() {
+    if (faces.empty()) return 0;
     std::vector<std::uint32_t> remap(vertices.size(), UINT32_MAX);
     for (const Tri& t : faces)
         for (auto i : t) remap[i] = 0;
@@ -79,12 +80,15 @@ std::size_t TriMesh::removeUnusedVertices() {
         if (remap[i] == UINT32_MAX) continue;
         remap[i] = next++;
         kept.push_back(vertices[i]);
+        if (hasNormals()) normals[remap[i]] = normals[i];
     }
     const std::size_t removed = vertices.size() - kept.size();
     for (Tri& t : faces)
         for (auto& i : t) i = remap[i];
     for (Quad& q : quads)
         for (auto& i : q) i = remap[i];
+    if (hasNormals()) normals.resize(kept.size());
+    else normals.clear();
     vertices = std::move(kept);
     return removed;
 }

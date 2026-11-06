@@ -10,6 +10,7 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 #include <unordered_map>
 
 namespace orv {
@@ -151,6 +152,11 @@ TriMesh readObj(const std::string& d) {
             float x = 0, y = 0, z = 0;
             ls >> x >> y >> z;
             m.vertices.emplace_back(x, y, z);
+        } else if (line[0] == 'v' && line[1] == 'n' && line.size() > 2 && (line[2] == ' ' || line[2] == '\t')) {
+            std::istringstream ls(line.substr(3));
+            float x = 0, y = 0, z = 0;
+            ls >> x >> y >> z;
+            m.normals.emplace_back(x, y, z);
         } else if (line[0] == 'f' && (line[1] == ' ' || line[1] == '\t')) {
             std::istringstream ls(line.substr(2));
             std::string item;
@@ -167,6 +173,49 @@ TriMesh readObj(const std::string& d) {
         }
     }
     sink.finish();
+    // Per-corner normals of a mesh are not kept; a cloud's "vn" lines go with its "v" lines.
+    if (!m.faces.empty() || m.normals.size() != m.vertices.size()) m.normals.clear();
+    return m;
+}
+
+// ---------------------------------------------------------------- XYZ -----
+// Text points: "x y z" or "x y z nx ny nz" per line, separated by spaces,
+// tabs, commas or semicolons. Other column counts (intensity, colour) keep
+// only x y z. Lines starting with # or // and a .pts point-count line are
+// skipped.
+TriMesh readXyz(const std::string& d) {
+    TriMesh m;
+    std::size_t pos = 0, lineNo = 0;
+    bool normals = true;
+    std::vector<double> vals;
+    while (pos < d.size()) {
+        std::size_t end = d.find('\n', pos);
+        if (end == std::string::npos) end = d.size();
+        std::string_view line(d.data() + pos, end - pos);
+        pos = end + 1;
+        ++lineNo;
+        while (!line.empty() && std::isspace(static_cast<unsigned char>(line.front()))) line.remove_prefix(1);
+        if (line.empty() || line[0] == '#' || line.rfind("//", 0) == 0) continue;
+        vals.clear();
+        std::size_t at = 0;
+        while (at < line.size()) {
+            while (at < line.size() && (std::isspace(static_cast<unsigned char>(line[at])) || line[at] == ',' || line[at] == ';')) ++at;
+            if (at >= line.size()) break;
+            double v = 0;
+            const char* b = line.data() + at;
+            if (*b == '+') ++b;  // from_chars does not take a leading '+'
+            const auto r = std::from_chars(b, line.data() + line.size(), v);
+            if (r.ec != std::errc()) throw IoError("line " + std::to_string(lineNo) + " is not numbers");
+            vals.push_back(v);
+            at = static_cast<std::size_t>(r.ptr - line.data());
+        }
+        if (vals.size() == 1 && m.vertices.empty()) continue;  // .pts: the number of points
+        if (vals.size() < 3) throw IoError("line " + std::to_string(lineNo) + " has fewer than 3 numbers");
+        m.vertices.emplace_back(static_cast<float>(vals[0]), static_cast<float>(vals[1]), static_cast<float>(vals[2]));
+        if (vals.size() == 6) m.normals.emplace_back(static_cast<float>(vals[3]), static_cast<float>(vals[4]), static_cast<float>(vals[5]));
+        else normals = false;
+    }
+    if (!normals) m.normals.clear();
     return m;
 }
 
@@ -288,12 +337,17 @@ TriMesh readPly(const std::string& d) {
     PolygonSink sink{m, {}, true};
     for (const auto& e : elements) {
         if (e.name == "vertex") {
-            int ix = -1, iy = -1, iz = -1;
+            int ix = -1, iy = -1, iz = -1, inx = -1, iny = -1, inz = -1;
             for (std::size_t i = 0; i < e.props.size(); ++i) {
                 if (e.props[i].name == "x") ix = static_cast<int>(i);
                 if (e.props[i].name == "y") iy = static_cast<int>(i);
                 if (e.props[i].name == "z") iz = static_cast<int>(i);
+                if (e.props[i].name == "nx") inx = static_cast<int>(i);
+                if (e.props[i].name == "ny") iny = static_cast<int>(i);
+                if (e.props[i].name == "nz") inz = static_cast<int>(i);
             }
+            const bool withNormals = inx >= 0 && iny >= 0 && inz >= 0;
+            if (withNormals) m.normals.reserve(e.count);
             if (ix < 0 || iy < 0 || iz < 0) throw IoError("PLY vertices have no x, y, z");
             m.vertices.reserve(e.count);
             std::vector<double> vals(e.props.size());
@@ -307,6 +361,7 @@ TriMesh readPly(const std::string& d) {
                     } else vals[i] = r.read(p.type);
                 }
                 m.vertices.emplace_back(static_cast<float>(vals[ix]), static_cast<float>(vals[iy]), static_cast<float>(vals[iz]));
+                if (withNormals) m.normals.emplace_back(static_cast<float>(vals[inx]), static_cast<float>(vals[iny]), static_cast<float>(vals[inz]));
             }
         } else if (e.name == "face") {
             m.faces.reserve(e.count);
@@ -334,6 +389,7 @@ TriMesh readPly(const std::string& d) {
         }
     }
     sink.finish();
+    if (!m.faces.empty()) m.normals.clear();  // only a point cloud keeps normals
     return m;
 }
 
@@ -374,6 +430,11 @@ void writeObj(const TriMesh& m, std::ofstream& out) {
     out << "# OpenRevers OBJ (mm)\n";
     out.precision(9);
     for (const auto& p : m.vertices) out << "v " << p.x() << ' ' << p.y() << ' ' << p.z() << '\n';
+    if (m.isPointCloud()) {
+        if (m.hasNormals())
+            for (const auto& n : m.normals) out << "vn " << n.x() << ' ' << n.y() << ' ' << n.z() << '\n';
+        return;
+    }
     if (m.hasQuads()) {
         for (const auto& q : m.quads) out << "f " << q[0] + 1 << ' ' << q[1] + 1 << ' ' << q[2] + 1 << ' ' << q[3] + 1 << '\n';
         return;
@@ -381,7 +442,41 @@ void writeObj(const TriMesh& m, std::ofstream& out) {
     for (const auto& t : m.faces) out << "f " << t[0] + 1 << ' ' << t[1] + 1 << ' ' << t[2] + 1 << '\n';
 }
 
+void writePlyPoints(const TriMesh& m, std::ofstream& out, bool ascii) {
+    const bool n = m.hasNormals();
+    out << "ply\nformat " << (ascii ? "ascii" : "binary_little_endian") << " 1.0\ncomment OpenRevers (mm)\n"
+        << "element vertex " << m.vertices.size() << "\nproperty float x\nproperty float y\nproperty float z\n"
+        << (n ? "property float nx\nproperty float ny\nproperty float nz\n" : "") << "end_header\n";
+    out.precision(9);
+    for (std::size_t i = 0; i < m.vertices.size(); ++i) {
+        const Vec3f& p = m.vertices[i];
+        if (ascii) {
+            out << p.x() << ' ' << p.y() << ' ' << p.z();
+            if (n) out << ' ' << m.normals[i].x() << ' ' << m.normals[i].y() << ' ' << m.normals[i].z();
+            out << '\n';
+        } else {
+            out.write(reinterpret_cast<const char*>(p.data()), 12);
+            if (n) out.write(reinterpret_cast<const char*>(m.normals[i].data()), 12);
+        }
+    }
+}
+
+void writeXyz(const TriMesh& m, std::ofstream& out) {
+    out.precision(9);
+    const bool n = m.hasNormals();
+    for (std::size_t i = 0; i < m.vertices.size(); ++i) {
+        const Vec3f& p = m.vertices[i];
+        out << p.x() << ' ' << p.y() << ' ' << p.z();
+        if (n) out << ' ' << m.normals[i].x() << ' ' << m.normals[i].y() << ' ' << m.normals[i].z();
+        out << '\n';
+    }
+}
+
 void writePly(const TriMesh& m, std::ofstream& out, bool ascii) {
+    if (m.isPointCloud()) {
+        writePlyPoints(m, out, ascii);
+        return;
+    }
     out << "ply\nformat " << (ascii ? "ascii" : "binary_little_endian") << " 1.0\ncomment OpenRevers (mm)\n"
         << "element vertex " << m.vertices.size() << "\nproperty float x\nproperty float y\nproperty float z\n"
         << "element face " << (m.hasQuads() ? m.quads.size() : m.faces.size()) << "\nproperty list uchar uint vertex_indices\nend_header\n";
@@ -419,7 +514,8 @@ MeshFormat formatFromPath(const fs::path& path) {
     if (ext == ".obj") return MeshFormat::Obj;
     if (ext == ".ply") return MeshFormat::Ply;
     if (ext == ".3mf") return MeshFormat::ThreeMf;
-    throw IoError("Unsupported mesh format: " + (ext.empty() ? path.filename().string() : ext) + " (use .stl, .obj, .ply or .3mf)");
+    if (ext == ".xyz" || ext == ".pts") return MeshFormat::Xyz;
+    throw IoError("Unsupported mesh format: " + (ext.empty() ? path.filename().string() : ext) + " (use .stl, .obj, .ply, .3mf, .xyz or .pts)");
 }
 
 TriMesh readMesh(const fs::path& path) {
@@ -432,13 +528,19 @@ TriMesh readMesh(const fs::path& path) {
             case MeshFormat::Obj: m = readObj(d); break;
             case MeshFormat::Ply: case MeshFormat::PlyAscii: m = readPly(d); break;
             case MeshFormat::ThreeMf: m = read3mf(d); break;
+            case MeshFormat::Xyz: m = readXyz(d); break;
         }
     } catch (const IoError& e) {
         throw IoError(path.filename().string() + ": " + e.what());
     } catch (const std::exception& e) {
         throw IoError(path.filename().string() + ": malformed file (" + e.what() + ")");
     }
-    if (m.faces.empty()) throw IoError(path.filename().string() + ": the file has no triangles");
+    if (m.vertices.empty()) throw IoError(path.filename().string() + ": the file has no points or triangles");
+    // STL and 3MF are always meshes; a PLY, OBJ or XYZ without faces is a point cloud.
+    if (m.faces.empty() && (fmt == MeshFormat::Stl || fmt == MeshFormat::StlAscii || fmt == MeshFormat::ThreeMf))
+        throw IoError(path.filename().string() + ": the file has no triangles");
+    for (const auto& p : m.vertices)
+        if (!p.allFinite()) throw IoError(path.filename().string() + ": a coordinate is not a finite number");
     m.removeUnusedVertices();
     return m;
 }
@@ -446,6 +548,10 @@ TriMesh readMesh(const fs::path& path) {
 void writeMesh(const TriMesh& mesh, const fs::path& path) { writeMesh(mesh, path, formatFromPath(path)); }
 
 void writeMesh(const TriMesh& mesh, const fs::path& path, MeshFormat format) {
+    if (mesh.isPointCloud() && (format == MeshFormat::Stl || format == MeshFormat::StlAscii || format == MeshFormat::ThreeMf))
+        throw IoError("A point cloud has no triangles to write as STL or 3MF; use .ply, .xyz or .obj, or reconstruct a mesh first");
+    if (format == MeshFormat::Xyz && !mesh.isPointCloud())
+        throw IoError("XYZ holds points only; write a mesh as .stl, .obj, .ply or .3mf");
     if (format == MeshFormat::ThreeMf) {
         write3mf(mesh, path);
         return;
@@ -458,6 +564,7 @@ void writeMesh(const TriMesh& mesh, const fs::path& path, MeshFormat format) {
         case MeshFormat::Obj: writeObj(mesh, out); break;
         case MeshFormat::Ply: writePly(mesh, out, false); break;
         case MeshFormat::PlyAscii: writePly(mesh, out, true); break;
+        case MeshFormat::Xyz: writeXyz(mesh, out); break;
         case MeshFormat::ThreeMf: break;
     }
     if (!out) throw IoError("Failed while writing " + path.string());

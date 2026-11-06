@@ -16,12 +16,16 @@
   de `run`; lo que imprima una biblioteca va a la salida de errores.
 - **3MF**: importar (unidad del archivo, transformaciones, componentes,
   varios objetos) y exportar.
+- **Nubes de puntos**: importar XYZ, PTS, PLY y OBJ sin caras (con sus
+  normales), aclarar, calcular y orientar normales, y reconstruir una malla
+  cerrada con Poisson apantallado (PoissonRecon), con recorte por densidad
+  para escaneos abiertos. Menú *Puntos*. Proyecto en formato 3.
 - **Mallas grandes**: medido con 10 M de triángulos (ver
   `docs/desarrollo/rendimiento.md`). Mapa de aristas y unión de vértices más
   rápidos y con menos memoria; el diezmado limita la valencia; los bordes
   abiertos se calculan fuera del hilo de la interfaz.
 - El instalador incluye las licencias de los componentes compilados.
-- 26 herramientas MCP.
+- 29 herramientas MCP.
 
 ## 0.1.0 — 6 de noviembre de 2026
 

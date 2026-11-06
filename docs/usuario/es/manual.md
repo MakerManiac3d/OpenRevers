@@ -34,7 +34,8 @@ El eje Z es el vertical, como en la mayoría de programas de CAD.
 ## Flujo de trabajo recomendado
 
 1. **Importar.** *Archivo → Importar malla* (Ctrl+I) o arrastra el archivo a la
-   ventana. Formatos: STL (binario y texto), OBJ y PLY, en milímetros; 3MF,
+   ventana. Formatos: STL (binario y texto), OBJ y PLY, en milímetros; nubes
+   de puntos XYZ y PTS; 3MF,
    convertido desde la unidad que declara, con todos los objetos de su
    construcción.
 2. **Analizar.** *Malla → Analizar malla*. El informe da:
@@ -78,6 +79,26 @@ El eje Z es el vertical, como en la mayoría de programas de CAD.
    agujeros antes del remallado en quads: el programa te dice qué impide la
    exportación.
 
+### Si partes de una nube de puntos
+
+Un archivo XYZ o PTS, o un PLY u OBJ sin caras, entra como **nube de puntos**
+(se dibuja con puntos). Las operaciones de malla no se aplican a una nube;
+primero hay que reconstruir la superficie, desde el menú *Puntos*:
+
+1. **Aclarar puntos** (opcional): un punto por cubo de lado *spacing*. Una
+   nube uniforme y más ligera reconstruye mejor y más rápido.
+2. **Calcular normales**: cada punto recibe la normal del plano de sus
+   vecinos. *propagate* orienta toda la nube de forma coherente (escaneos
+   abiertos o cerrados); *outward*, hacia fuera del centro (piezas cerradas
+   y más o menos convexas); *keep*, conserva el lado de las normales que ya
+   traía el escáner.
+3. **Malla desde puntos (Poisson)**: crea un cuerpo nuevo con una malla
+   cerrada; la nube se conserva. *depth* fija el detalle (8 suele bastar;
+   cada nivel más multiplica los triángulos por cuatro). En un escaneo
+   abierto, Poisson cierra lo que no se escaneó: *trim* (0,05–0,1) lo quita.
+
+Después, la malla sigue el flujo normal desde el paso 2.
+
 Prueba una operación sobre una copia con *Cuerpo → Duplicar cuerpo*, y compara.
 
 ## Ajustes
@@ -115,8 +136,10 @@ openrevers-cli mcp         # servidor MCP para un agente
 
 | Problema | Solución |
 | --- | --- |
-| «The file has no triangles» | El archivo es una nube de puntos o está vacío. La reconstrucción de nubes llega en una versión próxima |
+| «The file has no points or triangles» | El archivo está vacío o no es del formato que dice su extensión |
 | El relleno deja agujeros abiertos | Son más grandes que *maxEdges*; súbelo, o pon 0 para rellenarlos todos |
 | El remallado redondea una arista | Baja *featureAngle* para que esa arista cuente como viva |
+| «… es una nube de puntos; reconstruye antes una malla» | Usa el menú *Puntos*: calcular normales y malla desde puntos |
+| La malla de Poisson tiene una «tapa» donde no había puntos | Repite con *trim* 0,05–0,1 |
 | «La malla de quads no puede ser un T-Spline: está abierta» | Rellena los agujeros (maxEdges 0) y repite el remallado en quads |
 | «AI agent: port … busy» | Otro programa usa el puerto; cámbialo en *Ajustes → Agente IA* |

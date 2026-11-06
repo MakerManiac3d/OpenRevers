@@ -98,6 +98,7 @@ void MainWindow::buildActions() {
     auto* fileMenu = menuBar()->addMenu(tr("&File"));
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
     auto* meshMenu = menuBar()->addMenu(tr("&Mesh"));
+    auto* pointsMenu = menuBar()->addMenu(tr("&Points"));
     auto* bodyMenu = menuBar()->addMenu(tr("&Body"));
     auto* viewMenu = menuBar()->addMenu(tr("&View"));
     auto* agentMenu = menuBar()->addMenu(tr("&AI agent"));
@@ -143,6 +144,10 @@ void MainWindow::buildActions() {
     for (const char* name : {"mesh.analyze", "mesh.repair", "mesh.fill_holes", "mesh.remove_pieces", "mesh.flip_normals", "mesh.smooth", "mesh.decimate", "mesh.remesh", "mesh.remesh_quads"}) {
         const bool onTb = std::string(name) != "mesh.flip_normals" && std::string(name) != "mesh.remove_pieces";
         auto* a = add(meshMenu, cmdText(name), [this, name]() { runFromUi(name); }, {}, QStyle::SP_CustomBase, onTb);
+        a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
+    }
+    for (const char* name : {"points.thin", "points.estimate_normals", "points.to_mesh"}) {
+        auto* a = add(pointsMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
     for (const char* name : {"body.rename", "body.duplicate", "body.delete"}) add(bodyMenu, cmdText(name), [this, name]() { runFromUi(name); });
@@ -246,7 +251,9 @@ void MainWindow::refreshTree() {
     updatingTree_ = true;
     tree_->clear();
     for (const auto& b : doc_.bodies()) {
-        auto* item = new QTreeWidgetItem(tree_, {QString::fromStdString(b.name), QLocale().toString(static_cast<qlonglong>(b.mesh->faceCount()))});
+        const QString count = b.mesh->isPointCloud() ? tr("%1 points").arg(QLocale().toString(static_cast<qlonglong>(b.mesh->vertexCount())))
+                                                     : QLocale().toString(static_cast<qlonglong>(b.mesh->faceCount()));
+        auto* item = new QTreeWidgetItem(tree_, {QString::fromStdString(b.name), count});
         item->setData(0, Qt::UserRole, QVariant::fromValue<qulonglong>(b.id));
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
         item->setCheckState(0, b.visible ? Qt::Checked : Qt::Unchecked);
@@ -272,13 +279,18 @@ void MainWindow::refreshProperties() {
     auto mm = [&](float v) { return loc.toString(v, 'f', 3); };
     row(tr("Name"), QString::fromStdString(b->name));
     row(tr("Reference"), QString::fromStdString(b->ref()));
-    row(tr("Triangles"), loc.toString(static_cast<qlonglong>(b->mesh->faceCount())));
-    row(tr("Vertices"), loc.toString(static_cast<qlonglong>(b->mesh->vertexCount())));
+    if (b->mesh->isPointCloud()) {
+        row(tr("Points"), loc.toString(static_cast<qlonglong>(b->mesh->vertexCount())));
+        row(tr("Normals"), b->mesh->hasNormals() ? tr("Yes") : tr("No"));
+    } else {
+        row(tr("Triangles"), loc.toString(static_cast<qlonglong>(b->mesh->faceCount())));
+        row(tr("Vertices"), loc.toString(static_cast<qlonglong>(b->mesh->vertexCount())));
+    }
     if (b->mesh->hasQuads()) row(tr("Quads"), loc.toString(static_cast<qlonglong>(b->mesh->quads.size())));
     row(tr("Size X × Y × Z (mm)"), mm(bb.size().x()) + " × " + mm(bb.size().y()) + " × " + mm(bb.size().z()));
     row(tr("Minimum (mm)"), mm(bb.min.x()) + ", " + mm(bb.min.y()) + ", " + mm(bb.min.z()));
     row(tr("Maximum (mm)"), mm(bb.max.x()) + ", " + mm(bb.max.y()) + ", " + mm(bb.max.z()));
-    row(tr("Area (mm²)"), loc.toString(b->mesh->area(), 'f', 2));
+    if (!b->mesh->isPointCloud()) row(tr("Area (mm²)"), loc.toString(b->mesh->area(), 'f', 2));
     if (!b->source.empty()) row(tr("Source"), QString::fromStdString(b->source));
     props_->resizeColumnsToContents();
     props_->horizontalHeader()->setStretchLastSection(true);
@@ -358,7 +370,7 @@ void MainWindow::runFromUi(const QString& name) {
 
 void MainWindow::importMesh() {
     QSettings s;
-    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Import mesh"), s.value("dirs/import").toString(), tr("Meshes (*.stl *.obj *.ply *.3mf);;All files (*)"));
+    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Import mesh"), s.value("dirs/import").toString(), tr("Meshes and points (*.stl *.obj *.ply *.3mf *.xyz *.pts);;All files (*)"));
     if (files.isEmpty()) return;
     s.setValue("dirs/import", QFileInfo(files.first()).absolutePath());
     openPaths(files);
@@ -381,7 +393,7 @@ void MainWindow::exportMesh() {
         return;
     }
     QSettings s;
-    const QString f = QFileDialog::getSaveFileName(this, tr("Export mesh"), s.value("dirs/export").toString(), tr("STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf)"));
+    const QString f = QFileDialog::getSaveFileName(this, tr("Export mesh"), s.value("dirs/export").toString(), tr("STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf);;XYZ points (*.xyz)"));
     if (f.isEmpty()) return;
     s.setValue("dirs/export", QFileInfo(f).absolutePath());
     // The file dialog has already asked about replacing an existing file.

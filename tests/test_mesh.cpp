@@ -52,7 +52,7 @@ TEST(MeshIO, ErrorsSayWhatIsWrong) {
         readMesh(dir / "empty.obj");
         FAIL();
     } catch (const IoError& e) {
-        EXPECT_NE(std::string(e.what()).find("no triangles"), std::string::npos);
+        EXPECT_NE(std::string(e.what()).find("no points or triangles"), std::string::npos);
     }
 }
 

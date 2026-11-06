@@ -34,10 +34,17 @@ struct Box3 {
 /// its `quads`; `faces` then holds their triangulation, two triangles per
 /// quad, so that everything that works on triangles works on it too. An
 /// operation that changes the triangles drops the quads (see dropQuads).
+///
+/// A point cloud is a TriMesh with vertices and no faces; `normals` (one per
+/// vertex, or none) holds the points' estimated or scanned normals.
 struct TriMesh {
     std::vector<Vec3f> vertices;
     std::vector<Tri> faces;
     std::vector<Quad> quads;
+    std::vector<Vec3f> normals;
+
+    bool isPointCloud() const { return faces.empty() && !vertices.empty(); }
+    bool hasNormals() const { return !normals.empty() && normals.size() == vertices.size(); }
 
     bool hasQuads() const { return !quads.empty(); }
     /// Set the quads and rebuild `faces` from them.
@@ -57,7 +64,8 @@ struct TriMesh {
     double area() const;
     /// Signed volume in mm³ (meaningful for a closed, consistently oriented mesh).
     double signedVolume() const;
-    /// Remove vertices no face uses, renumbering the faces.
+    /// Remove vertices no face uses, renumbering the faces. Does nothing to a
+    /// point cloud (no faces).
     std::size_t removeUnusedVertices();
 };
 

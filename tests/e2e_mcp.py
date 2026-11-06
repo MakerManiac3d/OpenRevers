@@ -173,6 +173,20 @@ def main() -> int:
         check(not err and r["quads"] > 800 and r["tsmReady"] is False, f"quad remesh: {r.get('quads')} quads, open so not a T-Spline yet")
         err, _, content = agent.call("mesh_export_tsm", {"body": "b1", "path": str(work / "part.tsm")})
         check(err and "abierta" in content[0]["text"], "the T-Spline export explains why it cannot go on")
+        cloud = work / "cloud.xyz"
+        with open(cloud, "w") as f:  # 6000 points on a sphere of radius 15 mm, centred at (80, 0, 0)
+            import math, random
+            random.seed(3)
+            for _ in range(6000):
+                x, y, z = (random.gauss(0, 1) for _ in range(3))
+                r = math.sqrt(x * x + y * y + z * z)
+                f.write(f"{80 + 15 * x / r} {15 * y / r} {15 * z / r}\n")
+        err, r, _ = agent.call("mesh_import", {"path": str(cloud)})
+        check(not err and r["pointCloud"] and r["vertices"] == 6000, "import a point cloud (XYZ)")
+        err, r, _ = agent.call("points_estimate_normals", {"body": r["ref"]})
+        check(not err and r["points"] == 6000, "estimate normals")
+        err, r, _ = agent.call("points_to_mesh", {"body": "b2", "depth": 7})
+        check(not err and r["closed"] and r["faces"] > 5000, f"Poisson: closed mesh of {r.get('faces')} triangles")
         if a.picture:
             agent.call("view_set", {"view": "iso", "wireframe": True})
             err, r, content = agent.call("view_capture", {"width": 800, "height": 600})

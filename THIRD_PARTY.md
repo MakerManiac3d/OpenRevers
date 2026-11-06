@@ -11,6 +11,8 @@ licence; all are GPL-3.0 compatible.*
 | [Eigen](https://eigen.tuxfamily.org) | 3.4 | MPL-2.0 | Álgebra lineal, vectores | Solo cabeceras |
 | [nlohmann/json](https://github.com/nlohmann/json) | 3.11 | MIT | Comandos, proyecto, MCP | Solo cabeceras |
 | [miniz](https://github.com/richgel999/miniz) | 3.0.2 | MIT | ZIP de los paquetes 3MF | Compilado de su código fuente |
+| [nanoflann](https://github.com/jlblancoc/nanoflann) | 1.6.1 | BSD-2-Clause | Vecinos más cercanos en nubes de puntos | Solo cabeceras |
+| [PoissonRecon](https://github.com/mkazhdan/PoissonRecon) | 18.76 (commit `262b0f5`) | MIT | Reconstrucción de Poisson apantallada | Sus cabeceras, compiladas en un archivo propio |
 | [QuadriFlow](https://github.com/hjwdzh/QuadriFlow) | commit `810b7a0` | BSD-3-Clause | Remallado en quads | Compilado de su código fuente, con los cambios de `cmake/PatchQuadriFlow.cmake` (sin Boost, sin llamadas a otros programas) |
 | [LEMON](https://lemon.cs.elte.hu) | 1.3.1 (incluido en QuadriFlow) | Boost Software License 1.0 | Grafos y flujos para QuadriFlow | Solo cabeceras |
 | [PCG32](https://www.pcg-random.org) (incluido en QuadriFlow) | — | Apache-2.0 | Números aleatorios de QuadriFlow | Solo cabeceras |

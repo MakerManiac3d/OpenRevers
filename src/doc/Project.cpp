@@ -17,7 +17,8 @@ using nlohmann::json;
 namespace {
 constexpr char kMagic[8] = {'O', 'R', 'V', 'P', 'R', 'O', 'J', '\0'};
 // 1: vertices and triangles. 2: adds the quads of a quad mesh ("quads", may be 0).
-constexpr std::uint32_t kVersion = 2;
+// 3: adds the normals of a point cloud ("normals": 0 or one per vertex).
+constexpr std::uint32_t kVersion = 3;
 static_assert(std::endian::native == std::endian::little, "project files are little endian");
 }  // namespace
 
@@ -40,8 +41,11 @@ void saveProject(const Document& doc, const fs::path& path) {
         jb["vertices"] = b.mesh->vertices.size();
         jb["faces"] = b.mesh->faces.size();
         jb["quads"] = b.mesh->quads.size();
+        const std::size_t nn = b.mesh->hasNormals() ? b.mesh->normals.size() : 0;
+        jb["normals"] = nn;
+        if (b.mesh->isPointCloud()) jb["kind"] = "points";
         jb["offset"] = offset;
-        offset += b.mesh->vertices.size() * 12 + b.mesh->faces.size() * 12 + b.mesh->quads.size() * 16;
+        offset += b.mesh->vertices.size() * 12 + b.mesh->faces.size() * 12 + b.mesh->quads.size() * 16 + nn * 12;
         manifest["bodies"].push_back(jb);
     }
     if (!manifest.contains("bodies")) manifest["bodies"] = json::array();
@@ -61,6 +65,8 @@ void saveProject(const Document& doc, const fs::path& path) {
             out.write(reinterpret_cast<const char*>(b.mesh->vertices.data()), static_cast<std::streamsize>(b.mesh->vertices.size() * 12));
             out.write(reinterpret_cast<const char*>(b.mesh->faces.data()), static_cast<std::streamsize>(b.mesh->faces.size() * 12));
             out.write(reinterpret_cast<const char*>(b.mesh->quads.data()), static_cast<std::streamsize>(b.mesh->quads.size() * 16));
+            if (b.mesh->hasNormals())
+                out.write(reinterpret_cast<const char*>(b.mesh->normals.data()), static_cast<std::streamsize>(b.mesh->normals.size() * 12));
         }
         if (!out) throw IoError("Failed while writing " + path.string());
     }
@@ -109,8 +115,11 @@ void loadProject(Document& doc, const fs::path& path) {
         const auto nv = jb.at("vertices").get<std::uint64_t>();
         const auto nf = jb.at("faces").get<std::uint64_t>();
         const auto nq = jb.value("quads", std::uint64_t{0});
+        const auto nn = jb.value("normals", std::uint64_t{0});
         const auto off = jb.at("offset").get<std::uint64_t>();
-        if (nv > fileSize || nf > fileSize || nq > fileSize || dataStart + off + nv * 12 + nf * 12 + nq * 16 > fileSize) throw IoError(path.filename().string() + ": body \"" + b.name + "\" is truncated");
+        if (nn != 0 && nn != nv) throw IoError(path.filename().string() + ": body \"" + b.name + "\" has a wrong number of normals");
+        if (nv > fileSize || nf > fileSize || nq > fileSize || off > fileSize ||
+            dataStart + off + nv * 12 + nf * 12 + nq * 16 + nn * 12 > fileSize) throw IoError(path.filename().string() + ": body \"" + b.name + "\" is truncated");
         auto mesh = std::make_shared<TriMesh>();
         mesh->vertices.resize(nv);
         mesh->faces.resize(nf);
@@ -119,6 +128,8 @@ void loadProject(Document& doc, const fs::path& path) {
         in.read(reinterpret_cast<char*>(mesh->faces.data()), static_cast<std::streamsize>(nf * 12));
         mesh->quads.resize(nq);
         in.read(reinterpret_cast<char*>(mesh->quads.data()), static_cast<std::streamsize>(nq * 16));
+        mesh->normals.resize(nn);
+        in.read(reinterpret_cast<char*>(mesh->normals.data()), static_cast<std::streamsize>(nn * 12));
         bool bad = false;
         for (const auto& t : mesh->faces)
             for (auto v : t) bad |= v >= nv;

@@ -7,6 +7,7 @@
 #include "core/mesh/MeshIO.h"
 #include "core/mesh/MeshQuad.h"
 #include "core/mesh/MeshRepair.h"
+#include "core/points/PointCloud.h"
 #include "core/util/Version.h"
 #include "doc/Project.h"
 
@@ -34,7 +35,8 @@ double round4(double v) { return std::round(v * 1e4) / 1e4; }
 
 json bodyJson(const Body& b) {
     return {{"ref", b.ref()}, {"name", b.name}, {"vertices", b.mesh->vertexCount()}, {"faces", b.mesh->faceCount()},
-            {"quads", b.mesh->quads.size()}, {"visible", b.visible}, {"bounds", boxJson(b.mesh->bounds())}, {"source", b.source}};
+            {"quads", b.mesh->quads.size()},
+            {"pointCloud", b.mesh->isPointCloud()}, {"normals", b.mesh->hasNormals()}, {"visible", b.visible}, {"bounds", boxJson(b.mesh->bounds())}, {"source", b.source}};
 }
 
 json reportJson(const MeshReport& r, std::size_t maxLoops = 20) {
@@ -69,9 +71,27 @@ std::shared_ptr<TriMesh> editMesh(CommandContext& ctx, const Body& b, Op&& op, b
     auto m = std::make_shared<TriMesh>(*b.mesh);
     op(*m);
     if (!keepQuads) m->dropQuads();
-    if (m->faces.empty()) throw CommandError("failed", ctx.say("The operation left no triangles; nothing was changed.", "La operación no dejó ningún triángulo; no se ha cambiado nada."));
+    if (b.mesh->isPointCloud() ? m->vertices.empty() : m->faces.empty())
+        throw CommandError("failed", ctx.say("The operation left nothing; nothing was changed.", "La operación no dejó nada; no se ha cambiado nada."));
     ctx.doc.setMesh(b.id, m);
     return m;
+}
+
+/// The body, which must be a triangle mesh (not a point cloud).
+Body meshBody(CommandContext& ctx, const json& ref) {
+    Body b = ctx.doc.body(ref);
+    if (b.mesh->isPointCloud())
+        throw CommandError("invalid_input", ctx.say(b.name + " is a point cloud; reconstruct a mesh from it first (points.to_mesh).",
+                                                    b.name + " es una nube de puntos; reconstruye antes una malla (points.to_mesh)."));
+    return b;
+}
+
+/// The body, which must be a point cloud.
+Body cloudBody(CommandContext& ctx, const json& ref) {
+    Body b = ctx.doc.body(ref);
+    if (!b.mesh->isPointCloud())
+        throw CommandError("invalid_input", ctx.say(b.name + " is a mesh, not a point cloud.", b.name + " es una malla, no una nube de puntos."));
+    return b;
 }
 
 json changeSummary(const Body& b, const TriMesh& before, const TriMesh& after, json extra) {
@@ -104,9 +124,9 @@ void registerCoreCommands(CommandRegistry& R) {
 
     // ------------------------------------------------------------ files --
     R.add({"mesh.import", "file", {"Import mesh", "Importar malla"},
-           {"Read a mesh file into a new body: STL, OBJ or PLY (read as millimetres), or 3MF (converted from its own unit; every build item with its transforms).",
-            "Lee un archivo de malla en un cuerpo nuevo: STL, OBJ o PLY (en milímetros), o 3MF (convertido desde su unidad; todos los elementos de su construcción con sus transformaciones)."},
-           object({{"path", path({"File to read", "Archivo a leer"}, false, "Mesh (*.stl *.obj *.ply *.3mf)")},
+           {"Read a mesh or point cloud file into a new body: STL, OBJ or PLY (read as millimetres), 3MF (converted from its own unit; every build item with its transforms), or XYZ/PTS points. A PLY or OBJ without faces is a point cloud, with its normals if it has them.",
+            "Lee un archivo de malla o de nube de puntos en un cuerpo nuevo: STL, OBJ o PLY (en milímetros), 3MF (convertido desde su unidad; todos los elementos de su construcción con sus transformaciones) o puntos XYZ/PTS. Un PLY u OBJ sin caras es una nube de puntos, con sus normales si las tiene."},
+           object({{"path", path({"File to read", "Archivo a leer"}, false, "Mesh or points (*.stl *.obj *.ply *.3mf *.xyz *.pts)")},
                    {"name", string({"Name for the body (default: the file name)", "Nombre del cuerpo (por defecto, el del archivo)"})}},
                   {"path"}),
            true, false,
@@ -119,16 +139,22 @@ void registerCoreCommands(CommandRegistry& R) {
                const Body b = ctx.doc.addBody(name, mesh, p.string());
                json out = bodyJson(b);
                out["seconds"] = round4(secs);
-               out["summary"] = ctx.say("Imported " + p.filename().string() + ": " + std::to_string(mesh->faceCount()) + " triangles.",
-                                        "Importado " + p.filename().string() + ": " + std::to_string(mesh->faceCount()) + " triángulos.");
+               if (mesh->isPointCloud()) {
+                   const std::string n = std::to_string(mesh->vertexCount());
+                   out["summary"] = ctx.say("Imported " + p.filename().string() + ": a point cloud of " + n + " points" + (mesh->hasNormals() ? " with normals." : ", no normals."),
+                                            "Importado " + p.filename().string() + ": una nube de " + n + " puntos" + (mesh->hasNormals() ? " con normales." : ", sin normales."));
+               } else {
+                   out["summary"] = ctx.say("Imported " + p.filename().string() + ": " + std::to_string(mesh->faceCount()) + " triangles.",
+                                            "Importado " + p.filename().string() + ": " + std::to_string(mesh->faceCount()) + " triángulos.");
+               }
                return out;
            }});
 
     R.add({"mesh.export", "file", {"Export mesh", "Exportar malla"},
-           {"Write a body's mesh to a file: .stl (binary), .obj, .ply (binary) or .3mf (millimetres). Refuses to overwrite unless overwrite is true.",
-            "Escribe la malla de un cuerpo en un archivo: .stl (binario), .obj, .ply (binario) o .3mf (en milímetros). No sobrescribe salvo con overwrite."},
+           {"Write a body to a file: a mesh as .stl (binary), .obj, .ply (binary) or .3mf (millimetres); a point cloud as .ply, .xyz or .obj, with its normals. Refuses to overwrite unless overwrite is true.",
+            "Escribe un cuerpo en un archivo: una malla en .stl (binario), .obj, .ply (binario) o .3mf (en milímetros); una nube de puntos en .ply, .xyz u .obj, con sus normales. No sobrescribe salvo con overwrite."},
            object({{"body", body(kBody)},
-                   {"path", path({"File to write", "Archivo a escribir"}, true, "STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf)")},
+                   {"path", path({"File to write", "Archivo a escribir"}, true, "STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf);;XYZ (*.xyz)")},
                    {"ascii", boolean({"Text format (STL or PLY)", "Formato de texto (STL o PLY)"}, false)},
                    {"overwrite", boolean({"Replace the file if it exists", "Reemplazar el archivo si existe"}, false)}},
                   {"body", "path"}),
@@ -200,7 +226,7 @@ void registerCoreCommands(CommandRegistry& R) {
             "Revisa una malla antes de modelar: agujeros y su tamaño, bordes abiertos y no manifold, caras invertidas, degeneradas y duplicadas, piezas sueltas, área, volumen y longitud media de arista. No cambia nada."},
            object({{"body", body(kBody)}}, {"body"}), false, false,
            [](CommandContext& ctx, const json& in) {
-               const Body b = ctx.doc.body(in["body"]);
+               const Body b = meshBody(ctx, in["body"]);
                const MeshReport r = analyze(*b.mesh);
                json out = reportJson(r);
                out["body"] = b.ref();
@@ -226,7 +252,7 @@ void registerCoreCommands(CommandRegistry& R) {
                   {"body"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
-               const Body b = ctx.doc.body(in["body"]);
+               const Body b = meshBody(ctx, in["body"]);
                json done;
                auto before = b.mesh;
                auto after = editMesh(ctx, b, [&](TriMesh& m) {
@@ -256,7 +282,7 @@ void registerCoreCommands(CommandRegistry& R) {
                   {"body"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
-               const Body b = ctx.doc.body(in["body"]);
+               const Body b = meshBody(ctx, in["body"]);
                FillHolesResult r;
                auto before = b.mesh;
                auto after = editMesh(ctx, b, [&](TriMesh& m) { r = fillHoles(m, static_cast<std::size_t>(in["maxEdges"].get<long long>())); });
@@ -275,7 +301,7 @@ void registerCoreCommands(CommandRegistry& R) {
                   {"body"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
-               const Body b = ctx.doc.body(in["body"]);
+               const Body b = meshBody(ctx, in["body"]);
                std::size_t removed = 0;
                auto before = b.mesh;
                auto after = editMesh(ctx, b, [&](TriMesh& m) {
@@ -290,7 +316,7 @@ void registerCoreCommands(CommandRegistry& R) {
            {"Reverse every face so the normals point the other way.", "Invierte todas las caras para que las normales apunten al otro lado."},
            object({{"body", body(kBody)}}, {"body"}), true, false,
            [](CommandContext& ctx, const json& in) {
-               const Body b = ctx.doc.body(in["body"]);
+               const Body b = meshBody(ctx, in["body"]);
                auto before = b.mesh;
                auto after = editMesh(ctx, b, [&](TriMesh& m) { flipNormals(m); }, true);
                json out = changeSummary(b, *before, *after, json::object());
@@ -309,7 +335,7 @@ void registerCoreCommands(CommandRegistry& R) {
                   {"body"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
-               const Body b = ctx.doc.body(in["body"]);
+               const Body b = meshBody(ctx, in["body"]);
                auto before = b.mesh;
                auto after = editMesh(ctx, b, [&](TriMesh& m) {
                    smooth(m, in["method"] == "implicit", static_cast<unsigned>(in["iterations"].get<long long>()), static_cast<float>(in["timestep"].get<double>()));
@@ -329,7 +355,7 @@ void registerCoreCommands(CommandRegistry& R) {
                   {"body"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
-               const Body b = ctx.doc.body(in["body"]);
+               const Body b = meshBody(ctx, in["body"]);
                const auto faces = b.mesh->faceCount();
                const auto target = in["targetFaces"].get<long long>() > 0 ? static_cast<std::size_t>(in["targetFaces"].get<long long>())
                                                                            : static_cast<std::size_t>(std::llround(static_cast<double>(faces) * in["ratio"].get<double>()));
@@ -358,7 +384,7 @@ void registerCoreCommands(CommandRegistry& R) {
                   {"body"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
-               const Body b = ctx.doc.body(in["body"]);
+               const Body b = meshBody(ctx, in["body"]);
                auto before = b.mesh;
                const auto it = static_cast<unsigned>(in["iterations"].get<long long>());
                const auto feat = static_cast<float>(in["featureAngle"].get<double>());
@@ -395,7 +421,7 @@ void registerCoreCommands(CommandRegistry& R) {
                   {"body"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
-               const Body b = ctx.doc.body(in["body"]);
+               const Body b = meshBody(ctx, in["body"]);
                auto before = b.mesh;
                QuadRemeshOptions o;
                o.targetFaces = static_cast<std::size_t>(in["targetFaces"].get<long long>());
@@ -435,7 +461,7 @@ void registerCoreCommands(CommandRegistry& R) {
                   {"body", "path"}),
            false, false,
            [](CommandContext& ctx, const json& in) {
-               const Body b = ctx.doc.body(in["body"]);
+               const Body b = meshBody(ctx, in["body"]);
                const fs::path p = ctx.paths.check(in["path"].get<std::string>(), true);
                if (fs::exists(p) && !in["overwrite"].get<bool>())
                    throw CommandError("refused", ctx.say(p.string() + " already exists; pass overwrite: true to replace it.", p.string() + " ya existe; usa overwrite: true para reemplazarlo."));
@@ -448,6 +474,89 @@ void registerCoreCommands(CommandRegistry& R) {
                            {"bytes", fs::file_size(p)},
                            {"summary", ctx.say("Wrote " + p.filename().string() + ": " + std::to_string(r.faces) + " T-Spline faces.",
                                                "Escrito " + p.filename().string() + ": " + std::to_string(r.faces) + " caras T-Spline.")}};
+           }});
+
+    // ----------------------------------------------------------- points --
+    R.add({"points.thin", "points", {"Thin points", "Aclarar puntos"},
+           {"Keep one point per cube of side 'spacing' (the one nearest the cube's centre of mass): an even, lighter cloud for reconstruction.",
+            "Conserva un punto por cubo de lado 'spacing' (el más cercano al centro de masas del cubo): una nube uniforme y más ligera para reconstruir."},
+           object({{"body", body(kBody)},
+                   {"spacing", number({"Cube side", "Lado del cubo"}, 0.5, 0.0001, 1000.0, "mm")}},
+                  {"body", "spacing"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = cloudBody(ctx, in["body"]);
+               std::size_t removed = 0;
+               auto after = editMesh(ctx, b, [&](TriMesh& m) { removed = thinPoints(m, static_cast<float>(in["spacing"].get<double>())); });
+               const std::string n = std::to_string(after->vertexCount());
+               return json{{"body", b.ref()}, {"removed", removed}, {"points", after->vertexCount()},
+                           {"summary", ctx.say(std::to_string(removed) + " points removed; " + n + " left.", std::to_string(removed) + " puntos quitados; quedan " + n + ".")}};
+           }});
+
+    R.add({"points.estimate_normals", "points", {"Estimate normals", "Calcular normales"},
+           {"Give every point a normal from the plane through its nearest neighbours, then orient them: 'propagate' spreads one side over the cloud (open or closed scans), 'outward' points away from the centre (closed, roughly convex parts), 'keep' keeps the side of the normals the points already have. Needed before points.to_mesh.",
+            "Da a cada punto una normal a partir del plano de sus vecinos más cercanos y después las orienta: 'propagate' extiende un mismo lado por toda la nube (escaneos abiertos o cerrados), 'outward' las apunta hacia fuera del centro (piezas cerradas y más o menos convexas), 'keep' conserva el lado de las normales que ya tienen. Hace falta antes de points.to_mesh."},
+           object({{"body", body(kBody)},
+                   {"neighbours", integer({"Neighbours per point", "Vecinos por punto"}, 16, 3, 100)},
+                   {"orientation", choice({"Orientation", "Orientación"}, {"propagate", "outward", "keep"}, "propagate")}},
+                  {"body"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = cloudBody(ctx, in["body"]);
+               const std::string o = in["orientation"];
+               const NormalOrientation orient = o == "outward" ? NormalOrientation::Outward : o == "keep" ? NormalOrientation::Keep : NormalOrientation::Propagate;
+               if (orient == NormalOrientation::Keep && !b.mesh->hasNormals())
+                   throw CommandError("invalid_input", ctx.say("The points have no normals to keep the side of; use 'propagate' or 'outward'.",
+                                                               "Los puntos no tienen normales cuyo lado conservar; usa 'propagate' u 'outward'."));
+               NormalsResult r;
+               editMesh(ctx, b, [&](TriMesh& m) { r = estimateNormals(m, static_cast<int>(in["neighbours"].get<long long>()), orient); });
+               return json{{"body", b.ref()}, {"points", r.points}, {"flipped", r.flipped}, {"isolated", r.isolated}, {"meanSpacing", round4(r.meanSpacing)},
+                           {"summary", ctx.say("Normals for " + std::to_string(r.points) + " points (mean spacing " + std::to_string(round4(r.meanSpacing)).substr(0, 6) + " mm).",
+                                               "Normales de " + std::to_string(r.points) + " puntos (separación media " + std::to_string(round4(r.meanSpacing)).substr(0, 6) + " mm).")}};
+           }});
+
+    R.add({"points.to_mesh", "points", {"Mesh from points (Poisson)", "Malla desde puntos (Poisson)"},
+           {"Reconstruct a watertight surface from a point cloud with normals (screened Poisson) into a new body; the cloud is kept. 'depth' sets the detail (the smallest feature is about size / 2^depth). For an open scan, 'trim' removes the surface Poisson invents where there were no points (e.g. 0.05-0.1).",
+            "Reconstruye una superficie cerrada a partir de una nube de puntos con normales (Poisson apantallado) en un cuerpo nuevo; la nube se conserva. 'depth' fija el detalle (el detalle más pequeño es unos tamaño / 2^depth). Para un escaneo abierto, 'trim' quita la superficie que Poisson inventa donde no había puntos (p. ej. 0,05-0,1)."},
+           object({{"body", body(kBody)},
+                   {"depth", integer({"Octree depth (detail)", "Profundidad del octree (detalle)"}, 8, 4, 12)},
+                   {"pointWeight", number({"How closely the surface follows the points", "Cuánto se ciñe la superficie a los puntos"}, 4.0, 0.0, 100.0)},
+                   {"samplesPerNode", number({"Points per cell (raise for noisy scans)", "Puntos por celda (súbelo en escaneos con ruido)"}, 1.5, 1.0, 20.0)},
+                   {"trim", number({"Remove the lowest-density fraction of the surface", "Quitar la fracción de superficie con menos densidad"}, 0.0, 0.0, 0.5)},
+                   {"keepLargest", boolean({"After trimming, keep only the largest piece", "Tras recortar, conservar solo la pieza mayor"}, true)},
+                   {"name", string({"Name of the new body", "Nombre del cuerpo nuevo"})}},
+                  {"body"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = cloudBody(ctx, in["body"]);
+               if (!b.mesh->hasNormals())
+                   throw CommandError("invalid_input", ctx.say("The points have no normals; run points.estimate_normals first.",
+                                                               "Los puntos no tienen normales; usa antes points.estimate_normals."));
+               PoissonOptions o;
+               o.depth = static_cast<int>(in["depth"].get<long long>());
+               o.pointWeight = static_cast<float>(in["pointWeight"].get<double>());
+               o.samplesPerNode = static_cast<float>(in["samplesPerNode"].get<double>());
+               o.trimQuantile = static_cast<float>(in["trim"].get<double>());
+               o.keepLargest = in["keepLargest"].get<bool>();
+               auto mesh = std::make_shared<TriMesh>();
+               PoissonResult r;
+               const auto t0 = std::chrono::steady_clock::now();
+               try {
+                   r = reconstructPoisson(*b.mesh, o, *mesh);
+               } catch (const std::runtime_error& e) {
+                   throw CommandError("failed", ctx.say("Reconstruction failed: " + std::string(e.what()) + ".", "La reconstrucción ha fallado: " + std::string(e.what()) + "."));
+               }
+               const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+               const std::string name = in.contains("name") ? in["name"].get<std::string>() : b.name + " mesh";
+               const Body nb = ctx.doc.addBody(name, mesh, b.source);
+               json out = bodyJson(nb);
+               out["from"] = b.ref();
+               out["facesTrimmed"] = r.facesTrimmed;
+               out["closed"] = analyze(*mesh).closed;
+               out["seconds"] = round4(secs);
+               out["summary"] = ctx.say("Reconstructed " + nb.ref() + ": " + std::to_string(mesh->faceCount()) + " triangles.",
+                                        "Reconstruida " + nb.ref() + ": " + std::to_string(mesh->faceCount()) + " triángulos.");
+               return out;
            }});
 
     // ----------------------------------------------------------- bodies --

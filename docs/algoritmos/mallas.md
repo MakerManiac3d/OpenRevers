@@ -1,4 +1,4 @@
-# Algoritmos de mallas (fase 1)
+# Algoritmos de mallas y nubes de puntos (fase 1)
 
 Cada operación, qué hace, en qué se basa y sus límites. El código está en
 `src/core/mesh`; los tests, en `tests/test_mesh.cpp`.
@@ -17,6 +17,10 @@ Cada operación, qué hace, en qué se basa y sus límites. El código está en
 | Remallado adaptativo | Longitud de arista según la curvatura y un error máximo | PMP | M. Dunyach et al., *Adaptive Remeshing for Real-Time Mesh Deformation*, Eurographics 2013 |
 | Aristas vivas | Ángulo diedro mayor que `featureAngle`: la arista se marca y el remallado la conserva | PMP | — |
 | Remallado en quads | Campo de orientaciones y de posiciones con simetría de 4 rotaciones; el mapa entero se arregla con un flujo máximo para que no haya quads invertidos | [QuadriFlow](https://github.com/hjwdzh/QuadriFlow), modificado (ver abajo) | J. Huang, Y. Zhou, M. Nießner, J. R. Shewchuk, L. J. Guibas, *QuadriFlow: A Scalable and Robust Method for Quadrangulation*, SGP 2018; W. Jakob et al., *Instant Field-Aligned Meshes*, SIGGRAPH Asia 2015 |
+| Lectura XYZ / PTS | Texto: `x y z` o `x y z nx ny nz`; otras columnas (intensidad, color) se ignoran | Propia | — |
+| Aclarar puntos | Rejilla de cubos; en cada cubo, el punto más cercano a su centro de masas | Propia | — |
+| Normales de puntos | Plano de los *k* vecinos más cercanos por componentes principales; orientación por árbol de expansión mínima sobre el grafo de vecinos, con peso 1 − \|nᵢ·nⱼ\| | Propia + [nanoflann](https://github.com/jlblancoc/nanoflann) (k-d tree) | H. Hoppe et al., *Surface Reconstruction from Unorganized Points*, SIGGRAPH 1992 |
+| Malla desde puntos | Poisson apantallado sobre un octree; recorte por la densidad de puntos en cada vértice y conservar la pieza mayor | [PoissonRecon](https://github.com/mkazhdan/PoissonRecon) 18.76 | M. Kazhdan, H. Hoppe, *Screened Poisson Surface Reconstruction*, ACM TOG 2013 |
 | Exportar T-Spline | Semiaristas de la malla de quads escritas en el formato TS0200 de Autodesk (`.tsm`), en centímetros, orientada hacia fuera | Propia, con el mismo formato que ya se probó en Fusion | — |
 
 ## QuadriFlow en OpenRevers
@@ -67,6 +71,10 @@ Los tests usan mallas generadas con respuesta conocida:
   ruido tras suavizar;
 - **lámina abierta**: un único borde de 40 mm;
 - **esfera con dos agujeros**: queda cerrada tras rellenar;
+- **nubes** (`tests/test_points.cpp`): esfera de puntos con ruido, normales
+  hacia fuera en el 99 %, Poisson cerrado con el volumen de la esfera (±4 %),
+  media esfera recortada sin la mitad inventada; XYZ, PLY, OBJ y proyecto de
+  ida y vuelta con normales;
 - **quads** (`tests/test_quads.cpp`): esfera en quads cerrada, en el radio y
   cerca del número pedido; caja en quads con sus medidas y volumen; OBJ y PLY
   de ida y vuelta; el `.tsm` con sus recuentos, la característica de Euler

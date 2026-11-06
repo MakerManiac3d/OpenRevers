@@ -65,6 +65,7 @@ private:
         QOpenGLBuffer vbo{QOpenGLBuffer::VertexBuffer};
         QOpenGLBuffer ibo{QOpenGLBuffer::IndexBuffer};
         int indexCount{0};
+        int pointCount{0};  // a point cloud: drawn as points, not triangles
         // A quad mesh draws its wireframe as the quads' edges, not the triangles'.
         QOpenGLVertexArrayObject wireVao;
         QOpenGLBuffer wireIbo{QOpenGLBuffer::IndexBuffer};

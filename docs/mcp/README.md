@@ -62,7 +62,7 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | --- | --- | --- |
 | `session_state` | Qué hay abierto, cambios sin guardar, historial, carpetas permitidas | No |
 | `guide_read` | La guía de trabajo para el agente | No |
-| `mesh_import` | Importa STL, OBJ, PLY o 3MF (con su unidad y transformaciones) a un cuerpo nuevo | Sí |
+| `mesh_import` | Importa STL, OBJ, PLY o 3MF (con su unidad y transformaciones), o una nube de puntos XYZ, PTS, PLY u OBJ, a un cuerpo nuevo | Sí |
 | `mesh_analyze` | Agujeros, aristas no manifold, orientación, piezas, área, volumen | No |
 | `mesh_repair` | Une, limpia, quita piezas sueltas y orienta | Sí |
 | `mesh_fill_holes` | Rellena los agujeros de hasta `maxEdges` aristas | Sí |
@@ -72,7 +72,10 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `mesh_decimate` | Reduce triángulos con un error máximo | Sí |
 | `mesh_remesh` | Remallado uniforme o adaptativo que conserva las aristas vivas | Sí |
 | `mesh_remesh_quads` | Remallado en quads que siguen la forma y las aristas vivas (QuadriFlow); dice si sirve para T-Spline | Sí |
-| `mesh_export` | Escribe STL, OBJ, PLY o 3MF (no sobrescribe sin `overwrite`); una malla de quads sale en quads en OBJ y PLY | No |
+| `mesh_export` | Escribe STL, OBJ, PLY o 3MF; una nube, en PLY, XYZ u OBJ con sus normales (no sobrescribe sin `overwrite`); una malla de quads sale en quads en OBJ y PLY | No |
+| `points_thin` | Aclara una nube: un punto por cubo de lado `spacing` | Sí |
+| `points_estimate_normals` | Normales de una nube (plano de los vecinos) y su orientación | Sí |
+| `points_to_mesh` | Malla cerrada desde la nube (Poisson apantallado), con recorte opcional de lo inventado | Sí |
 | `mesh_export_tsm` | Escribe una malla de quads cerrada como T-Spline `.tsm` para Fusion | No |
 | `project_save` · `project_open` · `project_new` | Proyecto `.orvp` | — |
 | `body_list` · `body_rename` · `body_duplicate` · `body_delete` · `body_set_visible` | Cuerpos | — |

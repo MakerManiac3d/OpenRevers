@@ -34,7 +34,8 @@ Z is up, as in most CAD programs.
 ## Recommended workflow
 
 1. **Import.** *File → Import mesh* (Ctrl+I), or drop the file on the window.
-   STL (binary and text), OBJ and PLY, read as millimetres; 3MF, converted
+   STL (binary and text), OBJ and PLY, read as millimetres; XYZ and PTS
+   point clouds; 3MF, converted
    from the unit it states, with every object of its build.
 2. **Analyse.** *Mesh → Analyse mesh*. The report gives:
    - **holes** and their length. A one-sided scan has one long outer rim;
@@ -73,6 +74,25 @@ Z is up, as in most CAD programs.
    open, fill its holes before quad remeshing: the program says what stops the
    export.
 
+### Starting from a point cloud
+
+An XYZ or PTS file, or a PLY or OBJ without faces, comes in as a **point
+cloud** (drawn as points). Mesh operations do not apply to a cloud; first
+rebuild the surface from the *Points* menu:
+
+1. **Thin points** (optional): one point per cube of side *spacing*. An even,
+   lighter cloud reconstructs better and faster.
+2. **Estimate normals**: each point gets the normal of the plane through its
+   neighbours. *propagate* orients the whole cloud consistently (open or
+   closed scans); *outward*, away from the centre (closed, roughly convex
+   parts); *keep* keeps the side of the scanner's own normals.
+3. **Mesh from points (Poisson)**: makes a new body with a closed mesh; the
+   cloud is kept. *depth* sets the detail (8 is usually enough; each level
+   more makes four times the triangles). On an open scan, Poisson closes
+   what was not scanned: *trim* (0.05–0.1) removes it.
+
+The mesh then follows the usual workflow from step 2.
+
 Try an operation on a copy first (*Body → Duplicate body*) and compare.
 
 ## Settings
@@ -108,7 +128,9 @@ openrevers-cli mcp         # MCP server for an agent
 
 | Problem | Fix |
 | --- | --- |
-| "The file has no triangles" | The file is a point cloud or empty. Point-cloud reconstruction comes in a later version |
+| "The file has no points or triangles" | The file is empty or not the format its extension says |
+| "… is a point cloud; reconstruct a mesh from it first" | Use the *Points* menu: estimate normals, then mesh from points |
+| The Poisson mesh has a "lid" where there were no points | Run it again with *trim* 0.05–0.1 |
 | Holes are left open | They are larger than *maxEdges*: raise it, or use 0 for all |
 | Remeshing rounds an edge | Lower *featureAngle* so the edge counts as sharp |
 | "The quad mesh cannot be a T-Spline: it is open" | Fill the holes (maxEdges 0) and quad remesh again |

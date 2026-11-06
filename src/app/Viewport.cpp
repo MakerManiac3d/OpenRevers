@@ -39,10 +39,15 @@ in vec3 vNormal;
 in vec3 vViewPos;
 uniform vec3 uColor;
 uniform bool uFlat;
+uniform bool uPoints;
 uniform float uHighlight;
 out vec4 fragColor;
 void main() {
-    vec3 n = uFlat ? normalize(cross(dFdx(vViewPos), dFdy(vViewPos))) : normalize(vNormal);
+    if (uPoints && dot(vNormal, vNormal) < 0.25) {  // points without normals: unlit
+        fragColor = vec4(mix(uColor * 0.9, vec3(1.0, 0.72, 0.25), uHighlight * 0.18), 1.0);
+        return;
+    }
+    vec3 n = uFlat && !uPoints ? normalize(cross(dFdx(vViewPos), dFdy(vViewPos))) : normalize(vNormal);
     vec3 v = normalize(-vViewPos);
     if (dot(n, v) < 0.0) n = -n;               // back faces lit like front faces
     bool back = !gl_FrontFacing;
@@ -155,7 +160,9 @@ void Viewport::initializeGL() {
 void Viewport::resizeGL(int, int) {}
 
 void Viewport::upload(GpuMesh& g, const TriMesh& m) {
-    const auto normals = m.vertexNormals();
+    const auto normals = !m.isPointCloud() ? m.vertexNormals()
+                         : m.hasNormals()   ? m.normals
+                                            : std::vector<Vec3f>(m.vertices.size(), Vec3f::Zero());
     std::vector<float> buf;
     buf.reserve(m.vertices.size() * 6);
     for (std::size_t i = 0; i < m.vertices.size(); ++i) {
@@ -175,6 +182,7 @@ void Viewport::upload(GpuMesh& g, const TriMesh& m) {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, reinterpret_cast<void*>(12));
     g.vao.release();
     g.indexCount = static_cast<int>(m.faces.size() * 3);
+    g.pointCount = m.isPointCloud() ? static_cast<int>(m.vertices.size()) : 0;
     g.edgeVertexCount = -1;
     g.edgePending = false;
     g.edgeLines.reset();
@@ -406,6 +414,7 @@ void Viewport::paintGL() {
     meshProg_.setUniformValue("uMvp", mvp);
     meshProg_.setUniformValue("uView", view);
     meshProg_.setUniformValue("uFlat", flat_);
+    meshProg_.setUniformValue("uPoints", false);
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.f, 1.f);
     for (const auto& b : bodies_) {
@@ -415,7 +424,14 @@ void Viewport::paintGL() {
         // Tint the selected body only when there is another to tell it from.
         meshProg_.setUniformValue("uHighlight", b.id == selected_ && bodies_.size() > 1 ? 1.f : 0.f);
         g.vao.bind();
-        glDrawElements(GL_TRIANGLES, g.indexCount, GL_UNSIGNED_INT, nullptr);
+        if (g.pointCount > 0) {
+            meshProg_.setUniformValue("uPoints", true);
+            glPointSize(2.f);
+            glDrawArrays(GL_POINTS, 0, g.pointCount);
+            meshProg_.setUniformValue("uPoints", false);
+        } else {
+            glDrawElements(GL_TRIANGLES, g.indexCount, GL_UNSIGNED_INT, nullptr);
+        }
         g.vao.release();
     }
     glDisable(GL_POLYGON_OFFSET_FILL);
