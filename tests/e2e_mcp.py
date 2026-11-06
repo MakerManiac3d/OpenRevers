@@ -119,19 +119,24 @@ def main() -> int:
     scan = work / "scan.stl"
     make_scan(scan)
 
-    app = subprocess.Popen([a.app], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    app_log = open(work / "app.log", "w")
+    app = subprocess.Popen([a.app], env=env, stdout=app_log, stderr=subprocess.STDOUT)
     try:
         agent = None
         for _ in range(60):  # wait for the app to listen
             time.sleep(0.5)
             agent = Agent(a.cli, env)
             init = agent.rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "e2e", "version": "1"}})
-            if "aplicación de escritorio" in init["result"]["instructions"]:
+            if "conectado a la aplicación" in init["result"]["instructions"]:
                 break
             agent.close()
             agent = None
             if app.poll() is not None:
                 break
+        if agent is None:
+            app_log.flush()
+            print("--- app output ---\n" + (work / "app.log").read_text(errors="replace")[-3000:])
+            print("app exit code:", app.poll())
         check(agent is not None, "the bridge connects to the running app")
         agent.notify("notifications/initialized")
         names = {t["name"] for t in agent.rpc("tools/list")["result"]["tools"]}

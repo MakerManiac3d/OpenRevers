@@ -8,7 +8,7 @@
 
 #include <QMatrix4x4>
 #include <QOpenGLBuffer>
-#include <QOpenGLExtraFunctions>
+#include <QOpenGLFunctions_3_3_Core>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLVertexArrayObject>
 #include <QOpenGLWidget>
@@ -20,7 +20,7 @@
 
 namespace orv {
 
-class Viewport : public QOpenGLWidget, protected QOpenGLExtraFunctions {
+class Viewport : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core {
     Q_OBJECT
 public:
     enum class View { Iso, Front, Back, Left, Right, Top, Bottom };
