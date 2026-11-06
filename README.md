@@ -84,7 +84,7 @@ sale del equipo es lo que el agente de IA lee, que va a su proveedor del modelo.
 | --- | --- |
 | [Manual (es)](docs/usuario/es/manual.md) · [Manual (en)](docs/usuario/en/manual.md) | Uso del programa |
 | [docs/mcp](docs/mcp/README.md) | Conectar un agente de IA, herramientas, seguridad |
-| [docs/desarrollo](docs/desarrollo/arquitectura.md) | Arquitectura, compilación, formato de proyecto, cómo añadir un comando |
+| [docs/desarrollo](docs/desarrollo/arquitectura.md) | Arquitectura, compilación, formato de proyecto, rendimiento con mallas grandes, cómo añadir un comando |
 | [docs/algoritmos](docs/algoritmos/mallas.md) | Cada algoritmo, su referencia bibliográfica y sus límites |
 | [Hoja de ruta](docs/hoja-de-ruta.md) | Las cinco fases |
 | [THIRD_PARTY.md](THIRD_PARTY.md) | Librerías de terceros y sus licencias |

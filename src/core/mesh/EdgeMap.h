@@ -7,6 +7,7 @@
 #pragma once
 
 #include "core/mesh/TriMesh.h"
+#include "core/util/RadixSort.h"
 
 #include <algorithm>
 #include <array>
@@ -39,7 +40,8 @@ public:
                 if (a != b) halves.push_back({key(a, b), static_cast<std::uint32_t>(f * 3 + k)});
             }
         }
-        std::sort(halves.begin(), halves.end(), [](const Half& x, const Half& y) { return x.key != y.key ? x.key < y.key : x.corner < y.corner; });
+        // Stable: within an edge the faces stay in order (they were pushed in order).
+        radixSort(halves, [](const Half& h) { return h.key; });
         cornerEdge_.assign(mesh.faces.size() * 3, kNone);
         faceList_.reserve(halves.size());
         edges_.reserve(halves.size() / 2 + 1);

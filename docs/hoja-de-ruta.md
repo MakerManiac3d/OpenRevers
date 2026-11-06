@@ -16,6 +16,6 @@ En todas las fases: herramientas MCP, documentación, tests e instalador.
 ## Pendiente de la fase 1
 
 - Nubes de puntos a malla (Poisson apantallado) y lectura de E57 y XYZ.
-- Prueba de rendimiento con 10 M de triángulos.
+- Rendimiento: medido con 10 M de triángulos ([rendimiento](desarrollo/rendimiento.md)); falta medir el dibujo con tarjeta gráfica y acelerar el diezmado.
 - Firma del instalador de Windows.
 - Compilación en GitHub para macOS.
