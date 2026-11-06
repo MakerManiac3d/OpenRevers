@@ -1,0 +1,124 @@
+<p align="center"><img src="packaging/openrevers.svg" alt="" width="112" /></p>
+
+# OpenRevers
+
+**Ingeniería inversa de mallas escaneadas, en local y con código abierto.**
+*Reverse engineering of scanned meshes — local and open source. [English below](#english).*
+
+OpenRevers convierte una malla escaneada en una pieza que se puede imprimir en
+3D o mecanizar en CNC. Es un programa de escritorio nativo (C++ y Qt) que
+funciona **entero en tu equipo** y que un agente de IA (Claude u otro
+compatible con MCP) puede manejar paso a paso, delante de ti.
+
+![La ventana de OpenRevers con un escaneo reparado](docs/images/ventana-es.png)
+
+> **Estado: versión 0.1, fase 1 de 5.** Hoy prepara mallas: análisis,
+> reparación, relleno de agujeros, suavizado, diezmado y remallado que conserva
+> las aristas vivas, con proyecto, deshacer y servidor MCP. Las primitivas, el
+> sólido paramétrico (STEP), las superficies libres y la inspección llegan en
+> las fases siguientes: consulta la [hoja de ruta](docs/hoja-de-ruta.md).
+
+## Qué hace (versión 0.1)
+
+| Área | Funciones |
+| --- | --- |
+| Archivos | Importar STL (binario y texto), OBJ y PLY (texto y binario); exportar STL, OBJ y PLY; proyecto `.orvp` con todos los cuerpos |
+| Análisis | Agujeros y su tamaño, bordes abiertos y no manifold, caras degeneradas, duplicadas e invertidas, piezas sueltas, área, volumen, longitud media de arista |
+| Reparación | Unir vértices, quitar caras defectuosas y piezas sueltas, orientar las caras hacia fuera, rellenar agujeros con un parche suave |
+| Procesado | Suavizado laplaciano, diezmado con error máximo, remallado uniforme o adaptativo conservando las aristas vivas |
+| Trabajo | Deshacer y rehacer de cada operación, historial, registro, visor 3D con bordes abiertos marcados |
+| IA (MCP) | 24 herramientas, capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
+| Idiomas | Español e inglés |
+
+## Instalación
+
+### Windows
+
+1. Descarga `OpenRevers-<versión>-win64.exe` de la página
+   [Releases](https://github.com/MakerManiac3d/OpenRevers/releases), o del
+   último artefacto **OpenRevers-Windows** en
+   [Actions → Build](https://github.com/MakerManiac3d/OpenRevers/actions/workflows/build.yml).
+2. Ejecútalo y sigue el asistente. Instala el programa y su puente para IA,
+   `openrevers-cli.exe`, en la misma carpeta.
+3. Windows SmartScreen avisará de que el instalador no está firmado:
+   *Más información → Ejecutar de todas formas*.
+
+También hay un `.zip` portátil, que funciona sin instalar.
+
+### Linux y macOS
+
+Por ahora, se compila desde el código: [docs/desarrollo/compilar.md](docs/desarrollo/compilar.md).
+
+## Uso
+
+1. **Archivo → Importar malla** (o arrastra el archivo a la ventana).
+2. **Malla → Analizar malla**: qué le pasa al escaneo.
+3. **Malla → Reparar malla**, después **Rellenar agujeros**.
+4. Si hace falta, **Suavizar**, **Remallar** o **Diezmar**.
+5. **Archivo → Exportar malla** o **Guardar proyecto**.
+
+Cada paso se deshace con Ctrl+Z. El manual completo:
+[docs/usuario/es/manual.md](docs/usuario/es/manual.md).
+
+## Trabajar con un agente de IA
+
+En OpenRevers, menú **Agente IA → Copiar configuración para Claude Desktop**
+(o **Copiar comando para Claude Code**), pégalo donde indica y reinicia
+Claude. Después basta con pedírselo: *«Abre C:\Escaneos\soporte.stl, repáralo,
+cierra los agujeros pequeños y exporta el resultado»*. Lo verás hacerlo en la
+ventana, y cada paso se puede deshacer.
+
+Detalles, herramientas y seguridad: [docs/mcp/README.md](docs/mcp/README.md).
+
+## Privacidad
+
+OpenRevers **no se conecta a internet**: sin telemetría, sin comprobación de
+actualizaciones, sin cuentas. El agente se conecta solo por `127.0.0.1` con un
+token, y solo puede leer y escribir en las carpetas que autorices. Lo único que
+sale del equipo es lo que el agente de IA lee, que va a su proveedor del modelo.
+
+## Documentación
+
+| Documento | Contenido |
+| --- | --- |
+| [Manual (es)](docs/usuario/es/manual.md) · [Manual (en)](docs/usuario/en/manual.md) | Uso del programa |
+| [docs/mcp](docs/mcp/README.md) | Conectar un agente de IA, herramientas, seguridad |
+| [docs/desarrollo](docs/desarrollo/arquitectura.md) | Arquitectura, compilación, formato de proyecto, cómo añadir un comando |
+| [docs/algoritmos](docs/algoritmos/mallas.md) | Cada algoritmo, su referencia bibliográfica y sus límites |
+| [Hoja de ruta](docs/hoja-de-ruta.md) | Las cinco fases |
+| [THIRD_PARTY.md](THIRD_PARTY.md) | Librerías de terceros y sus licencias |
+| [CHANGELOG.md](CHANGELOG.md) | Cambios por versión |
+
+## Licencia
+
+**GNU GPL v3 o posterior** ([LICENSE](LICENSE)). Puedes usarlo, estudiarlo,
+modificarlo y redistribuirlo; quien distribuya una versión modificada debe
+publicar su código con la misma licencia. Las librerías de terceros conservan
+sus licencias ([THIRD_PARTY.md](THIRD_PARTY.md)).
+
+© 2026 MakerManiac3d.
+
+---
+
+## English
+
+OpenRevers turns a scanned mesh into a part you can 3D print or machine. It is
+a native desktop program (C++ and Qt) that runs **entirely on your computer**,
+and that an AI agent (Claude or any MCP client) can drive step by step, in
+front of you.
+
+**Status: version 0.1, phase 1 of 5** — mesh preparation: analysis, repair,
+hole filling, smoothing, decimation and edge-preserving remeshing, with
+projects, undo and an MCP server. Primitives, parametric solids (STEP),
+freeform surfaces and inspection follow ([roadmap](docs/hoja-de-ruta.md)).
+
+- **Install (Windows):** run `OpenRevers-<version>-win64.exe` from
+  [Releases](https://github.com/MakerManiac3d/OpenRevers/releases) or the
+  latest **OpenRevers-Windows** artifact of the Build workflow.
+- **Build from source:** [docs/desarrollo/compilar.md](docs/desarrollo/compilar.md) (bilingual).
+- **Manual:** [docs/usuario/en/manual.md](docs/usuario/en/manual.md).
+- **AI agents:** menu **AI agent → Copy configuration for Claude Desktop**;
+  details in [docs/mcp/README.md](docs/mcp/README.md).
+- **Privacy:** no internet connection of its own; the agent link is on
+  127.0.0.1 with a token and limited to the folders you allow.
+- **Licence:** GPL-3.0-or-later.

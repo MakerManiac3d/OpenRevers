@@ -1,0 +1,146 @@
+# OpenRevers y los agentes de IA (MCP) · OpenRevers and AI agents
+
+*Español primero; [English below](#english).*
+
+OpenRevers incluye un servidor del
+[Model Context Protocol](https://modelcontextprotocol.io) (revisión
+2025-06-18; acepta también 2025-03-26 y 2024-11-05). Con él, un agente como
+Claude puede usar todas las funciones del programa.
+
+## Cómo funciona
+
+```text
+Claude Desktop / Claude Code
+      │  stdio (JSON-RPC)
+      ▼
+openrevers-cli mcp ──── TCP 127.0.0.1:47823 + token ───► OpenRevers (ventana)
+      │                                                    los mismos comandos,
+      └─ sin la ventana abierta: trabaja «headless»         el mismo deshacer
+         sobre un documento propio
+```
+
+- El agente arranca `openrevers-cli mcp`.
+- Si la aplicación está abierta, el puente se conecta a ella y **cada paso
+  ocurre en la ventana**: aparece en el registro y en el historial, y se puede
+  deshacer.
+- Si no está abierta, el puente trabaja sin interfaz, sobre un documento
+  propio. Las herramientas de vista (`view_set` y `view_capture`) no están
+  disponibles en ese modo.
+
+## Configurar Claude Desktop
+
+1. En OpenRevers, abre **Agente IA → Copiar configuración para Claude Desktop**.
+2. En Claude Desktop, ve a **Configuración → Desarrollador → Editar configuración**.
+3. Pega la entrada `openrevers` dentro de `mcpServers`. Queda así:
+
+   ```json
+   {
+     "mcpServers": {
+       "openrevers": {
+         "command": "C:\\Program Files\\OpenRevers\\bin\\openrevers-cli.exe",
+         "args": ["mcp"]
+       }
+     }
+   }
+   ```
+
+4. Cierra Claude Desktop del todo (Archivo → Salir) y vuelve a abrirlo.
+
+**Claude Code:** usa **Agente IA → Copiar comando para Claude Code** y pégalo
+en una terminal:
+
+```text
+claude mcp add --scope user openrevers -- "C:\Program Files\OpenRevers\bin\openrevers-cli.exe" mcp
+```
+
+`--lang es` o `--lang en` fija el idioma de las descripciones; por defecto se
+usa el del sistema. `--headless` obliga a trabajar sin la ventana.
+
+## Herramientas (versión 0.1)
+
+| Herramienta | Qué hace | Cambia el proyecto |
+| --- | --- | --- |
+| `session_state` | Qué hay abierto, cambios sin guardar, historial, carpetas permitidas | No |
+| `guide_read` | La guía de trabajo para el agente | No |
+| `mesh_import` | Importa STL, OBJ o PLY a un cuerpo nuevo | Sí |
+| `mesh_analyze` | Agujeros, aristas no manifold, orientación, piezas, área, volumen | No |
+| `mesh_repair` | Une, limpia, quita piezas sueltas y orienta | Sí |
+| `mesh_fill_holes` | Rellena los agujeros de hasta `maxEdges` aristas | Sí |
+| `mesh_remove_pieces` | Quita piezas sueltas | Sí |
+| `mesh_flip_normals` | Invierte las caras | Sí |
+| `mesh_smooth` | Suavizado laplaciano (implícito o explícito) | Sí |
+| `mesh_decimate` | Reduce triángulos con un error máximo | Sí |
+| `mesh_remesh` | Remallado uniforme o adaptativo que conserva las aristas vivas | Sí |
+| `mesh_export` | Escribe STL, OBJ o PLY (no sobrescribe sin `overwrite`) | No |
+| `project_save` · `project_open` · `project_new` | Proyecto `.orvp` | — |
+| `body_list` · `body_rename` · `body_duplicate` · `body_delete` · `body_set_visible` | Cuerpos | — |
+| `history_undo` · `history_redo` | Deshacer y rehacer | — |
+| `view_set` · `view_capture` | Gira la vista y devuelve una imagen PNG (solo con la ventana) | No |
+
+`openrevers-cli list` imprime cada comando con su esquema JSON completo.
+
+## Seguridad
+
+- **Solo en local.** El puente habla con el agente por stdio y con la ventana
+  por `127.0.0.1`, con un token de emparejamiento. Ninguna de las dos partes se
+  conecta a internet.
+- **Carpetas permitidas.** El agente solo lee y escribe dentro de las carpetas
+  de *Ajustes → Agente IA*; por defecto, tu carpeta personal. Una ruta fuera de
+  ellas se rechaza con un mensaje que lo explica.
+- **Nada se pierde sin querer.** Un archivo no se sobrescribe sin
+  `overwrite: true`, ni se descarta un proyecto con cambios sin
+  `discard: true`. La guía pide al agente que te pregunte antes de usarlos.
+- **Todo se deshace.** Cada operación del agente es un paso del historial.
+- **Lo que lee el agente va a su modelo de IA.** Es la única información que
+  sale del equipo.
+
+Los ajustes del agente están en `agent.json`:
+
+- Windows: `%APPDATA%\OpenRevers`
+- macOS: `~/Library/Application Support/OpenRevers`
+- Linux: `~/.config/OpenRevers`
+
+`OPENREVERS_CONFIG_DIR` cambia esa carpeta.
+
+---
+
+## English
+
+OpenRevers ships a [Model Context Protocol](https://modelcontextprotocol.io)
+server (revision 2025-06-18; 2025-03-26 and 2024-11-05 also accepted).
+
+**How it works:**
+
+- The agent starts `openrevers-cli mcp`.
+- With the OpenRevers window open, the bridge connects to it on
+  `127.0.0.1:47823`, with a pairing token. Every step then happens in the
+  window, appears in its log and history, and can be undone.
+- Without the window, the bridge works headless on a document of its own. The
+  view tools are not available then.
+
+**Claude Desktop:**
+
+1. In OpenRevers: *AI agent → Copy configuration for Claude Desktop*.
+2. In Claude Desktop: *Settings → Developer → Edit Config*, and paste it inside
+   `mcpServers`.
+3. Quit Claude Desktop completely and open it again.
+
+**Claude Code:** *AI agent → Copy command for Claude Code*, and run the copied
+command in a terminal.
+
+**Tools:** see the table above (names are the same). `openrevers-cli list`
+prints every command with its full JSON Schema. `--lang es|en` sets the
+language of the descriptions, and `--headless` forces the headless mode.
+
+**Safety:**
+
+- Local only: the bridge talks to the agent over stdio and to the window over
+  `127.0.0.1` with a token. Neither connects to the internet.
+- The agent may read and write only inside the folders set in *Settings → AI
+  agent*; your home folder by default.
+- Nothing is lost by accident: files are not overwritten without
+  `overwrite: true`, and unsaved work is not discarded without
+  `discard: true`.
+- Every agent step is an undo step.
+- What the agent reads goes to its model provider. That is the only
+  information that leaves the computer.
