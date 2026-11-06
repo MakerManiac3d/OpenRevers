@@ -55,13 +55,14 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Install into a staging folder
         run: cmake --install build --config Release
-      - name: What was installed
-        shell: bash
-        run: ls stage/bin | head -60
       - name: End to end (the installed app driven through MCP)
         env:
           QT_OPENGL: software
         run: python tests/e2e_mcp.py --app stage/bin/OpenRevers.exe --cli stage/bin/openrevers-cli.exe --picture view.png
+      - name: NSIS, for the installer
+        run: |
+          choco install nsis -y --no-progress
+          echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
       - name: Installer
         working-directory: build
         run: cpack -C Release
