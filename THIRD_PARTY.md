@@ -17,6 +17,7 @@ licence; all are GPL-3.0 compatible.*
 | [LEMON](https://lemon.cs.elte.hu) | 1.3.1 (incluido en QuadriFlow) | Boost Software License 1.0 | Grafos y flujos para QuadriFlow | Solo cabeceras |
 | [PCG32](https://www.pcg-random.org) (incluido en QuadriFlow) | — | Apache-2.0 | Números aleatorios de QuadriFlow | Solo cabeceras |
 | [GoogleTest](https://github.com/google/googletest) | 1.14 | BSD-3-Clause | Tests (no se distribuye) | Solo para compilar los tests |
+| [libE57Format](https://github.com/asmaloney/libE57Format) | 3.4.1 | BSL-1.0 | Solo para escribir los archivos E57 de prueba (`tests/data/e57`); el programa lee E57 con código propio | No se distribuye |
 | Runtime de Microsoft Visual C++ | el de la compilación | Licencia redistribuible de Microsoft | Ejecución en Windows | Copiado junto al ejecutable |
 
 El instalador copia los textos de licencia de los componentes compilados en

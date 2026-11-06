@@ -35,7 +35,8 @@ El eje Z es el vertical, como en la mayoría de programas de CAD.
 
 1. **Importar.** *Archivo → Importar malla* (Ctrl+I) o arrastra el archivo a la
    ventana. Formatos: STL (binario y texto), OBJ y PLY, en milímetros; nubes
-   de puntos XYZ y PTS; 3MF,
+   de puntos E57 (todos los escaneos, colocados según su posición y pasados de
+   metros a milímetros), XYZ y PTS; 3MF,
    convertido desde la unidad que declara, con todos los objetos de su
    construcción.
 2. **Analizar.** *Malla → Analizar malla*. El informe da:
@@ -81,7 +82,7 @@ El eje Z es el vertical, como en la mayoría de programas de CAD.
 
 ### Si partes de una nube de puntos
 
-Un archivo XYZ o PTS, o un PLY u OBJ sin caras, entra como **nube de puntos**
+Un archivo E57, XYZ o PTS, o un PLY u OBJ sin caras, entra como **nube de puntos**
 (se dibuja con puntos). Las operaciones de malla no se aplican a una nube;
 primero hay que reconstruir la superficie, desde el menú *Puntos*:
 

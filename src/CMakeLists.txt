@@ -25,6 +25,8 @@ add_library(orv_core STATIC
   core/mesh/MeshQuad.cpp
   core/mesh/ThreeMf.cpp
   core/points/PointCloud.cpp
+  core/points/E57.cpp
+  core/util/Xml.cpp
   core/util/Config.cpp
   doc/Document.cpp
   doc/Project.cpp

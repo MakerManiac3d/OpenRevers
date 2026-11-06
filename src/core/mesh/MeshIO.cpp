@@ -2,6 +2,7 @@
 #include "core/mesh/MeshIO.h"
 
 #include "core/mesh/ThreeMf.h"
+#include "core/points/E57.h"
 
 #include <algorithm>
 #include <bit>
@@ -515,7 +516,8 @@ MeshFormat formatFromPath(const fs::path& path) {
     if (ext == ".ply") return MeshFormat::Ply;
     if (ext == ".3mf") return MeshFormat::ThreeMf;
     if (ext == ".xyz" || ext == ".pts") return MeshFormat::Xyz;
-    throw IoError("Unsupported mesh format: " + (ext.empty() ? path.filename().string() : ext) + " (use .stl, .obj, .ply, .3mf, .xyz or .pts)");
+    if (ext == ".e57") return MeshFormat::E57;
+    throw IoError("Unsupported mesh format: " + (ext.empty() ? path.filename().string() : ext) + " (use .stl, .obj, .ply, .3mf, .xyz, .pts or .e57)");
 }
 
 TriMesh readMesh(const fs::path& path) {
@@ -529,6 +531,7 @@ TriMesh readMesh(const fs::path& path) {
             case MeshFormat::Ply: case MeshFormat::PlyAscii: m = readPly(d); break;
             case MeshFormat::ThreeMf: m = read3mf(d); break;
             case MeshFormat::Xyz: m = readXyz(d); break;
+            case MeshFormat::E57: m = readE57(d); break;
         }
     } catch (const IoError& e) {
         throw IoError(path.filename().string() + ": " + e.what());
@@ -550,6 +553,7 @@ void writeMesh(const TriMesh& mesh, const fs::path& path) { writeMesh(mesh, path
 void writeMesh(const TriMesh& mesh, const fs::path& path, MeshFormat format) {
     if (mesh.isPointCloud() && (format == MeshFormat::Stl || format == MeshFormat::StlAscii || format == MeshFormat::ThreeMf))
         throw IoError("A point cloud has no triangles to write as STL or 3MF; use .ply, .xyz or .obj, or reconstruct a mesh first");
+    if (format == MeshFormat::E57) throw IoError("Writing E57 is not supported; use .ply or .xyz for points");
     if (format == MeshFormat::Xyz && !mesh.isPointCloud())
         throw IoError("XYZ holds points only; write a mesh as .stl, .obj, .ply or .3mf");
     if (format == MeshFormat::ThreeMf) {
@@ -565,6 +569,7 @@ void writeMesh(const TriMesh& mesh, const fs::path& path, MeshFormat format) {
         case MeshFormat::Ply: writePly(mesh, out, false); break;
         case MeshFormat::PlyAscii: writePly(mesh, out, true); break;
         case MeshFormat::Xyz: writeXyz(mesh, out); break;
+        case MeshFormat::E57: break;
         case MeshFormat::ThreeMf: break;
     }
     if (!out) throw IoError("Failed while writing " + path.string());

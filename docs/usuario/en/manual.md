@@ -34,8 +34,9 @@ Z is up, as in most CAD programs.
 ## Recommended workflow
 
 1. **Import.** *File → Import mesh* (Ctrl+I), or drop the file on the window.
-   STL (binary and text), OBJ and PLY, read as millimetres; XYZ and PTS
-   point clouds; 3MF, converted
+   STL (binary and text), OBJ and PLY, read as millimetres; E57 point clouds
+   (every scan, placed by its pose and converted from metres to
+   millimetres), XYZ and PTS point clouds; 3MF, converted
    from the unit it states, with every object of its build.
 2. **Analyse.** *Mesh → Analyse mesh*. The report gives:
    - **holes** and their length. A one-sided scan has one long outer rim;
@@ -76,7 +77,7 @@ Z is up, as in most CAD programs.
 
 ### Starting from a point cloud
 
-An XYZ or PTS file, or a PLY or OBJ without faces, comes in as a **point
+An E57, XYZ or PTS file, or a PLY or OBJ without faces, comes in as a **point
 cloud** (drawn as points). Mesh operations do not apply to a cloud; first
 rebuild the surface from the *Points* menu:
 

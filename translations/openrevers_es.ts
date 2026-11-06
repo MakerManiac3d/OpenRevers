@@ -403,8 +403,8 @@
     </message>
     <message>
         <location filename="../src/app/MainWindow.cpp" line="373"/>
-        <source>Meshes and points (*.stl *.obj *.ply *.3mf *.xyz *.pts);;All files (*)</source>
-        <translation>Mallas y puntos (*.stl *.obj *.ply *.3mf *.xyz *.pts);;Todos los archivos (*)</translation>
+        <source>Meshes and points (*.stl *.obj *.ply *.3mf *.e57 *.xyz *.pts);;All files (*)</source>
+        <translation>Mallas y puntos (*.stl *.obj *.ply *.3mf *.e57 *.xyz *.pts);;Todos los archivos (*)</translation>
     </message>
     <message>
         <location filename="../src/app/MainWindow.cpp" line="392"/>

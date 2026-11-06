@@ -124,9 +124,9 @@ void registerCoreCommands(CommandRegistry& R) {
 
     // ------------------------------------------------------------ files --
     R.add({"mesh.import", "file", {"Import mesh", "Importar malla"},
-           {"Read a mesh or point cloud file into a new body: STL, OBJ or PLY (read as millimetres), 3MF (converted from its own unit; every build item with its transforms), or XYZ/PTS points. A PLY or OBJ without faces is a point cloud, with its normals if it has them.",
-            "Lee un archivo de malla o de nube de puntos en un cuerpo nuevo: STL, OBJ o PLY (en milímetros), 3MF (convertido desde su unidad; todos los elementos de su construcción con sus transformaciones) o puntos XYZ/PTS. Un PLY u OBJ sin caras es una nube de puntos, con sus normales si las tiene."},
-           object({{"path", path({"File to read", "Archivo a leer"}, false, "Mesh or points (*.stl *.obj *.ply *.3mf *.xyz *.pts)")},
+           {"Read a mesh or point cloud file into a new body: STL, OBJ or PLY (read as millimetres), 3MF (converted from its own unit; every build item with its transforms), or points: E57 (every scan with its pose, metres converted to mm), XYZ or PTS. A PLY or OBJ without faces is a point cloud, with its normals if it has them.",
+            "Lee un archivo de malla o de nube de puntos en un cuerpo nuevo: STL, OBJ o PLY (en milímetros), 3MF (convertido desde su unidad; todos los elementos de su construcción con sus transformaciones) o puntos: E57 (todos los escaneos con su posición, de metros a mm), XYZ o PTS. Un PLY u OBJ sin caras es una nube de puntos, con sus normales si las tiene."},
+           object({{"path", path({"File to read", "Archivo a leer"}, false, "Mesh or points (*.stl *.obj *.ply *.3mf *.e57 *.xyz *.pts)")},
                    {"name", string({"Name for the body (default: the file name)", "Nombre del cuerpo (por defecto, el del archivo)"})}},
                   {"path"}),
            true, false,

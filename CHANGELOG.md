@@ -16,6 +16,9 @@
   de `run`; lo que imprima una biblioteca va a la salida de errores.
 - **3MF**: importar (unidad del archivo, transformaciones, componentes,
   varios objetos) y exportar.
+- **E57**: lector propio de nubes de puntos E57 (todos los escaneos con su
+  posición, cartesianas o esféricas, enteros escalados, normales), con las
+  sumas de comprobación verificadas; probado con archivos de libE57Format.
 - **Nubes de puntos**: importar XYZ, PTS, PLY y OBJ sin caras (con sus
   normales), aclarar, calcular y orientar normales, y reconstruir una malla
   cerrada con Poisson apantallado (PoissonRecon), con recorte por densidad

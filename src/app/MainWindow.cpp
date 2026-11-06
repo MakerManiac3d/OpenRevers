@@ -370,7 +370,7 @@ void MainWindow::runFromUi(const QString& name) {
 
 void MainWindow::importMesh() {
     QSettings s;
-    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Import mesh"), s.value("dirs/import").toString(), tr("Meshes and points (*.stl *.obj *.ply *.3mf *.xyz *.pts);;All files (*)"));
+    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Import mesh"), s.value("dirs/import").toString(), tr("Meshes and points (*.stl *.obj *.ply *.3mf *.e57 *.xyz *.pts);;All files (*)"));
     if (files.isEmpty()) return;
     s.setValue("dirs/import", QFileInfo(files.first()).absolutePath());
     openPaths(files);

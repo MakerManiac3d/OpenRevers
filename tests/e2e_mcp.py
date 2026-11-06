@@ -187,6 +187,10 @@ def main() -> int:
         check(not err and r["points"] == 6000, "estimate normals")
         err, r, _ = agent.call("points_to_mesh", {"body": "b2", "depth": 7})
         check(not err and r["closed"] and r["faces"] > 5000, f"Poisson: closed mesh of {r.get('faces')} triangles")
+        e57 = work / "scan.e57"
+        e57.write_bytes((Path(__file__).parent / "data" / "e57" / "scaled_pose.e57").read_bytes())
+        err, r, _ = agent.call("mesh_import", {"path": str(e57)})
+        check(not err and r["pointCloud"] and r["vertices"] == 5400, "import an E57 scan (5400 valid points)")
         if a.picture:
             agent.call("view_set", {"view": "iso", "wireframe": True})
             err, r, content = agent.call("view_capture", {"width": 800, "height": 600})

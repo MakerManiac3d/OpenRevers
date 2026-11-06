@@ -17,6 +17,7 @@ Cada operación, qué hace, en qué se basa y sus límites. El código está en
 | Remallado adaptativo | Longitud de arista según la curvatura y un error máximo | PMP | M. Dunyach et al., *Adaptive Remeshing for Real-Time Mesh Deformation*, Eurographics 2013 |
 | Aristas vivas | Ángulo diedro mayor que `featureAngle`: la arista se marca y el remallado la conserva | PMP | — |
 | Remallado en quads | Campo de orientaciones y de posiciones con simetría de 4 rotaciones; el mapa entero se arregla con un flujo máximo para que no haya quads invertidos | [QuadriFlow](https://github.com/hjwdzh/QuadriFlow), modificado (ver abajo) | J. Huang, Y. Zhou, M. Nießner, J. R. Shewchuk, L. J. Guibas, *QuadriFlow: A Scalable and Robust Method for Quadrangulation*, SGP 2018; W. Jakob et al., *Instant Field-Aligned Meshes*, SIGGRAPH Asia 2015 |
+| Lectura E57 | Páginas con su CRC-32C comprobado; XML del archivo con un lector propio sin DTD; secciones de vectores comprimidos: paquetes de datos con un flujo por campo; números en coma flotante o enteros empaquetados en bits (menos significativo primero, ancho según el rango) con escala y desplazamiento; coordenadas cartesianas o esféricas; posición de cada escaneo (cuaternión y traslación); puntos inválidos fuera; normales de la extensión `nor`; metros a mm | Propia (probada con archivos escritos por libE57Format 3.4.1) | ASTM E2807-11, *Standard Specification for 3D Imaging Data Exchange, Version 1.0* |
 | Lectura XYZ / PTS | Texto: `x y z` o `x y z nx ny nz`; otras columnas (intensidad, color) se ignoran | Propia | — |
 | Aclarar puntos | Rejilla de cubos; en cada cubo, el punto más cercano a su centro de masas | Propia | — |
 | Normales de puntos | Plano de los *k* vecinos más cercanos por componentes principales; orientación por árbol de expansión mínima sobre el grafo de vecinos, con peso 1 − \|nᵢ·nⱼ\| | Propia + [nanoflann](https://github.com/jlblancoc/nanoflann) (k-d tree) | H. Hoppe et al., *Surface Reconstruction from Unorganized Points*, SIGGRAPH 1992 |
@@ -55,6 +56,9 @@ triángulos; invertir las normales conserva los quads.
   que las conserve.
 - Las mallas con **aristas no manifold** se pasan a PMP sin las caras que lo
   impedirían. Repara antes de procesar. El remallado en quads las rechaza.
+- **E57**: se lee el archivo entero en memoria; no se leen imágenes,
+  intensidad ni color, y todos los escaneos se juntan en una nube. No se
+  escribe E57.
 - **El remallado en quads** tarda más cuanto más densa es la malla de
   entrada: diezma o remalla antes un escaneo de millones de triángulos. El
   número de quads se acerca al pedido, no es exacto.
@@ -71,6 +75,12 @@ Los tests usan mallas generadas con respuesta conocida:
   ruido tras suavizar;
 - **lámina abierta**: un único borde de 40 mm;
 - **esfera con dos agujeros**: queda cerrada tras rellenar;
+- **E57** (`tests/test_e57.cpp`): tres archivos escritos por la librería de
+  referencia (flotantes con normales, enteros escalados con posición y puntos
+  inválidos, coordenadas esféricas en dos escaneos), comparados punto a punto
+  con la fórmula que los generó; un bit cambiado da error de checksum.
+  Además se probó con 9 000 archivos alterados al azar bajo AddressSanitizer
+  y UBSan: ninguno hizo fallar el programa;
 - **nubes** (`tests/test_points.cpp`): esfera de puntos con ruido, normales
   hacia fuera en el 99 %, Poisson cerrado con el volumen de la esfera (±4 %),
   media esfera recortada sin la mitad inventada; XYZ, PLY, OBJ y proyecto de

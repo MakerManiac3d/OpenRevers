@@ -53,7 +53,7 @@ ES = {
     "Normals": "Normales",
     "Yes": "Sí",
     "No": "No",
-    "Meshes and points (*.stl *.obj *.ply *.3mf *.xyz *.pts);;All files (*)": "Mallas y puntos (*.stl *.obj *.ply *.3mf *.xyz *.pts);;Todos los archivos (*)",
+    "Meshes and points (*.stl *.obj *.ply *.3mf *.e57 *.xyz *.pts);;All files (*)": "Mallas y puntos (*.stl *.obj *.ply *.3mf *.e57 *.xyz *.pts);;Todos los archivos (*)",
     "STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf);;XYZ points (*.xyz)": "STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf);;Puntos XYZ (*.xyz)",
     "Export &T-Spline for Fusion (.tsm)…": "Exportar &T-Spline para Fusion (.tsm)…",
     "Export T-Spline": "Exportar T-Spline",

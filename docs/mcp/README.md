@@ -62,7 +62,7 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | --- | --- | --- |
 | `session_state` | Qué hay abierto, cambios sin guardar, historial, carpetas permitidas | No |
 | `guide_read` | La guía de trabajo para el agente | No |
-| `mesh_import` | Importa STL, OBJ, PLY o 3MF (con su unidad y transformaciones), o una nube de puntos XYZ, PTS, PLY u OBJ, a un cuerpo nuevo | Sí |
+| `mesh_import` | Importa STL, OBJ, PLY o 3MF (con su unidad y transformaciones), o una nube de puntos E57, XYZ, PTS, PLY u OBJ, a un cuerpo nuevo | Sí |
 | `mesh_analyze` | Agujeros, aristas no manifold, orientación, piezas, área, volumen | No |
 | `mesh_repair` | Une, limpia, quita piezas sueltas y orienta | Sí |
 | `mesh_fill_holes` | Rellena los agujeros de hasta `maxEdges` aristas | Sí |

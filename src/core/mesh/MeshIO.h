@@ -19,12 +19,12 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-enum class MeshFormat { Stl, StlAscii, Obj, Ply, PlyAscii, ThreeMf, Xyz };
+enum class MeshFormat { Stl, StlAscii, Obj, Ply, PlyAscii, ThreeMf, Xyz, E57 };
 
 /// The format a file name's extension names; throws IoError for one it does not.
 MeshFormat formatFromPath(const std::filesystem::path& path);
 
-/// Read a mesh or a point cloud (a PLY, OBJ or XYZ file without faces; its
+/// Read a mesh or a point cloud (E57, XYZ, or a PLY or OBJ file without faces; its
 /// normals are kept when the file has them). STL vertices are welded (exactly coincident corners become one
 /// vertex). Polygons in OBJ and PLY are fan-triangulated (kept as quads too
 /// when every polygon is a quad). 3MF: every build item, in millimetres.
