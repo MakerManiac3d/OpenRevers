@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Quad remeshing (QuadriFlow) and the T-Spline (.tsm) writer.
+#include <gtest/gtest.h>
+
+#include <fstream>
+#include <map>
+#include <sstream>
+
 #include "TestMeshes.h"
 #include "core/mesh/MeshAnalysis.h"
 #include "core/mesh/MeshIO.h"
 #include "core/mesh/MeshQuad.h"
 #include "core/mesh/MeshRepair.h"
-#include <gtest/gtest.h>
-#include <fstream>
-#include <map>
-#include <sstream>
 
 using namespace orv;
 
 namespace {
 
-std::filesystem::path tmpFile(const std::string& name) {
-    return std::filesystem::temp_directory_path() / ("orv_test_" + name);
-}
+std::filesystem::path tmpFile(const std::string& name) { return std::filesystem::temp_directory_path() / ("orv_test_" + name); }
 
 TriMesh quadSphere() {
     TriMesh m = test::sphere(10, 4);
@@ -112,26 +112,28 @@ TEST(Tsm, WritesTheTSplineFormat) {
     // Euler characteristic of a sphere: V - E + F = 2.
     EXPECT_EQ(static_cast<long>(r.vertices) - static_cast<long>(r.edges) + static_cast<long>(r.faces), 2);
 
-    std::ifstream in(p);
-    std::string line;
-    std::getline(in, line);
-    EXPECT_EQ(line, "#TS0200");
     std::map<std::string, std::size_t> count;
     std::vector<std::array<long, 6>> links;
-    while (std::getline(in, line)) {
-        std::istringstream ls(line);
-        std::string tag;
-        ls >> tag;
-        ++count[tag];
-        if (tag == "l") {
-            std::array<long, 6> l{};
-            for (auto& x : l) ls >> x;
-            links.push_back(l);
-        }
-        if (tag == "0g") {  // centimetres: the sphere of 10 mm has radius 1 cm
-            double x, y, z;
-            ls >> x >> y >> z;
-            EXPECT_NEAR(std::sqrt(x * x + y * y + z * z), 1.0, 0.03);
+    {  // closed before the file is removed (Windows will not remove an open file)
+        std::ifstream in(p);
+        std::string line;
+        std::getline(in, line);
+        EXPECT_EQ(line, "#TS0200");
+        while (std::getline(in, line)) {
+            std::istringstream ls(line);
+            std::string tag;
+            ls >> tag;
+            ++count[tag];
+            if (tag == "l") {
+                std::array<long, 6> l{};
+                for (auto& x : l) ls >> x;
+                links.push_back(l);
+            }
+            if (tag == "0g") {  // centimetres: the sphere of 10 mm has radius 1 cm
+                double x, y, z;
+                ls >> x >> y >> z;
+                EXPECT_NEAR(std::sqrt(x * x + y * y + z * z), 1.0, 0.03);
+            }
         }
     }
     EXPECT_EQ(count["f"], r.faces);
