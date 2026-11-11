@@ -76,9 +76,17 @@ Piezas sintéticas con ruido de 0,02 mm, un 3 % de atípicos y una posición arb
 
 Segmentar 300 000 triángulos tarda unos 15 s en 2 núcleos.
 
+## Selección en el visor
+
+Un clic lanza un rayo desde la cámara, con la inversa de la proyección por la
+vista. Primero se descartan los cuerpos cuya caja no corta el rayo (método
+de las placas) y después se prueban sus triángulos con Möller–Trumbore
+(T. Möller, B. Trumbore, *Fast, minimum storage ray-triangle intersection*,
+J. Graphics Tools 2(1), 1997), unos milisegundos por millón de caras. La
+cara tocada da la región y, con ella, la forma.
+
 ## Límites conocidos
 
 - Falta el criterio de la fase con una **pieza escaneada real** de medidas conocidas.
 - La segmentación no detecta todavía redondeos (toros de transición) como formas propias: quedan sin asignar.
 - En 3-2-1, el sentido de Y sigue la regla de la mano derecha desde Z y X: según qué cara se elija como terciaria, la pieza queda en +Y o en −Y.
-- No hay todavía selección de puntos con el ratón en el visor: el punto de `features.fit` se da por coordenadas.

@@ -8,9 +8,24 @@
 
 namespace orv {
 
-void registerAppCommands(CommandRegistry& R, Viewport& vp) {
+void registerAppCommands(CommandRegistry& R, Viewport& vp, SelectionAccess sel) {
     using namespace schema;
     Viewport* v = &vp;
+
+    R.add({"view.selection", "view", {"What is picked", "Qué está seleccionado"},
+           {"The point the person last clicked on a surface, its body, and the shapes they picked (in order). Use it to act on \"this hole\" or \"these faces\" as they point at them.",
+            "El último punto en que la persona hizo clic sobre una superficie, su cuerpo y las formas que ha elegido (en orden). Sirve para actuar sobre \"este taladro\" o \"estas caras\" cuando las señala."},
+           object({}), false, true,
+           [sel](CommandContext&, const json&) { return sel.selection(); }});
+
+    R.add({"view.pick", "view", {"Pick in the view", "Seleccionar en la vista"},
+           {"Click on the view as the person would: x and y from 0 to 1 across and down the view. With add, the shape under it is added to the picked ones.",
+            "Hace clic en la vista como lo haría la persona: x e y de 0 a 1, a lo ancho y hacia abajo. Con add, la forma de debajo se añade a las elegidas."},
+           object({{"x", number({"Across the view (0 left, 1 right)", "A lo ancho (0 izquierda, 1 derecha)"}, 0.5, 0.0, 1.0)},
+                   {"y", number({"Down the view (0 top, 1 bottom)", "Hacia abajo (0 arriba, 1 abajo)"}, 0.5, 0.0, 1.0)},
+                   {"add", boolean({"Add to the picked shapes", "Añadir a las formas elegidas"}, false)}}),
+           false, true,
+           [sel](CommandContext&, const json& in) { return sel.pick(in["x"].get<double>(), in["y"].get<double>(), in["add"].get<bool>()); }});
 
     R.add({"view.set", "view", {"Set view", "Cambiar vista"},
            {"Turn the view to a standard direction and fit the visible bodies.", "Gira la vista a una dirección estándar y encuadra los cuerpos visibles."},

@@ -22,9 +22,9 @@
 namespace orv {
 
 CommandDialog::CommandDialog(const Command& command, const std::vector<Body>& bodies, const QString& selectedBody, const QString& lang, QWidget* parent,
-                             const QString& selectedFeature)
+                             const QStringList& selectedFeatures, const std::optional<std::array<double, 3>>& pickedPoint)
     : QDialog(parent), command_(command) {
-    bool featurePrefilled = false;
+    int nextFeature = 0;  // the next selected shape to put in a shape field
     const std::string l = lang.toStdString();
     setWindowTitle(QString::fromStdString(command.title.in(l)));
     auto* layout = new QVBoxLayout(this);
@@ -64,10 +64,11 @@ CommandDialog::CommandDialog(const Command& command, const std::vector<Body>& bo
                 for (const auto& f : b.features->list)
                     box->addItem(QString::fromStdString(f.name + "  (" + f.ref() + ")"), QString::fromStdString(f.ref()));
             }
-            if (!featurePrefilled && !selectedFeature.isEmpty()) {
-                const int i = box->findData(selectedFeature);
+            if (nextFeature < selectedFeatures.size()) {
+                const int i = box->findData(selectedFeatures[nextFeature++]);
                 if (i >= 0) box->setCurrentIndex(i);
-                featurePrefilled = true;
+            } else if (!isRequired) {
+                box->setCurrentIndex(0);  // optional and nothing more picked: leave it empty
             }
             readers_[key] = [box]() {
                 const QString t = box->currentText().trimmed();
@@ -130,6 +131,8 @@ CommandDialog::CommandDialog(const Command& command, const std::vector<Body>& bo
                 sp->setDecimals(4);
                 h->addWidget(sp);
             }
+            if (pickedPoint && (key == "at" || key == "about"))
+                for (int k = 0; k < 3; ++k) xyz[static_cast<std::size_t>(k)]->setValue((*pickedPoint)[static_cast<std::size_t>(k)]);
             readers_[key] = [xyz]() { return json::array({xyz[0]->value(), xyz[1]->value(), xyz[2]->value()}); };
             field = row;
         } else if (type == "boolean") {

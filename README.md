@@ -33,7 +33,7 @@ compatible con MCP) puede manejar paso a paso, delante de ti.
 | Nubes de puntos | Aclarar, calcular y orientar normales, reconstruir una malla cerrada (Poisson apantallado) con recorte de lo que no estaba escaneado |
 | Superficies | Exportar una malla de quads cerrada como T-Spline (`.tsm`) para Autodesk Fusion |
 | Trabajo | Deshacer y rehacer de cada operación, historial, registro, visor 3D con bordes abiertos marcados |
-| IA (MCP) | 39 herramientas, capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
+| IA (MCP) | 42 herramientas con la ventana abierta (ve lo que señalas con el ratón), capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
 | Idiomas | Español e inglés |
 
 ## Instalación

@@ -8,7 +8,11 @@
   - el visor colorea las regiones por tipo.
 - **Alineación** (menú *Alinear*): ejes principales, 3-2-1 por datums (caras, ejes, centros), mejor ajuste ICP robusto con informe de desviación, y mover o girar. Las formas se mueven con la pieza.
 - Proyecto en formato 4 (guarda las formas; lee los anteriores).
-- 39 herramientas MCP; campos de punto [x, y, z] y de forma en los formularios.
+- **Selección con el ratón:**
+  - un clic sobre la pieza marca el punto y elige la forma de debajo; Ctrl+clic añade más, en orden (primario, secundario, terciario);
+  - las formas elegidas se resaltan en ámbar;
+  - el botón derecho abre un menú para ajustar una forma ahí, reajustar, medir, alinear por datums, renombrar o borrar, con el formulario ya relleno.
+- 42 herramientas MCP con la ventana abierta: `view_selection` (lo que la persona ha señalado) y `view_pick`; campos de punto [x, y, z] y de forma en los formularios.
 - Documentación: `docs/algoritmos/primitivas.md`, manuales, guía de la IA.
 
 ## 0.2.0 — 6 de noviembre de 2026

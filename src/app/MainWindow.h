@@ -3,6 +3,8 @@
 // the model tree, the properties, the history, the log and the 3D view.
 #pragma once
 
+#include "app/Viewport.h"
+
 #include "app/AgentServer.h"
 #include "app/CommandRunner.h"
 #include "commands/Command.h"
@@ -75,6 +77,14 @@ private:
     QTreeWidget* tree_{nullptr};
     QTableWidget* props_{nullptr};
     QTreeWidget* shapes_{nullptr};
+    // Picking: the last point clicked on a surface, and the shapes picked, in order.
+    Pick lastPick_;
+    QStringList pickedShapes_;
+    bool updatingShapes_{false};
+    void onPicked(const Pick& p, bool add);
+    void showContextMenu(const Pick& p, const QPoint& globalPos);
+    void selectBody(std::uint64_t id);
+    void syncShapeSelection();
     QListWidget* history_{nullptr};
     QPlainTextEdit* log_{nullptr};
     QLabel* status_{nullptr};

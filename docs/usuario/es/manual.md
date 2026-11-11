@@ -152,6 +152,23 @@ Para piezas mecánicas (caras planas, taladros, ejes, conos):
 
    Las formas se mueven con la pieza.
 
+**Con el ratón:**
+- Un **clic** sobre la pieza marca el punto (una cruz naranja) y elige la
+  forma de debajo, que se resalta en ámbar. La barra de estado muestra las
+  coordenadas, la forma y su σ.
+- **Ctrl+clic** añade otra forma. El orden cuenta: en *Alinear por datums*,
+  la primera elegida es el primario, la segunda el secundario y la tercera el
+  terciario.
+- Un clic en el fondo lo deselecciona todo.
+- El **botón derecho**, sin arrastrar, abre un menú con lo que se puede hacer
+  ahí: ajustar una forma en ese punto, reajustar, medir entre las dos formas
+  elegidas, alinear, renombrar o borrar. Los formularios salen rellenos con
+  el punto y las formas elegidas.
+- Arrastrar sigue igual: izquierdo para girar, derecho o central para
+  desplazar, y la rueda para acercar.
+- El agente de IA puede leer lo que has señalado, así que puedes pedirle
+  cosas como «mide la distancia entre estas dos caras».
+
 ## Ajustes
 
 *Archivo → Ajustes*:

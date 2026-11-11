@@ -179,6 +179,23 @@ def main() -> int:
             if imgs:
                 p = Path(a.picture)
                 p.with_name(p.stem + "-shapes" + p.suffix).write_bytes(base64.b64decode(imgs[0]["data"]))
+        agent.call("view_set", {"view": "iso"})
+        err, r, _ = agent.call("view_pick", {"x": 0.5, "y": 0.45})
+        check(not err and r["body"] == "b1" and len(r["shapes"]) == 1 and r["shapes"][0]["type"] == "plane",
+              f"a click on the part picks the face under it: {r.get('shapes') if r else err}")
+        err, r, _ = agent.call("view_pick", {"x": 0.5, "y": 0.72, "add": True})
+        check(not err and len(r["shapes"]) == 2, f"Ctrl+click adds a second face: {r.get('shapes') if r else err}")
+        if not err and len(r["shapes"]) == 2:
+            err, m, _ = agent.call("features_measure", {"body": "b1", "a": r["shapes"][0]["ref"], "b": r["shapes"][1]["ref"]})
+            check(not err and abs(m["angleDeg"] - 90) < 0.5, f"the two picked faces are at {m.get('angleDeg') if m else err}°")
+        if a.picture:
+            err2, r2, content2 = agent.call("view_capture", {"width": 800, "height": 600})
+            imgs = [c for c in content2 if c.get("type") == "image"]
+            if imgs:
+                p = Path(a.picture)
+                p.with_name(p.stem + "-picked" + p.suffix).write_bytes(base64.b64decode(imgs[0]["data"]))
+        err, r, _ = agent.call("view_pick", {"x": 0.02, "y": 0.02})
+        check(not err and r["body"] is None and r["shapes"] == [], "a click on the background clears the picks")
         err, r, _ = agent.call("align_principal", {"body": "b1"})
         check(not err and abs(r["bounds"]["max"][0] + r["bounds"]["min"][0]) < 1.0, "align to principal axes centres the part")
         err, r, _ = agent.call("mesh_remesh_quads", {"body": "b1", "targetFaces": 1500})

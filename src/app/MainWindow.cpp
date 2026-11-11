@@ -44,7 +44,26 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
     registerCoreCommands(registry_);
     viewport_ = new Viewport(this);
     setCentralWidget(viewport_);
-    registerAppCommands(registry_, *viewport_);
+    SelectionAccess access;
+    access.selection = [this]() {
+        json j = {{"body", lastPick_.hit() ? json("b" + std::to_string(lastPick_.body)) : json(nullptr)}};
+        if (lastPick_.hit()) {
+            j["point"] = {lastPick_.point.x(), lastPick_.point.y(), lastPick_.point.z()};
+            j["normal"] = {lastPick_.normal.x(), lastPick_.normal.y(), lastPick_.normal.z()};
+        }
+        json shapes = json::array();
+        if (auto b = doc_.findBody(selectedRef().toStdString()); b && b->features)
+            for (const auto& r : pickedShapes_)
+                if (const Feature* f = b->features->find(r.toStdString())) shapes.push_back({{"ref", f->ref()}, {"name", f->name}, {"type", primitiveName(f->shape.type)}});
+        j["shapes"] = shapes;
+        return j;
+    };
+    access.pick = [this, selection = access.selection](double x, double y, bool add) {
+        const QPoint pos(static_cast<int>(x * viewport_->width()), static_cast<int>(y * viewport_->height()));
+        onPicked(viewport_->pickAt(pos), add);
+        return selection();
+    };
+    registerAppCommands(registry_, *viewport_, access);
     runner_ = new CommandRunner(registry_, doc_, this);
     agent_ = new AgentServer(*runner_, this);
 
@@ -80,7 +99,8 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
         status_->setText(ok ? summary : tr("Failed: %1").arg(summary));
     });
     connect(agent_, &AgentServer::statusChanged, this, &MainWindow::refreshAgentStatus);
-    connect(viewport_, &Viewport::bodyClicked, this, [this](std::uint64_t) {});
+    connect(viewport_, &Viewport::picked, this, &MainWindow::onPicked);
+    connect(viewport_, &Viewport::contextRequested, this, &MainWindow::showContextMenu);
 
     QSettings settings;
     restoreGeometry(settings.value("window/geometry").toByteArray());
@@ -236,6 +256,20 @@ void MainWindow::buildDocks() {
     shapes_ = new QTreeWidget();
     shapes_->setHeaderLabels({tr("Shape"), tr("Size"), tr("σ (mm)")});
     shapes_->setRootIsDecorated(false);
+    shapes_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    connect(shapes_, &QTreeWidget::itemSelectionChanged, this, [this]() {
+        if (updatingShapes_) return;
+        // Keep the order in which shapes were picked: the dialogs fill primary, secondary… from it.
+        QStringList now;
+        for (auto* it : shapes_->selectedItems()) now << it->data(0, Qt::UserRole).toString();
+        QStringList ordered;
+        for (const auto& r : pickedShapes_)
+            if (now.contains(r)) ordered << r;
+        for (const auto& r : now)
+            if (!ordered.contains(r)) ordered << r;
+        pickedShapes_ = ordered;
+        syncShapeSelection();
+    });
     shapes_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     connect(shapes_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem*, int) { runFromUi("features.rename"); });
     dock(tr("Shapes"), "ShapesDock", shapes_, Qt::RightDockWidgetArea);
@@ -316,10 +350,105 @@ void MainWindow::refreshProperties() {
     props_->horizontalHeader()->setStretchLastSection(true);
 }
 
+void MainWindow::selectBody(std::uint64_t id) {
+    for (int i = 0; i < tree_->topLevelItemCount(); ++i) {
+        auto* it = tree_->topLevelItem(i);
+        if (it->data(0, Qt::UserRole).toULongLong() == id) {
+            if (selected_ != id) tree_->setCurrentItem(it);
+            return;
+        }
+    }
+}
+
+void MainWindow::onPicked(const Pick& p, bool add) {
+    lastPick_ = p;
+    viewport_->setPickMarker(p);
+    if (!p.hit()) {
+        if (!add) {
+            pickedShapes_.clear();
+            syncShapeSelection();
+        }
+        status_->clear();
+        return;
+    }
+    selectBody(p.body);
+    QLocale loc;
+    QString where = tr("Point %1, %2, %3 mm").arg(loc.toString(p.point.x(), 'f', 3), loc.toString(p.point.y(), 'f', 3), loc.toString(p.point.z(), 'f', 3));
+    // The shape whose region holds the clicked face.
+    QString shape;
+    if (auto b = doc_.findBody("b" + std::to_string(p.body)); b && b->features && p.face < b->features->faceRegion.size()) {
+        const std::int32_t r = b->features->faceRegion[p.face];
+        for (const auto& f : b->features->list)
+            if (r >= 0 && f.region == r) {
+                shape = QString::fromStdString(f.ref());
+                where += " · " + QString::fromStdString(f.name) + tr(" (σ %1 mm)").arg(loc.toString(f.shape.rms, 'f', 4));
+            }
+    }
+    if (!add) pickedShapes_.clear();
+    if (!shape.isEmpty()) {
+        if (add && pickedShapes_.contains(shape)) pickedShapes_.removeAll(shape);
+        else if (!pickedShapes_.contains(shape)) pickedShapes_ << shape;
+    }
+    syncShapeSelection();
+    if (pickedShapes_.size() > 1) where += " · " + tr("%1 shapes picked").arg(pickedShapes_.size());
+    status_->setText(where);
+}
+
+void MainWindow::syncShapeSelection() {
+    // Panel and view follow pickedShapes_.
+    updatingShapes_ = true;
+    shapes_->clearSelection();
+    for (int i = 0; i < shapes_->topLevelItemCount(); ++i) {
+        auto* it = shapes_->topLevelItem(i);
+        if (pickedShapes_.contains(it->data(0, Qt::UserRole).toString())) {
+            it->setSelected(true);
+            shapes_->scrollToItem(it);
+        }
+    }
+    updatingShapes_ = false;
+    std::vector<std::int32_t> regions;
+    if (auto b = doc_.findBody(selectedRef().toStdString()); b && b->features)
+        for (const auto& r : pickedShapes_)
+            if (const Feature* f = b->features->find(r.toStdString()); f && f->region >= 0) regions.push_back(f->region);
+    viewport_->setHighlightedRegions(selected_, regions);
+}
+
+void MainWindow::showContextMenu(const Pick& p, const QPoint& globalPos) {
+    if (p.hit() && (!pickedShapes_.size() || p.body != selected_)) onPicked(p, false);
+    else if (p.hit()) { lastPick_ = p; viewport_->setPickMarker(p); }
+    QMenu menu(this);
+    auto item = [&](const char* name, bool enabled = true) {
+        const Command* c = registry_.find(name);
+        if (!c) return;
+        QAction* a = menu.addAction(QString::fromStdString(c->title.in(lang_.toStdString())) + QStringLiteral("…"), this, [this, name]() { runFromUi(name); });
+        a->setEnabled(enabled);
+    };
+    const bool onBody = p.hit();
+    const bool hasShape = !pickedShapes_.isEmpty();
+    item("features.fit", onBody);
+    item("features.refit", hasShape);
+    item("features.measure", pickedShapes_.size() >= 2);
+    menu.addSeparator();
+    item("align.datums", hasShape);
+    item("align.best_fit", onBody);
+    menu.addSeparator();
+    item("features.rename", hasShape);
+    item("features.delete", hasShape);
+    menu.addSeparator();
+    item("features.segment", onBody);
+    menu.exec(globalPos);
+}
+
 void MainWindow::refreshShapes() {
+    updatingShapes_ = true;
     shapes_->clear();
     auto b = doc_.findBody(selectedRef().toStdString());
-    if (!b || !b->features) return;
+    if (!b || !b->features) {
+        updatingShapes_ = false;
+        pickedShapes_.clear();
+        viewport_->setHighlightedRegions(selected_, {});
+        return;
+    }
     QLocale loc;
     auto n = [&](double v, int d = 3) { return loc.toString(v, 'f', d); };
     for (const auto& f : b->features->list) {
@@ -340,6 +469,14 @@ void MainWindow::refreshShapes() {
     }
     shapes_->resizeColumnToContents(1);
     shapes_->resizeColumnToContents(2);
+    updatingShapes_ = false;
+    // Picks that no longer exist (another body, a new segmentation) are dropped.
+    QStringList keep;
+    if (b->features)
+        for (const auto& r : pickedShapes_)
+            if (b->features->find(r.toStdString())) keep << r;
+    pickedShapes_ = keep;
+    syncShapeSelection();
 }
 
 void MainWindow::refreshHistory() {
@@ -399,13 +536,25 @@ void MainWindow::runFromUi(const QString& name) {
     if (props.size() == 1 && needsBody && !selectedRef().isEmpty()) {
         params = {{"body", selectedRef().toStdString()}};
     } else {
-        QString feature;
-        if (shapes_ && !shapes_->selectedItems().isEmpty()) feature = shapes_->selectedItems().first()->data(0, Qt::UserRole).toString();
-        CommandDialog dlg(*c, bodies, selectedRef(), lang_, this, feature);
+        std::optional<std::array<double, 3>> point;
+        if (lastPick_.hit() && lastPick_.body == selected_) point = std::array<double, 3>{lastPick_.point.x(), lastPick_.point.y(), lastPick_.point.z()};
+        CommandDialog dlg(*c, bodies, selectedRef(), lang_, this, pickedShapes_, point);
         if (dlg.exec() != QDialog::Accepted) return;
         params = dlg.values();
     }
     run(name, params, [this, name](const json& r) {
+        if (name == "features.measure") {
+            QLocale loc;
+            QStringList lines;
+            if (r.contains("angleDeg")) lines << tr("Angle: %1°").arg(loc.toString(r["angleDeg"].get<double>(), 'f', 3));
+            if (r.contains("distance")) lines << tr("Distance: %1 mm").arg(loc.toString(r["distance"].get<double>(), 'f', 4));
+            if (r.contains("axisIntersection")) {
+                const auto& p = r["axisIntersection"];
+                lines << tr("Axis meets the plane at: %1, %2, %3").arg(loc.toString(p[0].get<double>(), 'f', 3), loc.toString(p[1].get<double>(), 'f', 3), loc.toString(p[2].get<double>(), 'f', 3));
+            }
+            if (lines.isEmpty()) lines << tr("These two shapes have no simple relation to measure.");
+            QMessageBox::information(this, tr("Measure"), lines.join("\n"));
+        }
         if (name == "mesh.analyze") {
             QMessageBox box(this);
             box.setWindowTitle(tr("Mesh analysis"));

@@ -20,6 +20,15 @@
 
 namespace orv {
 
+/// What a click hit: a point on a body's surface.
+struct Pick {
+    std::uint64_t body{0};       // 0: nothing hit
+    Vec3d point{Vec3d::Zero()};  // mm
+    Vec3d normal{Vec3d::Zero()};
+    std::uint32_t face{0};
+    bool hit() const { return body != 0; }
+};
+
 class Viewport : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core {
     Q_OBJECT
 public:
@@ -35,6 +44,12 @@ public:
     void setWireframe(bool on);
     /// Colour the faces of bodies with found shapes by their region.
     void setShowShapes(bool on);
+    /// Light up these regions of a body (the shapes selected in the panel).
+    void setHighlightedRegions(std::uint64_t body, std::vector<std::int32_t> regions);
+    /// The point shown as picked (none: hit() false).
+    void setPickMarker(const Pick& p);
+    /// The surface under a widget position (logical pixels).
+    Pick pickAt(const QPoint& pos) const;
     bool showShapes() const { return shapes_; }
     void setOpenEdges(bool on);
     void setFlatShading(bool on);
@@ -50,6 +65,10 @@ public:
 
 signals:
     void bodyClicked(std::uint64_t id);
+    /// A click (no drag) with the left button; `add` when Ctrl was held.
+    void picked(const orv::Pick& pick, bool add);
+    /// A right click (no drag): the place for a context menu.
+    void contextRequested(const orv::Pick& pick, const QPoint& globalPos);
 
 protected:
     void initializeGL() override;
@@ -74,6 +93,7 @@ private:
         QOpenGLBuffer regionVbo{QOpenGLBuffer::VertexBuffer};
         int regionVertexCount{0};
         std::shared_ptr<const Features> regionSource;
+        std::vector<std::int32_t> regionHighlight;  // what the buffer was built with
         // A quad mesh draws its wireframe as the quads' edges, not the triangles'.
         QOpenGLVertexArrayObject wireVao;
         QOpenGLBuffer wireIbo{QOpenGLBuffer::IndexBuffer};
@@ -113,6 +133,11 @@ private:
     float yaw_{-45.f}, pitch_{30.f};
     float sceneRadius_{50.f};
     bool wireframe_{false}, openEdges_{true}, flat_{false}, shapes_{true};
+    std::uint64_t highlightBody_{0};
+    std::vector<std::int32_t> highlightRegions_;
+    Pick marker_;
+    QOpenGLVertexArrayObject markerVao_;
+    QOpenGLBuffer markerVbo_{QOpenGLBuffer::VertexBuffer};
 
     QPoint lastPos_;
     Qt::MouseButton dragButton_{Qt::NoButton};

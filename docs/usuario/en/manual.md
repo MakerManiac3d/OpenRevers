@@ -144,6 +144,23 @@ For mechanical parts (flat faces, holes, shafts, cones):
 
    The shapes move with the part.
 
+**With the mouse:**
+- A **click** on the part marks the point (an orange cross) and picks the
+  shape under it, which turns amber. The status bar shows the coordinates,
+  the shape and its σ.
+- **Ctrl+click** adds another shape. Order matters: in *Align by datums* the
+  first picked is the primary, the second the secondary and the third the
+  tertiary.
+- A click on the background clears it all.
+- A **right click**, without dragging, opens a menu of what can be done
+  there: fit a shape at that point, refit, measure between the two picked
+  shapes, align, rename or delete. The forms come filled in with the point
+  and the picked shapes.
+- Dragging is unchanged: left to orbit, right or middle to pan, and the
+  wheel to zoom.
+- The AI agent can read what you picked, so you can ask it things like
+  "measure the distance between these two faces".
+
 ## Settings
 
 *File → Settings*:

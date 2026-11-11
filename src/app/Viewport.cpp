@@ -287,7 +287,9 @@ void Viewport::setBodies(const std::vector<Body>& bodies) {
             g->regionSource.reset();
             g->regionVertexCount = 0;
         }
-        if (g->regionSource != b.features) {
+        const std::vector<std::int32_t> hl = b.id == highlightBody_ ? highlightRegions_ : std::vector<std::int32_t>{};
+        if (g->regionSource != b.features || g->regionHighlight != hl) {
+            g->regionHighlight = hl;
             uploadRegions(*g, *b.mesh, b.features.get());
             g->regionSource = b.features;
         }
@@ -390,6 +392,8 @@ void Viewport::uploadRegions(GpuMesh& g, const TriMesh& m, const Features* f) {
         const Vec3f fn = m.faceNormal(i);  // flat per face: the regions' borders stay crisp
         QVector3D c(0.55f, 0.55f, 0.55f);  // not in any region
         if (r >= 0 && static_cast<std::size_t>(r) < typeOf.size()) c = regionColor(typeOf[static_cast<std::size_t>(r)], r);
+        if (r >= 0 && std::find(g.regionHighlight.begin(), g.regionHighlight.end(), r) != g.regionHighlight.end())
+            c = QVector3D(1.0f, 0.78f, 0.25f);  // selected: amber
         for (auto v : m.faces[i])
             buf.insert(buf.end(), {m.vertices[v].x(), m.vertices[v].y(), m.vertices[v].z(), fn.x(), fn.y(), fn.z(), c.x(), c.y(), c.z()});
     }
@@ -549,7 +553,100 @@ void Viewport::paintGL() {
             }
         }
     }
+    if (marker_.hit()) {
+        // A small 3-D cross at the picked point, drawn over everything.
+        const float r = sceneRadius_ * 0.025f;
+        const Vec3f p = marker_.point.cast<float>();
+        const float m[] = {p.x() - r, p.y(), p.z(), 1, 0.55f, 0.1f, p.x() + r, p.y(), p.z(), 1, 0.55f, 0.1f,
+                           p.x(), p.y() - r, p.z(), 1, 0.55f, 0.1f, p.x(), p.y() + r, p.z(), 1, 0.55f, 0.1f,
+                           p.x(), p.y(), p.z() - r, 1, 0.55f, 0.1f, p.x(), p.y(), p.z() + r, 1, 0.55f, 0.1f};
+        if (!markerVao_.isCreated()) markerVao_.create();
+        markerVao_.bind();
+        if (!markerVbo_.isCreated()) markerVbo_.create();
+        markerVbo_.bind();
+        markerVbo_.allocate(m, sizeof m);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, nullptr);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, reinterpret_cast<void*>(12));
+        lineProg_.bind();
+        lineProg_.setUniformValue("uMvp", mvp);
+        lineProg_.setUniformValue("uTint", QVector4D(0, 0, 0, 0));
+        glDisable(GL_DEPTH_TEST);
+        glLineWidth(3.f);
+        glDrawArrays(GL_LINES, 0, 6);
+        glLineWidth(1.f);
+        glEnable(GL_DEPTH_TEST);
+        markerVao_.release();
+    }
     drawTriad();
+}
+
+void Viewport::setHighlightedRegions(std::uint64_t body, std::vector<std::int32_t> regions) {
+    highlightBody_ = body;
+    highlightRegions_ = std::move(regions);
+    const std::vector<Body> same = bodies_;
+    setBodies(same);  // rebuilds only the region colours that changed
+    update();
+}
+
+void Viewport::setPickMarker(const Pick& p) {
+    marker_ = p;
+    update();
+}
+
+Pick Viewport::pickAt(const QPoint& pos) const {
+    // The ray under the cursor, from the inverse of the camera's matrices.
+    const QMatrix4x4 inv = (projMatrix() * viewMatrix()).inverted();
+    const float x = 2.f * static_cast<float>(pos.x()) / static_cast<float>(std::max(1, width())) - 1.f;
+    const float y = 1.f - 2.f * static_cast<float>(pos.y()) / static_cast<float>(std::max(1, height()));
+    const QVector3D a = inv.map(QVector3D(x, y, -1.f)), b = inv.map(QVector3D(x, y, 1.f));
+    const Vec3d o(a.x(), a.y(), a.z());
+    Vec3d d(b.x() - a.x(), b.y() - a.y(), b.z() - a.z());
+    d.normalize();
+    Pick best;
+    double bestT = 1e300;
+    for (const auto& body : bodies_) {
+        if (!body.visible || !body.mesh || body.mesh->faces.empty()) continue;
+        const TriMesh& m = *body.mesh;
+        // Slab test against the body's box first.
+        const Box3 bx = m.bounds();
+        double t0 = 0, t1 = 1e300;
+        bool miss = false;
+        for (int k = 0; k < 3 && !miss; ++k) {
+            const double inv_d = 1.0 / (std::abs(d[k]) < 1e-300 ? 1e-300 : d[k]);
+            double ta = (bx.min[k] - o[k]) * inv_d, tb = (bx.max[k] - o[k]) * inv_d;
+            if (ta > tb) std::swap(ta, tb);
+            t0 = std::max(t0, ta);
+            t1 = std::min(t1, tb);
+            miss = t0 > t1;
+        }
+        if (miss || t0 > bestT) continue;
+        // Möller–Trumbore against every face (a few ms per million faces).
+        for (std::size_t f = 0; f < m.faces.size(); ++f) {
+            const Tri& t = m.faces[f];
+            const Vec3d p0 = m.vertices[t[0]].cast<double>();
+            const Vec3d e1 = m.vertices[t[1]].cast<double>() - p0, e2 = m.vertices[t[2]].cast<double>() - p0;
+            const Vec3d pv = d.cross(e2);
+            const double det = e1.dot(pv);
+            if (std::abs(det) < 1e-14) continue;
+            const double id = 1.0 / det;
+            const Vec3d tv = o - p0;
+            const double u = tv.dot(pv) * id;
+            if (u < 0 || u > 1) continue;
+            const Vec3d qv = tv.cross(e1);
+            const double v = d.dot(qv) * id;
+            if (v < 0 || u + v > 1) continue;
+            const double tt = e2.dot(qv) * id;
+            if (tt <= 0 || tt >= bestT) continue;
+            bestT = tt;
+            best.body = body.id;
+            best.face = static_cast<std::uint32_t>(f);
+            best.point = o + d * tt;
+            best.normal = e1.cross(e2).normalized();
+        }
+    }
+    return best;
 }
 
 QImage Viewport::capture(int w, int h) {
@@ -586,7 +683,13 @@ void Viewport::mouseMoveEvent(QMouseEvent* e) {
 }
 
 void Viewport::mouseReleaseEvent(QMouseEvent* e) {
-    if (!dragged_ && e->button() == Qt::LeftButton) emit bodyClicked(0);
+    if (!dragged_ && e->button() == Qt::LeftButton) {
+        const Pick p = pickAt(e->position().toPoint());
+        emit picked(p, (e->modifiers() & Qt::ControlModifier) != 0);
+        emit bodyClicked(p.body);
+    } else if (!dragged_ && e->button() == Qt::RightButton) {
+        emit contextRequested(pickAt(e->position().toPoint()), e->globalPosition().toPoint());
+    }
     dragButton_ = Qt::NoButton;
 }
 

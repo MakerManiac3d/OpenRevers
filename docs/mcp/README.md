@@ -79,6 +79,8 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `features_list` | Formas del cuerpo con medidas, posición y σ | No |
 | `features_measure` | Ángulo y distancia entre dos formas | No |
 | `features_rename` / `features_delete` | Renombrar o borrar formas | Sí |
+| `view_selection` | Lo que la persona ha señalado con el ratón: punto, cuerpo y formas en orden (solo con la ventana abierta) | No |
+| `view_pick` | Hacer clic en la vista como la persona (x, y de 0 a 1; `add` para añadir) | No |
 | `align_principal` | Alinea a los ejes principales | Sí |
 | `align_datums` | Alineación 3-2-1 por formas (caras, ejes, centros) | Sí |
 | `align_best_fit` | Mejor ajuste (ICP robusto) sobre otro cuerpo, con informe de desviación | Sí |

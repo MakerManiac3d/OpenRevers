@@ -4,7 +4,16 @@
 
 #include "commands/Command.h"
 
+#include <functional>
+
 namespace orv {
 class Viewport;
-void registerAppCommands(CommandRegistry& registry, Viewport& viewport);
+
+/// What the person has picked in the view, and picking on their behalf.
+struct SelectionAccess {
+    std::function<json()> selection;
+    std::function<json(double x, double y, bool add)> pick;  // x, y: 0..1 across the view
+};
+
+void registerAppCommands(CommandRegistry& registry, Viewport& viewport, SelectionAccess selection);
 }  // namespace orv
