@@ -20,10 +20,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Dependencies
+        # The Ubuntu mirrors sometimes stall: each attempt is limited to 6
+        # minutes, with network retries and timeouts, and three attempts.
+        timeout-minutes: 20
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
-            qt6-qpa-plugins libgl1-mesa-dev libgl1-mesa-dri libeigen3-dev nlohmann-json3-dev libgtest-dev xvfb
+          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          for attempt in 1 2 3; do
+            if timeout 360 sudo apt-get $APT update -qq && \
+               timeout 360 sudo apt-get $APT install -y -qq ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
+                 qt6-qpa-plugins libgl1-mesa-dev libgl1-mesa-dri libeigen3-dev nlohmann-json3-dev libgtest-dev xvfb; then
+              exit 0
+            fi
+            echo "apt attempt $attempt failed; retrying"
+            sleep 20
+          done
+          exit 1
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DORV_WARNINGS_AS_ERRORS=ON
       - name: Build
