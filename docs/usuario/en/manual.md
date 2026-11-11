@@ -161,6 +161,30 @@ For mechanical parts (flat faces, holes, shafts, cones):
 - The AI agent can read what you picked, so you can ask it things like
   "measure the distance between these two faces".
 
+## Parametric part (phase 3, in progress)
+
+A **part** is an exact solid with its history, exported as STEP for Fusion,
+FreeCAD or SolidWorks. The *Model* panel shows its parameters, sketches and
+operations under it; double-click an operation to change it.
+
+1. **Part → New part.**
+2. **Part → Section with a plane**, on the aligned scan: the part's outline
+   at that height, in the plane's coordinates, to draw the sketch from.
+3. **Part → Add a sketch:** closed loops of lines, arcs and circles (as JSON;
+   a sketch editor comes later). A loop inside another is a hole. The easiest
+   way today is to ask the AI agent, which reads the section and proposes
+   the sketch.
+4. **Part → Extrude** (join, cut, intersect), **Revolve** and **Fillet
+   edges**. Values may be numbers or **parameter** names (*Part → Set a
+   parameter*): change a parameter and the part is rebuilt. A change that
+   breaks it is not applied, and the reason is given.
+5. **Part → Compare with the scan:** the scan's distances to the solid, the
+   median, 95th percentile and the share within a tolerance (±0.2 mm by
+   default).
+6. **File → Export STEP.**
+
+A part's triangles only show it: the mesh tools do not change it.
+
 ## Settings
 
 *File → Settings*:

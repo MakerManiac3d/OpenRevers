@@ -56,7 +56,7 @@ claude mcp add --scope user openrevers -- "C:\Program Files\OpenRevers\bin\openr
 `--lang es` o `--lang en` fija el idioma de las descripciones; por defecto se
 usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 
-## Herramientas (versión 0.3)
+## Herramientas (versión 0.4)
 
 | Herramienta | Qué hace | Cambia el proyecto |
 | --- | --- | --- |
@@ -88,6 +88,15 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `points_thin` | Aclara una nube: un punto por cubo de lado `spacing` | Sí |
 | `points_estimate_normals` | Normales de una nube (plano de los vecinos) y su orientación | Sí |
 | `points_to_mesh` | Malla cerrada desde la nube (Poisson apantallado), con recorte opcional de lo inventado | Sí |
+| `mesh_section` | Dónde corta un plano a una malla: polilíneas en coordenadas del plano, simplificadas. El contorno del que sacar un boceto | No |
+| `part_new` | Pieza paramétrica vacía | Sí |
+| `part_sketch` · `part_edit_sketch` | Boceto: lazos cerrados de rectas, arcos y círculos en un plano (un lazo dentro de otro es un agujero) | Sí |
+| `part_extrude` · `part_revolve` · `part_fillet` | Operaciones; se combinan con la pieza (`new`, `join`, `cut`, `intersect`). Los valores pueden ser números o nombres de parámetros | Sí |
+| `part_parameter` | Crea o cambia un parámetro con nombre; la pieza se reconstruye | Sí |
+| `part_edit` · `part_delete` | Cambiar valores, modo o supresión de una operación; borrar operaciones o bocetos. Un cambio que rompe la pieza no se aplica | Sí |
+| `part_list` | Parámetros, bocetos, operaciones y el sólido (volumen, área, caras, tamaño) | No |
+| `part_compare` | Distancias con signo del escaneo al sólido: mediana, percentiles 90 y 95, parte dentro de ±tolerancia | No |
+| `part_export_step` · `part_import_step` | STEP (AP214, mm) | No · Sí |
 | `mesh_export_tsm` | Escribe una malla de quads cerrada como T-Spline `.tsm` para Fusion | No |
 | `project_save` · `project_open` · `project_new` | Proyecto `.orvp` | — |
 | `body_list` · `body_rename` · `body_duplicate` · `body_delete` · `body_set_visible` | Cuerpos | — |

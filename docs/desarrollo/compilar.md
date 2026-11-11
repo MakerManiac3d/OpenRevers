@@ -32,12 +32,34 @@ fetched at a pinned version.*
    `cpack` necesita [NSIS](https://nsis.sourceforge.io/) para el instalador
    `.exe`; el `.zip` se genera siempre.
 
+## Open CASCADE
+
+Los sólidos exactos y el STEP usan [Open CASCADE Technology](https://github.com/Open-Cascade-SAS/OCCT):
+
+- **Linux:** los paquetes de Ubuntu (7.6), en la lista de abajo.
+- **Windows:** una compilación propia de la 7.9.3 con solo los módulos de modelado y STEP (sin FreeType, TBB ni gráficos). Los mismos pasos que la compilación de GitHub (`.github/workflows/build.yml`):
+
+  ```powershell
+  git clone --depth 1 --branch V7_9_3 https://github.com/Open-Cascade-SAS/OCCT.git occt-src
+  cmake -S occt-src -B occt-build -A x64 -DBUILD_LIBRARY_TYPE=Shared -DINSTALL_DIR=C:/occt `
+    -DBUILD_MODULE_FoundationClasses=OFF -DBUILD_MODULE_ModelingData=OFF -DBUILD_MODULE_ModelingAlgorithms=OFF `
+    -DBUILD_MODULE_Visualization=OFF -DBUILD_MODULE_ApplicationFramework=OFF -DBUILD_MODULE_DataExchange=OFF `
+    -DBUILD_MODULE_Draw=OFF -DBUILD_MODULE_DETools=OFF `
+    "-DBUILD_ADDITIONAL_TOOLKITS=TKDESTEP;TKBool;TKFillet;TKOffset;TKFeat;TKMesh;TKPrim;TKBO;TKShHealing" `
+    -DUSE_FREETYPE=OFF -DUSE_TK=OFF -DUSE_OPENGL=OFF -DUSE_TBB=OFF -DUSE_FREEIMAGE=OFF
+  cmake --build occt-build --config Release --parallel
+  cmake --install occt-build --config Release
+  ```
+
+  Después, al configurar OpenRevers: `-DOpenCASCADE_DIR=C:/occt/cmake`, y `C:\occt\win64\vc14\bin` en el `PATH` para los tests. La instalación copia sus DLL junto al programa.
+
 ## Linux (Ubuntu 24.04)
 
 ```bash
 sudo apt install build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools \
   qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools libgl1-mesa-dev libeigen3-dev \
-  nlohmann-json3-dev libgtest-dev
+  nlohmann-json3-dev libgtest-dev libocct-foundation-dev libocct-modeling-data-dev \
+  libocct-modeling-algorithms-dev libocct-data-exchange-dev
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build

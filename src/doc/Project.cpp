@@ -68,7 +68,9 @@ constexpr char kMagic[8] = {'O', 'R', 'V', 'P', 'R', 'O', 'J', '\0'};
 // 3: adds the normals of a point cloud ("normals": 0 or one per vertex).
 // 4: adds the shapes found on a body ("features" in the manifest, and
 //    "faceRegions": 0 or one int32 region per face in the data).
-constexpr std::uint32_t kVersion = 4;
+// 5: adds parametric parts ("kind": "part", their "model" and the exact solid
+//    it built as Open CASCADE text in "solid"; the mesh is its triangles).
+constexpr std::uint32_t kVersion = 5;
 static_assert(std::endian::native == std::endian::little, "project files are little endian");
 }  // namespace
 
@@ -97,6 +99,12 @@ void saveProject(const Document& doc, const fs::path& path) {
         const std::size_t nr = b.features ? b.features->faceRegion.size() : 0;
         jb["faceRegions"] = nr;
         if (b.features) jb["features"] = featuresToJson(*b.features);
+        if (b.isPart()) {
+            jb["kind"] = "part";
+            jb["model"] = modelToJson(*b.model);
+            jb["solid"] = b.solid.toBrep();
+            jb["buildError"] = b.buildError;
+        }
         jb["offset"] = offset;
         offset += b.mesh->vertices.size() * 12 + b.mesh->faces.size() * 12 + b.mesh->quads.size() * 16 + nn * 12 + nr * 4;
         manifest["bodies"].push_back(jb);
@@ -202,6 +210,15 @@ void loadProject(Document& doc, const fs::path& path) {
             for (auto v : q) bad |= v >= nv;
         if (bad) throw IoError(path.filename().string() + ": body \"" + b.name + "\" refers to a vertex that does not exist");
         b.mesh = std::move(mesh);
+        if (jb.value("kind", "mesh") == "part") {
+            try {
+                b.model = std::make_shared<Model>(modelFromJson(jb.at("model")));
+                b.solid = Solid::fromBrep(jb.value("solid", ""));
+            } catch (const std::exception& e) {
+                throw IoError(path.filename().string() + ": part \"" + b.name + "\" could not be read (" + e.what() + ")");
+            }
+            b.buildError = jb.value("buildError", "");
+        }
         bodies.push_back(std::move(b));
     }
     doc.reset(std::move(bodies), manifest.value("nextId", std::uint64_t{1}), path.string());

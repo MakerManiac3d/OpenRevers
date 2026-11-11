@@ -109,3 +109,24 @@ if(ORV_BUILD_APP)
   find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets Network Concurrent LinguistTools)
   qt_standard_project_setup()
 endif()
+
+# --- Open CASCADE Technology (LGPL-2.1 with exception): exact solids, STEP ---
+# Ubuntu's packages (7.6) on Linux; on Windows a build of 7.9 made by the CI
+# (see .github/workflows/build.yml) or by hand, found through OpenCASCADE_DIR.
+find_package(OpenCASCADE REQUIRED)
+set(ORV_OCCT_TOOLKITS TKernel TKMath TKG2d TKG3d TKGeomBase TKBRep TKGeomAlgo TKTopAlgo TKPrim TKBO TKBool
+    TKShHealing TKFillet TKOffset TKFeat TKMesh TKXSBase)
+if(TARGET TKDESTEP)  # 7.8 and later: one data-exchange toolkit per format
+  list(APPEND ORV_OCCT_TOOLKITS TKDE TKDESTEP)
+else()
+  list(APPEND ORV_OCCT_TOOLKITS TKSTEPBase TKSTEPAttr TKSTEP209 TKSTEP)
+endif()
+add_library(orv_occt INTERFACE)
+target_link_libraries(orv_occt INTERFACE ${ORV_OCCT_TOOLKITS})
+target_include_directories(orv_occt SYSTEM INTERFACE ${OpenCASCADE_INCLUDE_DIR})
+message(STATUS "Open CASCADE ${OpenCASCADE_VERSION} from ${OpenCASCADE_INSTALL_PREFIX}")
+if(WIN32)
+  # Its DLLs beside the executables, for the installer (only those built: the
+  # minimal build has just the modelling and STEP toolkits).
+  install(DIRECTORY "${OpenCASCADE_BINARY_DIR}/" DESTINATION bin FILES_MATCHING PATTERN "TK*.dll")
+endif()

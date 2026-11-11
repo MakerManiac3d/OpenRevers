@@ -26,7 +26,7 @@ jobs:
         timeout-minutes: 25
         run: |
           APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Dpkg::Use-Pty=0"
-          PKGS="ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools qt6-qpa-plugins libgl1-mesa-dev libgl1-mesa-dri libeigen3-dev nlohmann-json3-dev libgtest-dev xvfb"
+          PKGS="ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools qt6-qpa-plugins libgl1-mesa-dev libgl1-mesa-dri libeigen3-dev nlohmann-json3-dev libgtest-dev xvfb libocct-foundation-dev libocct-modeling-data-dev libocct-modeling-algorithms-dev libocct-data-exchange-dev"
           for attempt in 1 2 3; do
             if timeout 420 sudo apt-get $APT update && timeout 420 sudo apt-get $APT install -y $PKGS; then
               exit 0
@@ -52,7 +52,8 @@ jobs:
 
   windows:
     runs-on: windows-latest
-    timeout-minutes: 60
+    # The first run also builds Open CASCADE (about an hour); later runs take it from the cache.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v7
       - uses: jurplel/install-qt-action@v4.5.0
@@ -60,8 +61,29 @@ jobs:
           version: '6.8.*'
           arch: win64_msvc2022_64
           cache: true
+      - name: Open CASCADE from the cache
+        id: occt
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/occt
+          key: occt-7.9.3-minimal-v1-${{ runner.os }}
+      - name: Build Open CASCADE 7.9.3 (only the modelling and STEP toolkits; first run only)
+        if: steps.occt.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch V7_9_3 https://github.com/Open-Cascade-SAS/OCCT.git occt-src
+          cmake -S occt-src -B occt-build -A x64 -DBUILD_LIBRARY_TYPE=Shared -DINSTALL_DIR="${{ github.workspace }}/occt" `
+            -DBUILD_MODULE_FoundationClasses=OFF -DBUILD_MODULE_ModelingData=OFF -DBUILD_MODULE_ModelingAlgorithms=OFF `
+            -DBUILD_MODULE_Visualization=OFF -DBUILD_MODULE_ApplicationFramework=OFF -DBUILD_MODULE_DataExchange=OFF `
+            -DBUILD_MODULE_Draw=OFF -DBUILD_MODULE_DETools=OFF `
+            "-DBUILD_ADDITIONAL_TOOLKITS=TKDESTEP;TKBool;TKFillet;TKOffset;TKFeat;TKMesh;TKPrim;TKBO;TKShHealing" `
+            -DUSE_FREETYPE=OFF -DUSE_TK=OFF -DUSE_OPENGL=OFF -DUSE_GLES2=OFF -DUSE_D3D=OFF -DUSE_VTK=OFF -DUSE_RAPIDJSON=OFF `
+            -DUSE_DRACO=OFF -DUSE_TBB=OFF -DUSE_FREEIMAGE=OFF -DUSE_FFMPEG=OFF -DUSE_OPENVR=OFF -DBUILD_DOC_Overview=OFF
+          cmake --build occt-build --config Release --parallel
+          cmake --install occt-build --config Release
+      - name: Open CASCADE on the path
+        run: echo "${{ github.workspace }}\occt\win64\vc14\bin" >> $env:GITHUB_PATH
       - name: Configure
-        run: cmake -S . -B build -A x64 -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
+        run: cmake -S . -B build -A x64 -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage" -DOpenCASCADE_DIR="${{ github.workspace }}/occt/cmake"
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Unit tests

@@ -341,3 +341,65 @@ TEST(Commands, HolesFittedOnASpotAndTheirPitch) {
     EXPECT_NEAR(d["angleDeg"].get<double>(), 3.0, 0.05);
     EXPECT_NEAR(d["distance"].get<double>(), 4.0, 0.15);  // not the 0.0x where the two lines pass closest
 }
+
+TEST(Commands, ParametricPartFromSketchToStep) {
+    const auto dir = tempDir("part");
+    Fixture f;
+    const json p = f.run("part.new", {{"name", "Plate"}});
+    ASSERT_EQ(p["body"], "b1");
+    f.run("part.parameter", {{"body", "b1"}, {"name", "thickness"}, {"value", 2.5}});
+    json loops = json::array();
+    loops.push_back(json::array({{{"type", "line"}, {"from", {0, 0}}, {"to", {30, 0}}}, {{"type", "line"}, {"from", {30, 0}}, {"to", {30, 12}}},
+                                 {{"type", "line"}, {"from", {30, 12}}, {"to", {0, 12}}}, {{"type", "line"}, {"from", {0, 12}}, {"to", {0, 0}}}}));
+    for (double x : {9.0, 13.0, 17.0, 21.0}) loops.push_back(json::array({{{"type", "circle"}, {"centre", {x, 6.0}}, {"radius", 1.375}}}));
+    const json s = f.run("part.sketch", {{"body", "b1"}, {"loops", loops}});
+    EXPECT_EQ(s["ref"], "s1");
+    const json e = f.run("part.extrude", {{"body", "b1"}, {"sketch", "s1"}, {"end", "thickness"}, {"mode", "new"}});
+    const double area = 30 * 12 - 4 * 3.14159265358979 * 1.375 * 1.375;
+    EXPECT_NEAR(e["solid"]["volume"].get<double>(), 2.5 * area, 1e-3);
+    EXPECT_EQ(e["solid"]["faces"], 10);
+    // Change the parameter: the part follows.
+    const json t = f.run("part.parameter", {{"body", "b1"}, {"name", "thickness"}, {"value", 3.0}});
+    EXPECT_NEAR(t["solid"]["volume"].get<double>(), 3.0 * area, 1e-3);
+    // An edit that breaks the part is refused and changes nothing.
+    EXPECT_THROW(f.run("part.fillet", {{"body", "b1"}, {"points", {{15.0, 0.0, 3.0}}}, {"radius", 50.0}}), CommandError);
+    EXPECT_EQ(f.run("part.list", {{"body", "b1"}})["operations"].size(), 1u);
+    // A 0.5 mm round on the top front edge.
+    const json r = f.run("part.fillet", {{"body", "b1"}, {"points", {{15.0, 0.0, 3.0}}}, {"radius", 0.5}});
+    EXPECT_LT(r["solid"]["volume"].get<double>(), 3.0 * area);
+    EXPECT_THROW(f.run("mesh.smooth", {{"body", "b1"}}), CommandError);  // its triangles only show the solid
+    EXPECT_THROW(f.run("part.delete", {{"body", "b1"}, {"item", "s1"}}), CommandError);  // used by the extrusion
+
+    // A scan of it: a remeshed box in the same place, holes not drilled.
+    TriMesh scan = test::box(30, 12, 3);
+    remeshUniform(scan, 0.5f, 4);
+    writeMesh(scan, dir / "scan.stl");
+    f.run("mesh.import", {{"path", (dir / "scan.stl").string()}});
+    const json c = f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"tolerance", 0.2}});
+    EXPECT_GT(c["withinPercent"].get<double>(), 90.0);  // all but the rounded edge and the plain top over the holes
+    EXPECT_LT(c["median"].get<double>(), 0.01);
+
+    // The section of the scan half way up: one closed rectangle.
+    const json sec = f.run("mesh.section", {{"body", "b2"}, {"origin", {0.0, 0.0, 1.5}}, {"normal", {0.0, 0.0, 1.0}}, {"xDir", {1.0, 0.0, 0.0}}});
+    ASSERT_EQ(sec["polylines"].size(), 1u);
+    EXPECT_TRUE(sec["polylines"][0]["closed"].get<bool>());
+    EXPECT_NEAR(std::abs(sec["polylines"][0]["area"].get<double>()), 360.0, 0.5);
+    EXPECT_LE(sec["polylines"][0]["points"].size(), 8u);  // simplified to its corners
+
+    // STEP out and in; the project keeps the part.
+    f.run("part.export_step", {{"body", "b1"}, {"path", (dir / "plate.step").string()}});
+    const json imp = f.run("part.import_step", {{"path", (dir / "plate.step").string()}});
+    EXPECT_NEAR(imp["solid"]["volume"].get<double>(), r["solid"]["volume"].get<double>(), 1e-2);
+    f.run("project.save", {{"path", (dir / "p.orvp").string()}});
+    Fixture g;
+    g.run("project.open", {{"path", (dir / "p.orvp").string()}});
+    const json back = g.run("part.list", {{"body", "Plate"}});
+    EXPECT_EQ(back["operations"].size(), 2u);
+    EXPECT_NEAR(back["solid"]["volume"].get<double>(), r["solid"]["volume"].get<double>(), 1e-6);
+    EXPECT_EQ(back["parameters"]["thickness"], 3.0);
+    // Undo takes the fillet back.
+    f.run("history.undo");  // the STEP import
+    f.run("history.undo");  // the scan import
+    f.run("history.undo");  // the fillet
+    EXPECT_NEAR(f.run("part.list", {{"body", "b1"}})["solid"]["volume"].get<double>(), 3.0 * area, 1e-3);
+}

@@ -13,6 +13,7 @@ licence; all are GPL-3.0 compatible.*
 | [miniz](https://github.com/richgel999/miniz) | 3.0.2 | MIT | ZIP de los paquetes 3MF | Compilado de su código fuente |
 | [nanoflann](https://github.com/jlblancoc/nanoflann) | 1.6.1 | BSD-2-Clause | Vecinos más cercanos en nubes de puntos | Solo cabeceras |
 | [PoissonRecon](https://github.com/mkazhdan/PoissonRecon) | 18.76 (commit `262b0f5`) | MIT | Reconstrucción de Poisson apantallada | Sus cabeceras, compiladas en un archivo propio |
+| [Open CASCADE Technology](https://github.com/Open-Cascade-SAS/OCCT) | 7.6 (Ubuntu) / 7.9.3 (Windows) | LGPL-2.1 con excepción | Sólidos exactos (B-rep): extruir, revolución, operaciones booleanas, redondeos, STEP | Biblioteca dinámica; en Windows solo los módulos de modelado y STEP, sin FreeType, TBB ni gráficos |
 | [QuadriFlow](https://github.com/hjwdzh/QuadriFlow) | commit `810b7a0` | BSD-3-Clause | Remallado en quads | Compilado de su código fuente, con los cambios de `cmake/PatchQuadriFlow.cmake` (sin Boost, sin llamadas a otros programas) |
 | [LEMON](https://lemon.cs.elte.hu) | 1.3.1 (incluido en QuadriFlow) | Boost Software License 1.0 | Grafos y flujos para QuadriFlow | Solo cabeceras |
 | [PCG32](https://www.pcg-random.org) (incluido en QuadriFlow) | — | Apache-2.0 | Números aleatorios de QuadriFlow | Solo cabeceras |
@@ -30,7 +31,6 @@ Las referencias bibliográficas de los algoritmos están en
 
 | Componente | Licencia | Para qué |
 | --- | --- | --- |
-| [Open CASCADE Technology](https://dev.opencascade.org) | LGPL-2.1 con excepción | Núcleo CAD: B-rep, NURBS, STEP, IGES |
 | [CGAL](https://www.cgal.org) | GPL-3.0+ / LGPL-3.0+ | Detección de primitivas (RANSAC eficiente), crecimiento de regiones |
 | [oneTBB](https://github.com/uxlfoundation/oneTBB) | Apache-2.0 | Paralelismo |
 | [Geogram](https://github.com/BrunoLevy/geogram) | BSD-3-Clause | Remallado y reconstrucción robustos |

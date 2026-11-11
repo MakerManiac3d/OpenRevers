@@ -30,6 +30,9 @@ Body meshBody(CommandContext& ctx, const json& ref) {
     if (b.mesh->isPointCloud())
         throw CommandError("invalid_input", ctx.say(b.name + " is a point cloud; reconstruct a mesh from it first (points.to_mesh).",
                                                     b.name + " es una nube de puntos; reconstruye antes una malla (points.to_mesh)."));
+    if (b.isPart())
+        throw CommandError("invalid_input", ctx.say(b.name + " is a parametric part: its triangles only show its solid. Change it with the part commands.",
+                                                    b.name + " es una pieza paramétrica: sus triángulos solo muestran su sólido. Se cambia con los comandos de pieza."));
     return b;
 }
 

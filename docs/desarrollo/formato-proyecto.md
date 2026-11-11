@@ -1,4 +1,4 @@
-# Formato de proyecto `.orvp` (versión 4)
+# Formato de proyecto `.orvp` (versión 5)
 
 Un proyecto es un único archivo binario, en orden little endian:
 
@@ -53,12 +53,27 @@ punto. El significado de `origin`, `axis`, `radius`… según el tipo está en
 
 Una **nube de puntos** es un cuerpo con `faces` = 0 y `"kind": "points"`.
 
+Una **pieza paramétrica** tiene `"kind": "part"`; su malla son los triángulos
+de su sólido, solo para verla. Además lleva:
+
+- `"model"`: `{"parameters": {"espesor": 2.5}, "sketches": [{"id": 1, "name": "Boceto 1",
+  "plane": {"origin": [...], "normal": [...], "xDir": [...]}, "loops": [[{"type": "line",
+  "from": [x, y], "to": [x, y]}, {"type": "arc", "from", "to", "centre", "ccw"}, …],
+  [{"type": "circle", "centre": [x, y], "radius": r}]]}], "operations": [{"id": 2,
+  "name": "Extrusión 1", "kind": "extrude", "mode": "new", "suppressed": false, "sketch": 1,
+  "start": 0, "end": "espesor"}, …], "nextId": 3}`. Un valor es un número o el nombre
+  de un parámetro. Los tipos de operación están en `src/doc/Model.h`;
+- `"solid"`: el sólido que construyó el historial, en el formato de texto de
+  Open CASCADE (BREP), para no tener que reconstruirlo al abrir;
+- `"buildError"`: vacío, o por qué falló la última reconstrucción.
+
 | Versión | Cambio |
 | --- | --- |
 | 1 | Vértices y triángulos |
 | 2 | Añade `quads`. Un archivo de la versión 1 se lee igual, sin quads |
 | 3 | Añade `normals` y las nubes de puntos. Las versiones 1 y 2 se leen igual |
 | 4 | Añade las formas (`features`, `faceRegions`). Las anteriores se leen igual, sin formas |
+| 5 | Añade las piezas paramétricas (`"kind": "part"`, `model`, `solid`). Las anteriores se leen igual |
 
 ## Garantías
 

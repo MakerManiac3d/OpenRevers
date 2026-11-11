@@ -97,6 +97,27 @@ void Document::setMesh(std::uint64_t id, std::shared_ptr<const TriMesh> mesh, st
     b->features = std::move(features);
 }
 
+Body Document::addPart(std::string name, std::shared_ptr<const Model> model, Solid solid, std::shared_ptr<const TriMesh> mesh, std::string buildError) {
+    std::lock_guard lock(m_);
+    Body b = addBody(std::move(name), std::move(mesh));
+    Body* nb = find(b.id);
+    nb->model = std::move(model);
+    nb->solid = std::move(solid);
+    nb->buildError = std::move(buildError);
+    nb->color = {0.78f, 0.80f, 0.84f};
+    return *nb;
+}
+
+void Document::setPart(std::uint64_t id, std::shared_ptr<const Model> model, Solid solid, std::shared_ptr<const TriMesh> mesh, std::string buildError) {
+    std::lock_guard lock(m_);
+    Body* b = find(id);
+    b->model = std::move(model);
+    b->solid = std::move(solid);
+    b->mesh = std::move(mesh);
+    b->features = nullptr;
+    b->buildError = std::move(buildError);
+}
+
 void Document::setFeatures(std::uint64_t id, std::shared_ptr<const Features> features) {
     std::lock_guard lock(m_);
     find(id)->features = std::move(features);

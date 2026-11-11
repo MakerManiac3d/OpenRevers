@@ -87,7 +87,9 @@ bool sameShape(const Primitive& a, const Primitive& b, double tol) {
             return (a.origin - b.origin).norm() < tol && std::abs(a.radius - b.radius) < tol;
         case PrimitiveType::Cylinder: {
             const Vec3d d = b.origin - a.origin;
-            return axisCos > std::cos(1.0 * kPi / 180) && (d - d.dot(a.axis) * a.axis).norm() < tol && std::abs(a.radius - b.radius) < tol;
+            // A short bore's axis is uncertain by several degrees: two halves of it
+            // may disagree that much; the joint fit decides.
+            return axisCos > std::cos(10.0 * kPi / 180) && (d - d.dot(a.axis) * a.axis).norm() < tol && std::abs(a.radius - b.radius) < tol;
         }
         case PrimitiveType::Cone:
             return axisCos > std::cos(1.0 * kPi / 180) && (a.origin - b.origin).norm() < 3 * tol && std::abs(a.angle - b.angle) < 0.5 * kPi / 180;
@@ -292,14 +294,28 @@ double estimateNoise(const TriMesh& m) {
     double faceArea = 0;
     for (std::size_t f = 0; f < m.faces.size(); ++f) { box.extend(d.centre[f]); faceArea += d.area[f]; }
     faceArea /= static_cast<double>(m.faces.size());
-    const double R = 0.03 * box.diagonal().norm();
-    const auto count = static_cast<std::size_t>(std::clamp(kPi * R * R / std::max(faceArea, 1e-12), 200.0, 5000.0));
+    // Patches stay on one face: every normal within 20° of the seed's, so a
+    // patch on a thin part does not fold over a rounded edge. Only patches
+    // that grew to their full size count (they fit inside a face).
+    const double R = 0.06 * box.diagonal().norm();
+    const auto count = static_cast<std::size_t>(std::clamp(kPi * R * R / std::max(faceArea, 1e-12), 50.0, 20000.0));
     std::vector<double> wide;
     std::fill(mark.begin(), mark.end(), 0u);
-    for (int i = 0; i < 200; ++i) {
+    const double cone = std::cos(20 * kPi / 180);
+    for (int i = 0; i < 300; ++i) {
         const auto f = static_cast<std::uint32_t>(pick(g));
-        auto patch = patchAround(d, f, count, std::cos(25 * kPi / 180), nullptr, mark, static_cast<std::uint32_t>(i + 1));
-        if (patch.size() < count / 2) continue;
+        const auto stamp = static_cast<std::uint32_t>(i + 1);
+        std::vector<std::uint32_t> patch{f};
+        mark[f] = stamp;
+        double area = d.area[f];
+        for (std::size_t k = 0; k < patch.size() && patch.size() < 4 * count; ++k)
+            for (auto nb : d.nbr[patch[k]]) {
+                if (nb == UINT32_MAX || mark[nb] == stamp || d.normal[nb].dot(d.normal[f]) < cone || (d.centre[nb] - d.centre[f]).norm() > R) continue;
+                mark[nb] = stamp;
+                patch.push_back(nb);
+                area += d.area[nb];
+            }
+        if (area < 0.7 * kPi * R * R) continue;  // the disc does not fit on one face
         std::vector<std::uint32_t> verts;
         for (auto face : patch)
             for (auto v : m.faces[face]) verts.push_back(v);
@@ -461,7 +477,8 @@ Segmentation segment(const TriMesh& m, const SegmentOptions& o) {
                     const Primitive& A = s.regions[i].shape;
                     const Primitive& B = s.regions[j].shape;
                     if (A.type != B.type) continue;
-                    if (A.type != PrimitiveType::Sphere && std::abs(A.axis.dot(B.axis)) < std::cos(3.0 * kPi / 180)) continue;
+                    const double maxAxisDeg = A.type == PrimitiveType::Cylinder ? 10.0 : 3.0;
+                    if (A.type != PrimitiveType::Sphere && std::abs(A.axis.dot(B.axis)) < std::cos(maxAxisDeg * kPi / 180)) continue;
                     if (!sameShape(A, B, std::max(10 * tol, 0.05 * std::max(A.radius, B.radius))) && A.type != PrimitiveType::Cone) continue;
                     std::vector<std::uint32_t> both = facesOf[i];
                     both.insert(both.end(), facesOf[j].begin(), facesOf[j].end());

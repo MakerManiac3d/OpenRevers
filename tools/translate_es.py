@@ -12,6 +12,17 @@ from pathlib import Path
 from xml.sax.saxutils import escape, unescape
 
 ES = {
+    "number or parameter name": "número o nombre de parámetro",
+    "&Part": "&Pieza",
+    "part": "pieza",
+    "Parameter": "Parámetro",
+    "sketch": "boceto",
+    "Kind": "Tipo",
+    "Parametric part": "Pieza paramétrica",
+    "Operations": "Operaciones",
+    "Volume (mm³)": "Volumen (mm³)",
+    "Solid faces": "Caras del sólido",
+    "Error": "Error",
     "Run": "Ejecutar",
     "Cancel": "Cancelar",
     "Agent: %1…": "Agente: %1…",

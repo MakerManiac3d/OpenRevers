@@ -50,8 +50,23 @@ json CommandRegistry::validate(const Command& c, const json& in) {
             continue;
         }
         json v = params[key];
-        const std::string type = s.value("type", "");
+        std::string type = s.contains("type") && s["type"].is_string() ? s["type"].get<std::string>() : "";
+        if (s.contains("type") && s["type"].is_array()) {  // a choice of types: number or a parameter's name
+            for (const auto& t : s["type"]) {
+                const std::string tt = t.get<std::string>();
+                if ((tt == "number" && v.is_number()) || (tt == "string" && v.is_string())) type = tt;
+            }
+            if (type.empty()) throw CommandError("invalid_input", c.name + ": input \"" + key + "\" must be " + s["type"].dump());
+        }
         auto bad = [&](const std::string& why) { throw CommandError("invalid_input", c.name + ": input \"" + key + "\" " + why); };
+        if ((type == "number" || type == "integer") && v.is_string()) {  // some clients send numbers as text
+            try {
+                std::size_t used = 0;
+                const double d = std::stod(v.get<std::string>(), &used);
+                if (used == v.get<std::string>().size()) v = d;
+            } catch (...) {
+            }
+        }
         if (type == "number") {
             if (!v.is_number()) bad("must be a number");
             const double d = v.get<double>();
@@ -66,10 +81,14 @@ json CommandRegistry::validate(const Command& c, const json& in) {
             if (s.contains("maximum") && d > s["maximum"].get<long long>()) bad("must be at most " + s["maximum"].dump());
         } else if (type == "boolean") {
             if (!v.is_boolean()) bad("must be true or false");
-        } else if (type == "array") {
+        } else if (type == "array" && s.value("x-kind", "") == "point") {
             if (!v.is_array() || v.size() != 3) bad("must be three numbers [x, y, z]");
             for (const auto& x : v)
                 if (!x.is_number() || !std::isfinite(x.get<double>())) bad("must be three finite numbers [x, y, z]");
+        } else if (type == "array") {
+            if (!v.is_array()) bad("must be a list");
+        } else if (type == "object") {
+            if (!v.is_object()) bad("must be an object");
         } else if (type == "string") {
             if (!v.is_string()) bad("must be a string");
             if (s.contains("enum")) {

@@ -31,9 +31,10 @@ compatible con MCP) puede manejar paso a paso, delante de ti.
 | Formas | Segmentación automática y ajuste de planos, esferas, cilindros, conos y toros con su σ; medir entre formas |
 | Alineación | Ejes principales, 3-2-1 por datums (caras, ejes, centros) y mejor ajuste (ICP robusto) con informe de desviación |
 | Nubes de puntos | Aclarar, calcular y orientar normales, reconstruir una malla cerrada (Poisson apantallado) con recorte de lo que no estaba escaneado |
+| Sólido paramétrico | Piezas con historial: bocetos de rectas, arcos y círculos; extruir, cortar, revolución y redondeos; parámetros con nombre; comparar con el escaneo; exportar e importar STEP (Open CASCADE). Secciones de la malla para dibujar los bocetos |
 | Superficies | Exportar una malla de quads cerrada como T-Spline (`.tsm`) para Autodesk Fusion |
 | Trabajo | Deshacer y rehacer de cada operación, historial, registro, visor 3D con bordes abiertos marcados |
-| IA (MCP) | 42 herramientas con la ventana abierta (ve lo que señalas con el ratón), capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
+| IA (MCP) | 56 herramientas con la ventana abierta (ve lo que señalas con el ratón), capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
 | Idiomas | Español e inglés |
 
 ## Instalación

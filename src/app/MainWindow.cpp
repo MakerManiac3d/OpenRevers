@@ -121,6 +121,7 @@ void MainWindow::buildActions() {
     auto* pointsMenu = menuBar()->addMenu(tr("&Points"));
     auto* shapesMenu = menuBar()->addMenu(tr("S&hapes"));
     auto* alignMenu = menuBar()->addMenu(tr("&Align"));
+    auto* partMenu = menuBar()->addMenu(tr("&Part"));
     auto* bodyMenu = menuBar()->addMenu(tr("&Body"));
     auto* viewMenu = menuBar()->addMenu(tr("&View"));
     auto* agentMenu = menuBar()->addMenu(tr("&AI agent"));
@@ -153,6 +154,8 @@ void MainWindow::buildActions() {
     add(fileMenu, tr("&Import mesh…"), &MainWindow::importMesh, QKeySequence(Qt::CTRL | Qt::Key_I), QStyle::SP_ArrowDown, true);
     add(fileMenu, tr("&Export mesh…"), &MainWindow::exportMesh, QKeySequence(Qt::CTRL | Qt::Key_E), QStyle::SP_ArrowUp, true);
     add(fileMenu, tr("Export &T-Spline for Fusion (.tsm)…"), &MainWindow::exportTsm);
+    add(fileMenu, cmdText("part.import_step") + "…", [this]() { runFromUi("part.import_step"); });
+    add(fileMenu, cmdText("part.export_step") + "…", [this]() { runFromUi("part.export_step"); });
     fileMenu->addSeparator();
     add(fileMenu, tr("&Quit"), &QWidget::close, QKeySequence::Quit);
     tb->addSeparator();
@@ -179,6 +182,12 @@ void MainWindow::buildActions() {
     for (const char* name : {"points.thin", "points.estimate_normals", "points.to_mesh"}) {
         auto* a = add(pointsMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
+    }
+    for (const char* name : {"part.new", "part.sketch", "part.extrude", "part.revolve", "part.fillet", "part.parameter", "part.edit", "part.delete", "part.list",
+                             "part.compare", "mesh.section"}) {
+        auto* a = add(partMenu, cmdText(name), [this, name]() { runFromUi(name); });
+        a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
+        if (std::string(name) == "part.fillet" || std::string(name) == "part.list") partMenu->addSeparator();
     }
     for (const char* name : {"body.rename", "body.duplicate", "body.delete"}) add(bodyMenu, cmdText(name), [this, name]() { runFromUi(name); });
 
@@ -237,11 +246,11 @@ void MainWindow::buildDocks() {
         refreshShapes();
     });
     connect(tree_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int col) {
-        if (updatingTree_ || col != 0) return;
+        if (updatingTree_ || col != 0 || item->parent()) return;  // a part's history rows have no visibility
         const QString ref = "b" + QString::number(item->data(0, Qt::UserRole).toULongLong());
         run("body.set_visible", {{"body", ref.toStdString()}, {"visible", item->checkState(0) == Qt::Checked}});
     });
-    connect(tree_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem*, int) { runFromUi("body.rename"); });
+    connect(tree_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int) { runFromUi(item && item->parent() ? "part.edit" : "body.rename"); });
     dock(tr("Model"), "ModelDock", tree_, Qt::LeftDockWidgetArea);
 
     props_ = new QTableWidget(0, 2);
@@ -305,9 +314,27 @@ void MainWindow::refreshTree() {
     updatingTree_ = true;
     tree_->clear();
     for (const auto& b : doc_.bodies()) {
-        const QString count = b.mesh->isPointCloud() ? tr("%1 points").arg(QLocale().toString(static_cast<qlonglong>(b.mesh->vertexCount())))
-                                                     : QLocale().toString(static_cast<qlonglong>(b.mesh->faceCount()));
+        const QString count = b.isPart() ? tr("part")
+                              : b.mesh->isPointCloud() ? tr("%1 points").arg(QLocale().toString(static_cast<qlonglong>(b.mesh->vertexCount())))
+                                                       : QLocale().toString(static_cast<qlonglong>(b.mesh->faceCount()));
         auto* item = new QTreeWidgetItem(tree_, {QString::fromStdString(b.name), count});
+        if (b.isPart()) {
+            // The history under the part: parameters, sketches, then the operations in order.
+            auto child = [&](const QString& text, const QString& note, const std::string& tip) {
+                auto* c = new QTreeWidgetItem(item, {text, note});
+                c->setData(0, Qt::UserRole, QVariant::fromValue<qulonglong>(b.id));
+                c->setToolTip(0, QString::fromStdString(tip));
+                c->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
+                return c;
+            };
+            for (const auto& [name, value] : b.model->parameters) child(QString::fromStdString(name), QLocale().toString(value, 'g', 6), tr("Parameter").toStdString());
+            for (const auto& sk : b.model->sketches) child(QString::fromStdString(sk.name), tr("sketch"), sk.ref());
+            for (const auto& op : b.model->operations) {
+                auto* c = child(QString::fromStdString(op.name), QString::fromUtf8(opModeName(op.mode)), op.ref() + " · " + opKindName(op.kind));
+                if (op.suppressed) c->setForeground(0, palette().brush(QPalette::Disabled, QPalette::Text));
+            }
+            item->setExpanded(true);
+        }
         item->setData(0, Qt::UserRole, QVariant::fromValue<qulonglong>(b.id));
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
         item->setCheckState(0, b.visible ? Qt::Checked : Qt::Unchecked);
@@ -333,7 +360,15 @@ void MainWindow::refreshProperties() {
     auto mm = [&](float v) { return loc.toString(v, 'f', 3); };
     row(tr("Name"), QString::fromStdString(b->name));
     row(tr("Reference"), QString::fromStdString(b->ref()));
-    if (b->mesh->isPointCloud()) {
+    if (b->isPart()) {
+        row(tr("Kind"), tr("Parametric part"));
+        row(tr("Operations"), loc.toString(static_cast<qlonglong>(b->model->operations.size())));
+        if (!b->solid.empty()) {
+            row(tr("Volume (mm³)"), loc.toString(b->solid.volume(), 'f', 3));
+            row(tr("Solid faces"), loc.toString(b->solid.faceCount()));
+        }
+        if (!b->buildError.empty()) row(tr("Error"), QString::fromStdString(b->buildError));
+    } else if (b->mesh->isPointCloud()) {
         row(tr("Points"), loc.toString(static_cast<qlonglong>(b->mesh->vertexCount())));
         row(tr("Normals"), b->mesh->hasNormals() ? tr("Yes") : tr("No"));
     } else {
@@ -341,6 +376,10 @@ void MainWindow::refreshProperties() {
         row(tr("Vertices"), loc.toString(static_cast<qlonglong>(b->mesh->vertexCount())));
     }
     if (b->mesh->hasQuads()) row(tr("Quads"), loc.toString(static_cast<qlonglong>(b->mesh->quads.size())));
+    if (bb.empty()) {
+        props_->resizeColumnsToContents();
+        return;
+    }
     row(tr("Size X × Y × Z (mm)"), mm(bb.size().x()) + " × " + mm(bb.size().y()) + " × " + mm(bb.size().z()));
     row(tr("Minimum (mm)"), mm(bb.min.x()) + ", " + mm(bb.min.y()) + ", " + mm(bb.min.z()));
     row(tr("Maximum (mm)"), mm(bb.max.x()) + ", " + mm(bb.max.y()) + ", " + mm(bb.max.z()));

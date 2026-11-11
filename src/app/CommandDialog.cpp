@@ -2,6 +2,7 @@
 #include "app/CommandDialog.h"
 
 #include <QCheckBox>
+#include <QLocale>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -40,7 +41,8 @@ CommandDialog::CommandDialog(const Command& command, const std::vector<Body>& bo
     for (auto it = props.begin(); it != props.end(); ++it) {
         const std::string key = it.key();
         const json& s = it.value();
-        const std::string type = s.value("type", "");
+        const bool numberOrName = s.contains("type") && s["type"].is_array();  // a value: a number or a parameter's name
+        const std::string type = s.contains("type") && s["type"].is_string() ? s["type"].get<std::string>() : "";
         const std::string kind = s.value("x-kind", "");
         QString label = QString::fromStdString(l == "es" && s.contains("x-es") ? s["x-es"].get<std::string>() : s.value("description", key));
         if (s.contains("x-unit")) label += QString(" (%1)").arg(QString::fromStdString(s["x-unit"]));
@@ -120,6 +122,33 @@ CommandDialog::CommandDialog(const Command& command, const std::vector<Body>& bo
             spin->setValue(static_cast<int>(s.value("default", 0LL)));
             readers_[key] = [spin]() { return json(spin->value()); };
             field = spin;
+        } else if (numberOrName) {
+            auto* edit = new QLineEdit();
+            if (s.contains("default")) edit->setText(QString::fromStdString(s["default"].is_number() ? QString::number(s["default"].get<double>()).toStdString() : s["default"].dump()));
+            edit->setPlaceholderText(tr("number or parameter name"));
+            readers_[key] = [edit]() {
+                const QString t = edit->text().trimmed();
+                if (t.isEmpty()) return json(nullptr);
+                bool ok = false;
+                const double v = QLocale().toDouble(t, &ok);
+                if (ok) return json(v);
+                const double v2 = t.toDouble(&ok);
+                return ok ? json(v2) : json(t.toStdString());
+            };
+            field = edit;
+        } else if (type == "object" || (type == "array" && kind != "point")) {  // structured input, as JSON text
+            auto* edit = new QLineEdit();
+            edit->setPlaceholderText(type == "object" ? "{...}" : "[...]");
+            readers_[key] = [edit]() {
+                const std::string t = edit->text().trimmed().toStdString();
+                if (t.empty()) return json(nullptr);
+                try {
+                    return json::parse(t);
+                } catch (...) {
+                    return json(t);  // the command says what is wrong
+                }
+            };
+            field = edit;
         } else if (type == "array") {  // a point: x, y, z
             auto* row = new QWidget();
             auto* h = new QHBoxLayout(row);

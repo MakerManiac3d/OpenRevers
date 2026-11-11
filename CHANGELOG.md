@@ -1,5 +1,29 @@
 # Cambios · Changelog
 
+## 0.4.0 — en desarrollo (fase 3: sólido paramétrico)
+
+- **Open CASCADE** para los sólidos exactos: los paquetes de Ubuntu en Linux;
+  en Windows, una compilación propia y mínima de la 7.9.3 (solo modelado y
+  STEP), hecha y guardada en caché por GitHub.
+- **Piezas paramétricas** (menú *Pieza*; en el panel *Modelo*, con su
+  historial debajo):
+  - bocetos de rectas, arcos y círculos en cualquier plano; un lazo dentro de
+    otro es un agujero;
+  - extruir, cortar, intersecar, revolución y redondeos;
+  - parámetros con nombre: al cambiarlos, la pieza se reconstruye. Un cambio
+    que la rompe no se aplica y se dice por qué;
+  - comparar con el escaneo: distancias con signo, mediana, percentil 95 y
+    parte dentro de una tolerancia;
+  - exportar e importar STEP; el proyecto (formato 5) guarda la pieza.
+- **Sección de una malla con un plano**, simplificada: el contorno del que
+  sacar un boceto.
+- **Ruido amplio** (corrección de la 0.3.1 tras probarla en la leva): en
+  discos del 6 % del tamaño de la pieza que no se doblan por los cantos.
+  En piezas finas la 0.3.1 medía la curvatura de los cantos (0,08 mm).
+- Dos mitades de un taladro corto, con ejes hasta 10° distintos, se unen si
+  encajan juntas.
+- Los números que llegan como texto se aceptan en las entradas numéricas.
+
 ## 0.3.1 — 11 de noviembre de 2026
 
 Correcciones tras la primera pieza real (una leva escaneada, 84 × 15 × 3,6 mm,

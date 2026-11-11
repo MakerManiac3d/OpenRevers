@@ -6,6 +6,7 @@
 
 #include "core/mesh/TriMesh.h"
 #include "doc/Features.h"
+#include "doc/Model.h"
 
 #include <array>
 #include <functional>
@@ -24,11 +25,18 @@ struct Body {
     std::string name;
     std::shared_ptr<const TriMesh> mesh;
     std::shared_ptr<const Features> features;  // shapes found on it (null: none)
+    // A parametric part: its history, the exact solid it builds and, when an
+    // operation failed, why. Its mesh is then only the solid's triangles,
+    // for drawing and measuring.
+    std::shared_ptr<const Model> model;
+    Solid solid;
+    std::string buildError;
     bool visible{true};
     std::array<float, 3> color{0.62f, 0.70f, 0.78f};
     std::string source;  // file it came from, if any
 
     std::string ref() const { return "b" + std::to_string(id); }
+    bool isPart() const { return model != nullptr; }
 };
 
 struct HistoryEntry {
@@ -56,6 +64,9 @@ public:
     /// `features` gives the ones that go with the new mesh (a move keeps them).
     void setMesh(std::uint64_t id, std::shared_ptr<const TriMesh> mesh, std::shared_ptr<const Features> features = nullptr);
     void setFeatures(std::uint64_t id, std::shared_ptr<const Features> features);
+    /// A new parametric part, or a part's new state after an edit.
+    Body addPart(std::string name, std::shared_ptr<const Model> model, Solid solid, std::shared_ptr<const TriMesh> mesh, std::string buildError = {});
+    void setPart(std::uint64_t id, std::shared_ptr<const Model> model, Solid solid, std::shared_ptr<const TriMesh> mesh, std::string buildError = {});
     void renameBody(std::uint64_t id, const std::string& name);
     void setVisible(std::uint64_t id, bool visible);
     void setColor(std::uint64_t id, std::array<float, 3> color);

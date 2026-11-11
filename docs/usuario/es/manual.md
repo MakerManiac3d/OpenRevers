@@ -169,6 +169,34 @@ Para piezas mecánicas (caras planas, taladros, ejes, conos):
 - El agente de IA puede leer lo que has señalado, así que puedes pedirle
   cosas como «mide la distancia entre estas dos caras».
 
+## Pieza paramétrica (fase 3, en desarrollo)
+
+Una **pieza** es un sólido exacto con su historial, que se exporta a STEP para
+Fusion, FreeCAD o SolidWorks. En el panel *Modelo* aparece con sus
+parámetros, bocetos y operaciones debajo; doble clic en una operación para
+cambiarla.
+
+1. **Pieza → Nueva pieza.**
+2. **Pieza → Sección con un plano**, sobre el escaneo ya alineado: da el
+   contorno de la pieza a esa altura, en coordenadas del plano. Es la base
+   del boceto.
+3. **Pieza → Añadir boceto:** lazos cerrados de rectas, arcos y círculos
+   (en JSON; un editor de bocetos llegará más adelante). Un lazo dentro de
+   otro es un agujero. Lo más cómodo hoy es pedírselo al agente de IA, que
+   lee la sección y propone el boceto.
+4. **Pieza → Extruir** (unir, cortar, intersecar), **Revolución** y
+   **Redondear aristas**. Los valores pueden ser números o nombres de
+   **parámetros** (*Pieza → Fijar un parámetro*): al cambiar un parámetro, la
+   pieza se reconstruye. Si un cambio la rompe, no se aplica y se dice por
+   qué.
+5. **Pieza → Comparar con el escaneo:** distancias del escaneo al sólido,
+   mediana, percentil 95 y qué parte queda dentro de una tolerancia (±0,2 mm
+   por defecto).
+6. **Archivo → Exportar STEP.**
+
+Los triángulos de una pieza solo la muestran: las herramientas de malla no
+la cambian.
+
 ## Ajustes
 
 *Archivo → Ajustes*:

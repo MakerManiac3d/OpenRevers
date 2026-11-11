@@ -28,14 +28,19 @@ add_library(orv_core STATIC
   core/fit/Primitive.cpp
   core/fit/Segmentation.cpp
   core/fit/Align.cpp
+  core/solid/Profile.cpp
+  core/solid/Solid.cpp
+  core/mesh/Distance.cpp
   core/points/E57.cpp
   core/util/Xml.cpp
   core/util/Config.cpp
   doc/Document.cpp
   doc/Project.cpp
+  doc/Model.cpp
   commands/Command.cpp
   commands/CoreCommands.cpp
   commands/FeatureCommands.cpp
+  commands/PartCommands.cpp
   commands/Guide.cpp
   mcp/McpServer.cpp
   mcp/LocalBackend.cpp
@@ -43,7 +48,7 @@ add_library(orv_core STATIC
 target_include_directories(orv_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(orv_core PUBLIC Eigen3::Eigen nlohmann_json::nlohmann_json PRIVATE pmp quadriflow orv_miniz orv_nanoflann orv_poisson)
+target_link_libraries(orv_core PUBLIC Eigen3::Eigen nlohmann_json::nlohmann_json PRIVATE pmp quadriflow orv_miniz orv_nanoflann orv_poisson orv_occt)
 if(WIN32)
   target_link_libraries(orv_core PRIVATE ws2_32)
 endif()
