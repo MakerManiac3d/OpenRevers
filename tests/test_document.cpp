@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "TestMeshes.h"
 #include "commands/Command.h"
+#include "core/fit/Align.h"
 #include "core/mesh/MeshIO.h"
+#include "core/mesh/MeshRepair.h"
 #include "doc/Project.h"
 #include "mcp/LocalBackend.h"
 #include "mcp/McpServer.h"
@@ -149,6 +151,76 @@ TEST(Commands, PointCloudToMesh) {
     EXPECT_THROW(f.run("points.thin", {{"body", "b2"}, {"spacing", 1.0}}), CommandError);  // a cloud command on a mesh
     f.run("history.undo");  // takes the reconstruction back
     EXPECT_EQ(f.run("body.list")["bodies"].size(), 1u);
+}
+
+TEST(Commands, ShapesAndAlignment) {
+    const auto dir = tempDir("shapes");
+    TriMesh box = test::box(40, 30, 20);
+    remeshUniform(box, 1.5f, 4);
+    // Somewhere off the axes, as a scan comes in.
+    Transform pose = Transform::Identity();
+    pose.rotate(Eigen::AngleAxisd(0.4, Vec3d(1, 2, 3).normalized()));
+    pose.pretranslate(Vec3d(30, -10, 5));
+    transformMesh(box, pose);
+    writeMesh(box, dir / "box.stl");
+    Fixture f;
+    f.run("mesh.import", {{"path", (dir / "box.stl").string()}});
+    const json seg = f.run("features.segment", {{"body", "b1"}, {"noise", 0.01}});
+    ASSERT_EQ(seg["features"].size(), 6u);
+    for (const auto& x : seg["features"]) EXPECT_EQ(x["type"], "plane");
+    EXPECT_EQ(seg["features"][0]["name"], "Plane 1");
+
+    // The two largest faces are opposite: 20 mm apart, parallel.
+    const json m = f.run("features.measure", {{"body", "b1"}, {"a", "f1"}, {"b", "f2"}});
+    EXPECT_NEAR(m["angleDeg"].get<double>(), 0.0, 0.05);
+    EXPECT_NEAR(m["distance"].get<double>(), 20.0, 0.02);
+
+    // 3-2-1 on three mutually perpendicular faces: the box lands in the positive octant.
+    std::vector<std::string> perpendicular{"f1"};
+    for (const auto& x : seg["features"]) {
+        const std::string r = x["ref"];
+        if (r == "f1" || perpendicular.size() == 3) continue;
+        bool ok = true;
+        for (const auto& p : perpendicular)
+            ok = ok && f.run("features.measure", {{"body", "b1"}, {"a", p}, {"b", r}})["angleDeg"].get<double>() > 89;
+        if (ok) perpendicular.push_back(r);
+    }
+    ASSERT_EQ(perpendicular.size(), 3u);
+    const json al = f.run("align.datums", {{"body", "b1"}, {"primary", perpendicular[0]}, {"secondary", perpendicular[1]}, {"tertiary", perpendicular[2]}});
+    // A corner at the origin and the box along the axes (Y's sign follows the
+    // right-hand rule from Z and X, so the tertiary face may be at either end).
+    EXPECT_NEAR(al["bounds"]["min"][0].get<double>(), 0.0, 0.05);
+    EXPECT_NEAR(al["bounds"]["min"][2].get<double>(), 0.0, 0.05);
+    const double ymin = al["bounds"]["min"][1].get<double>(), ymax = al["bounds"]["max"][1].get<double>();
+    EXPECT_LT(std::min(std::abs(ymin), std::abs(ymax)), 0.05);
+    // The shapes moved with the body.
+    const json listed = f.run("features.list", {{"body", "b1"}});
+    EXPECT_NEAR(std::abs(listed["features"][0]["normal"][2].get<double>()), 1.0, 1e-4);
+
+    // A shape fitted on a spot, and a project that keeps them all.
+    const double ymid = (ymin + ymax) / 2, ztop = al["bounds"]["max"][2].get<double>();
+    const json spot = f.run("features.fit", {{"body", "b1"}, {"at", {20, ymid, ztop}}, {"radius", 6.0}});
+    EXPECT_EQ(spot["type"], "plane");
+    f.run("project.save", {{"path", (dir / "s.orvp").string()}});
+    Document e;
+    loadProject(e, dir / "s.orvp");
+    ASSERT_TRUE(e.bodies()[0].features);
+    EXPECT_EQ(e.bodies()[0].features->list.size(), 7u);
+    EXPECT_EQ(e.bodies()[0].features->faceRegion.size(), e.bodies()[0].mesh->faces.size());
+
+    // Best fit of a second copy, moved, back onto the first.
+    f.run("mesh.import", {{"path", (dir / "box.stl").string()}});
+    const json bf = f.run("align.best_fit", {{"body", "b2"}, {"reference", "b1"}, {"coarse", true}});
+    EXPECT_LT(bf["rms"].get<double>(), 0.01);
+    EXPECT_GT(bf["overlapPercent"].get<double>(), 95.0);
+
+    // Undo puts the shapes back where they were; a mesh edit drops them.
+    f.run("history.undo");  // best fit
+    f.run("history.undo");  // import b2
+    f.run("mesh.smooth", {{"body", "b1"}});
+    EXPECT_EQ(f.run("features.list", {{"body", "b1"}})["features"].size(), 0u);
+    f.run("history.undo");
+    EXPECT_EQ(f.run("features.list", {{"body", "b1"}})["features"].size(), 7u);
 }
 
 TEST(Commands, InputIsChecked) {

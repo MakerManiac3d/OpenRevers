@@ -1,5 +1,16 @@
 # Cambios · Changelog
 
+## 0.3.0 — 11 de noviembre de 2026
+
+- **Formas** (menú *Formas*, panel *Formas*):
+  - segmentación automática en planos, esferas, cilindros, conos y toros, con su σ y el ruido del escáner estimado;
+  - ajustar una forma alrededor de un punto, reajustar una región como otro tipo, medir ángulo y distancia entre formas, renombrar y borrar;
+  - el visor colorea las regiones por tipo.
+- **Alineación** (menú *Alinear*): ejes principales, 3-2-1 por datums (caras, ejes, centros), mejor ajuste ICP robusto con informe de desviación, y mover o girar. Las formas se mueven con la pieza.
+- Proyecto en formato 4 (guarda las formas; lee los anteriores).
+- 39 herramientas MCP; campos de punto [x, y, z] y de forma en los formularios.
+- Documentación: `docs/algoritmos/primitivas.md`, manuales, guía de la IA.
+
 ## 0.2.0 — 6 de noviembre de 2026
 
 - **Remallado en quads** (*Malla → Remallado en quads*, `mesh.remesh_quads`)

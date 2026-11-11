@@ -56,7 +56,7 @@ claude mcp add --scope user openrevers -- "C:\Program Files\OpenRevers\bin\openr
 `--lang es` o `--lang en` fija el idioma de las descripciones; por defecto se
 usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 
-## Herramientas (versión 0.2)
+## Herramientas (versión 0.3)
 
 | Herramienta | Qué hace | Cambia el proyecto |
 | --- | --- | --- |
@@ -73,6 +73,16 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `mesh_remesh` | Remallado uniforme o adaptativo que conserva las aristas vivas | Sí |
 | `mesh_remesh_quads` | Remallado en quads que siguen la forma y las aristas vivas (QuadriFlow); dice si sirve para T-Spline | Sí |
 | `mesh_export` | Escribe STL, OBJ, PLY o 3MF; una nube, en PLY, XYZ u OBJ con sus normales (no sobrescribe sin `overwrite`); una malla de quads sale en quads en OBJ y PLY | No |
+| `features_segment` | Divide la malla en regiones y ajusta a cada una plano, esfera, cilindro, cono o toro, con su σ | Sí |
+| `features_fit` | Ajusta una forma a las caras alrededor de un punto | Sí |
+| `features_refit` | Vuelve a ajustar una región como otro tipo de forma | Sí |
+| `features_list` | Formas del cuerpo con medidas, posición y σ | No |
+| `features_measure` | Ángulo y distancia entre dos formas | No |
+| `features_rename` / `features_delete` | Renombrar o borrar formas | Sí |
+| `align_principal` | Alinea a los ejes principales | Sí |
+| `align_datums` | Alineación 3-2-1 por formas (caras, ejes, centros) | Sí |
+| `align_best_fit` | Mejor ajuste (ICP robusto) sobre otro cuerpo, con informe de desviación | Sí |
+| `align_move` | Girar y trasladar | Sí |
 | `points_thin` | Aclara una nube: un punto por cubo de lado `spacing` | Sí |
 | `points_estimate_normals` | Normales de una nube (plano de los vecinos) y su orientación | Sí |
 | `points_to_mesh` | Malla cerrada desde la nube (Poisson apantallado), con recorte opcional de lo inventado | Sí |

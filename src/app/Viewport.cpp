@@ -5,6 +5,7 @@
 
 #include <unordered_set>
 
+#include <QColor>
 #include <QFutureWatcher>
 #include <QMouseEvent>
 #include <QtConcurrent/QtConcurrentRun>
@@ -23,11 +24,14 @@ namespace {
 const char* kMeshVs = R"(#version 330 core
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec3 aColor;
 uniform mat4 uMvp;
 uniform mat4 uView;
 out vec3 vNormal;
 out vec3 vViewPos;
+out vec3 vColor;
 void main() {
+    vColor = aColor;
     vec4 vp = uView * vec4(aPos, 1.0);
     vViewPos = vp.xyz;
     vNormal = mat3(uView) * aNormal;
@@ -37,7 +41,9 @@ void main() {
 const char* kMeshFs = R"(#version 330 core
 in vec3 vNormal;
 in vec3 vViewPos;
+in vec3 vColor;
 uniform vec3 uColor;
+uniform bool uVertexColor;  // shapes view: each face coloured by its region
 uniform bool uFlat;
 uniform bool uPoints;
 uniform float uHighlight;
@@ -56,7 +62,7 @@ void main() {
     float diff = max(dot(n, l1), 0.0) * 0.75 + max(dot(n, l2), 0.0) * 0.25;
     vec3 h = normalize(l1 + v);
     float spec = pow(max(dot(n, h), 0.0), 48.0) * 0.25;
-    vec3 base = back ? vec3(0.78, 0.45, 0.40) : uColor;  // inside of the surface in a warm tone
+    vec3 base = back ? vec3(0.78, 0.45, 0.40) : (uVertexColor ? vColor : uColor);  // inside of the surface in a warm tone
     vec3 c = base * (0.22 + 0.78 * diff) + vec3(spec);
     c = mix(c, vec3(1.0, 0.72, 0.25), uHighlight * 0.18);
     fragColor = vec4(c, 1.0);
@@ -278,6 +284,12 @@ void Viewport::setBodies(const std::vector<Body>& bodies) {
         if (g->source != b.mesh) {
             upload(*g, *b.mesh);
             g->source = b.mesh;
+            g->regionSource.reset();
+            g->regionVertexCount = 0;
+        }
+        if (g->regionSource != b.features) {
+            uploadRegions(*g, *b.mesh, b.features.get());
+            g->regionSource = b.features;
         }
         next[b.id] = std::move(g);
     }
@@ -338,6 +350,63 @@ void Viewport::setView(View v) {
 }
 
 void Viewport::setWireframe(bool on) { wireframe_ = on; update(); }
+void Viewport::setShowShapes(bool on) { shapes_ = on; update(); }
+
+namespace {
+
+/// Colour of a region: hue by shape type, lightness varied per region so
+/// that neighbours of one type can be told apart.
+QVector3D regionColor(PrimitiveType t, std::int32_t region) {
+    float h = 0.58f;  // plane: blue
+    switch (t) {
+        case PrimitiveType::Plane: h = 0.58f; break;
+        case PrimitiveType::Cylinder: h = 0.33f; break;  // green
+        case PrimitiveType::Cone: h = 0.08f; break;      // orange
+        case PrimitiveType::Sphere: h = 0.80f; break;    // violet
+        case PrimitiveType::Torus: h = 0.15f; break;     // yellow
+    }
+    const std::uint32_t k = static_cast<std::uint32_t>(region) * 2654435761u;
+    const float l = 0.38f + 0.36f * static_cast<float>((k >> 8) % 100) / 100.f;
+    const float hue = h + 0.12f * (static_cast<float>((k >> 16) % 100) / 100.f - 0.5f);
+    const QColor c = QColor::fromHslF(std::fmod(hue + 1.f, 1.f), 0.6f, l);
+    return {static_cast<float>(c.redF()), static_cast<float>(c.greenF()), static_cast<float>(c.blueF())};
+}
+
+}  // namespace
+
+void Viewport::uploadRegions(GpuMesh& g, const TriMesh& m, const Features* f) {
+    g.regionVertexCount = 0;
+    if (!f || f->faceRegion.size() != m.faces.size() || m.faces.empty()) return;
+    std::vector<PrimitiveType> typeOf;
+    for (const auto& x : f->list)
+        if (x.region >= 0) {
+            if (typeOf.size() <= static_cast<std::size_t>(x.region)) typeOf.resize(static_cast<std::size_t>(x.region) + 1, PrimitiveType::Plane);
+            typeOf[static_cast<std::size_t>(x.region)] = x.shape.type;
+        }
+    std::vector<float> buf;
+    buf.reserve(m.faces.size() * 27);
+    for (std::size_t i = 0; i < m.faces.size(); ++i) {
+        const std::int32_t r = f->faceRegion[i];
+        const Vec3f fn = m.faceNormal(i);  // flat per face: the regions' borders stay crisp
+        QVector3D c(0.55f, 0.55f, 0.55f);  // not in any region
+        if (r >= 0 && static_cast<std::size_t>(r) < typeOf.size()) c = regionColor(typeOf[static_cast<std::size_t>(r)], r);
+        for (auto v : m.faces[i])
+            buf.insert(buf.end(), {m.vertices[v].x(), m.vertices[v].y(), m.vertices[v].z(), fn.x(), fn.y(), fn.z(), c.x(), c.y(), c.z()});
+    }
+    if (!g.regionVao.isCreated()) g.regionVao.create();
+    g.regionVao.bind();
+    if (!g.regionVbo.isCreated()) g.regionVbo.create();
+    g.regionVbo.bind();
+    g.regionVbo.allocate(buf.data(), static_cast<int>(buf.size() * sizeof(float)));
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 36, nullptr);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 36, reinterpret_cast<void*>(12));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 36, reinterpret_cast<void*>(24));
+    g.regionVao.release();
+    g.regionVertexCount = static_cast<int>(m.faces.size() * 3);
+}
 void Viewport::setOpenEdges(bool on) { openEdges_ = on; update(); }
 void Viewport::setFlatShading(bool on) { flat_ = on; update(); }
 
@@ -415,6 +484,7 @@ void Viewport::paintGL() {
     meshProg_.setUniformValue("uView", view);
     meshProg_.setUniformValue("uFlat", flat_);
     meshProg_.setUniformValue("uPoints", false);
+    meshProg_.setUniformValue("uVertexColor", false);
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.f, 1.f);
     for (const auto& b : bodies_) {
@@ -423,6 +493,14 @@ void Viewport::paintGL() {
         meshProg_.setUniformValue("uColor", QVector3D(b.color[0], b.color[1], b.color[2]));
         // Tint the selected body only when there is another to tell it from.
         meshProg_.setUniformValue("uHighlight", b.id == selected_ && bodies_.size() > 1 ? 1.f : 0.f);
+        if (shapes_ && g.regionVertexCount > 0) {
+            meshProg_.setUniformValue("uVertexColor", true);
+            g.regionVao.bind();
+            glDrawArrays(GL_TRIANGLES, 0, g.regionVertexCount);
+            g.regionVao.release();
+            meshProg_.setUniformValue("uVertexColor", false);
+            continue;
+        }
         g.vao.bind();
         if (g.pointCount > 0) {
             meshProg_.setUniformValue("uPoints", true);

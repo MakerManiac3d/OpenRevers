@@ -88,6 +88,8 @@ json number(const Text& description, double def, double min, double max, const c
 json integer(const Text& description, long long def, long long min, long long max);
 json boolean(const Text& description, bool def);
 json choice(const Text& description, std::vector<std::string> values, const std::string& def);
+/// A point or vector: three numbers [x, y, z].
+json point(const Text& description, const char* unit = "mm");
 }  // namespace schema
 
 /// The commands that need no interface: files, mesh tools, bodies, history, help.

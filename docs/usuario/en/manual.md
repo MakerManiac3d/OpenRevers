@@ -1,4 +1,4 @@
-# OpenRevers manual (version 0.2)
+# OpenRevers manual (version 0.3)
 
 OpenRevers prepares scanned meshes for reverse engineering. This version
 covers **phase 1**: open the scan, see what is wrong with it, repair it and
@@ -95,6 +95,54 @@ rebuild the surface from the *Points* menu:
 The mesh then follows the usual workflow from step 2.
 
 Try an operation on a copy first (*Body → Duplicate body*) and compare.
+
+## Shapes and alignment
+
+For mechanical parts (flat faces, holes, shafts, cones):
+
+1. **Shapes → Find shapes.** The mesh is split into regions and each gets a
+   plane, sphere, cylinder, cone or torus. The view colours them:
+   - blue: planes;
+   - green: cylinders;
+   - orange: cones;
+   - violet: spheres;
+   - yellow: tori;
+   - grey: what is no shape (fillets, freeform areas).
+
+   The *Shapes* panel lists each with its size (Ø, angle, area) and its
+   **σ**, the standard deviation of the mesh from the shape. A σ close to
+   the scanner noise, which is also shown, means a true shape.
+   - *noise*: the scanner noise, if you know it (0 to estimate it).
+   - *tolerance*: how many times the noise a face may stand off the shape
+     and still belong to it.
+   - *angle*: largest normal deviation.
+2. **Shapes → Fit a shape here**, for a hole or a face that was missed.
+   Give a point on its surface and a radius.
+3. **Shapes → Refit shape as…**, when a region came out as another type (a
+   short cylinder taken for a plane, for example).
+4. **Shapes → Measure between shapes**: angle and distance between two
+   shapes, for example:
+   - the thickness between two parallel faces;
+   - the distance between two holes;
+   - the distance from an axis to a face;
+   - the point where an axis meets a face.
+5. **Align** puts the part at the origin:
+   - **Align by datums (3-2-1):** as on a measuring machine.
+     - **Primary:** a large face or an axis. The part sits on that face and Z
+       points into it.
+     - **Secondary:** a side face or an axis; it sets X.
+     - **Tertiary:** another face or a hole; it sets the rest of the origin.
+
+     With a face and two holes, the origin is on the first hole and X points
+     to the second.
+   - **Align to principal axes:** quick; centres the part with its longest
+     side on X.
+   - **Best-fit alignment:** brings a scan onto another body (another scan
+     or the nominal mesh) and reports the deviation left. If they are far
+     apart or turned, set *coarse*.
+   - **Move or rotate:** by hand.
+
+   The shapes move with the part.
 
 ## Settings
 

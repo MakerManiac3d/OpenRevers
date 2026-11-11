@@ -5,6 +5,7 @@
 #pragma once
 
 #include "core/mesh/TriMesh.h"
+#include "doc/Features.h"
 
 #include <array>
 #include <functional>
@@ -22,6 +23,7 @@ struct Body {
     std::uint64_t id{0};
     std::string name;
     std::shared_ptr<const TriMesh> mesh;
+    std::shared_ptr<const Features> features;  // shapes found on it (null: none)
     bool visible{true};
     std::array<float, 3> color{0.62f, 0.70f, 0.78f};
     std::string source;  // file it came from, if any
@@ -50,7 +52,10 @@ public:
     void abortChange();
 
     Body addBody(std::string name, std::shared_ptr<const TriMesh> mesh, std::string source = {});
-    void setMesh(std::uint64_t id, std::shared_ptr<const TriMesh> mesh);
+    /// Replace the mesh. Its shapes no longer match and are dropped, unless
+    /// `features` gives the ones that go with the new mesh (a move keeps them).
+    void setMesh(std::uint64_t id, std::shared_ptr<const TriMesh> mesh, std::shared_ptr<const Features> features = nullptr);
+    void setFeatures(std::uint64_t id, std::shared_ptr<const Features> features);
     void renameBody(std::uint64_t id, const std::string& name);
     void setVisible(std::uint64_t id, bool visible);
     void setColor(std::uint64_t id, std::array<float, 3> color);

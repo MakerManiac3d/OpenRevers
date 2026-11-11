@@ -8,6 +8,7 @@
 #include "core/mesh/MeshQuad.h"
 #include "core/mesh/MeshRepair.h"
 #include "core/points/PointCloud.h"
+#include "commands/FeatureCommands.h"
 #include "core/util/Version.h"
 #include "doc/Project.h"
 
@@ -120,6 +121,7 @@ std::string extensionOf(const fs::path& p) {
 }  // namespace
 
 void registerCoreCommands(CommandRegistry& R) {
+    registerFeatureCommands(R);
     using namespace schema;
 
     // ------------------------------------------------------------ files --

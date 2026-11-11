@@ -27,6 +27,7 @@ add_library(orv_core STATIC
   core/points/PointCloud.cpp
   core/fit/Primitive.cpp
   core/fit/Segmentation.cpp
+  core/fit/Align.cpp
   core/points/E57.cpp
   core/util/Xml.cpp
   core/util/Config.cpp
@@ -34,6 +35,7 @@ add_library(orv_core STATIC
   doc/Project.cpp
   commands/Command.cpp
   commands/CoreCommands.cpp
+  commands/FeatureCommands.cpp
   commands/Guide.cpp
   mcp/McpServer.cpp
   mcp/LocalBackend.cpp

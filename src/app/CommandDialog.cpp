@@ -15,13 +15,16 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <array>
 #include <cmath>
 #include <cstdint>
 
 namespace orv {
 
-CommandDialog::CommandDialog(const Command& command, const std::vector<Body>& bodies, const QString& selectedBody, const QString& lang, QWidget* parent)
+CommandDialog::CommandDialog(const Command& command, const std::vector<Body>& bodies, const QString& selectedBody, const QString& lang, QWidget* parent,
+                             const QString& selectedFeature)
     : QDialog(parent), command_(command) {
+    bool featurePrefilled = false;
     const std::string l = lang.toStdString();
     setWindowTitle(QString::fromStdString(command.title.in(l)));
     auto* layout = new QVBoxLayout(this);
@@ -50,6 +53,28 @@ CommandDialog::CommandDialog(const Command& command, const std::vector<Body>& bo
             const int i = box->findData(selectedBody);
             if (i >= 0) box->setCurrentIndex(i);
             readers_[key] = [box]() { return box->currentData().isValid() ? json(box->currentData().toString().toStdString()) : json(nullptr); };
+            field = box;
+        } else if (kind == "feature") {
+            // The shapes of the selected body; another can be typed (by name or reference).
+            auto* box = new QComboBox();
+            box->setEditable(true);
+            if (!isRequired) box->addItem(QString(), QString());
+            for (const auto& b : bodies) {
+                if (b.ref() != selectedBody.toStdString() || !b.features) continue;
+                for (const auto& f : b.features->list)
+                    box->addItem(QString::fromStdString(f.name + "  (" + f.ref() + ")"), QString::fromStdString(f.ref()));
+            }
+            if (!featurePrefilled && !selectedFeature.isEmpty()) {
+                const int i = box->findData(selectedFeature);
+                if (i >= 0) box->setCurrentIndex(i);
+                featurePrefilled = true;
+            }
+            readers_[key] = [box]() {
+                const QString t = box->currentText().trimmed();
+                const int i = box->currentIndex();
+                if (i >= 0 && box->itemText(i) == box->currentText() && !box->itemData(i).toString().isEmpty()) return json(box->itemData(i).toString().toStdString());
+                return t.isEmpty() ? json(nullptr) : json(t.toStdString());
+            };
             field = box;
         } else if (kind == "open-path" || kind == "save-path") {
             auto* row = new QWidget();
@@ -94,6 +119,19 @@ CommandDialog::CommandDialog(const Command& command, const std::vector<Body>& bo
             spin->setValue(static_cast<int>(s.value("default", 0LL)));
             readers_[key] = [spin]() { return json(spin->value()); };
             field = spin;
+        } else if (type == "array") {  // a point: x, y, z
+            auto* row = new QWidget();
+            auto* h = new QHBoxLayout(row);
+            h->setContentsMargins(0, 0, 0, 0);
+            std::array<QDoubleSpinBox*, 3> xyz{};
+            for (auto& sp : xyz) {
+                sp = new QDoubleSpinBox();
+                sp->setRange(-1e7, 1e7);
+                sp->setDecimals(4);
+                h->addWidget(sp);
+            }
+            readers_[key] = [xyz]() { return json::array({xyz[0]->value(), xyz[1]->value(), xyz[2]->value()}); };
+            field = row;
         } else if (type == "boolean") {
             auto* check = new QCheckBox();
             check->setChecked(s.value("default", false));

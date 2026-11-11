@@ -4,12 +4,12 @@
 <context>
     <name>orv::CommandDialog</name>
     <message>
-        <location filename="../src/app/CommandDialog.cpp" line="109"/>
+        <location filename="../src/app/CommandDialog.cpp" line="147"/>
         <source>Run</source>
         <translation>Ejecutar</translation>
     </message>
     <message>
-        <location filename="../src/app/CommandDialog.cpp" line="110"/>
+        <location filename="../src/app/CommandDialog.cpp" line="148"/>
         <source>Cancel</source>
         <translation>Cancelar</translation>
     </message>
@@ -43,10 +43,10 @@
     </message>
     <message>
         <location filename="../src/app/MainWindow.cpp" line="92"/>
-        <location filename="../src/app/MainWindow.cpp" line="335"/>
-        <location filename="../src/app/MainWindow.cpp" line="349"/>
-        <location filename="../src/app/MainWindow.cpp" line="392"/>
-        <location filename="../src/app/MainWindow.cpp" line="405"/>
+        <location filename="../src/app/MainWindow.cpp" line="381"/>
+        <location filename="../src/app/MainWindow.cpp" line="395"/>
+        <location filename="../src/app/MainWindow.cpp" line="440"/>
+        <location filename="../src/app/MainWindow.cpp" line="453"/>
         <source>OpenRevers</source>
         <translation>OpenRevers</translation>
     </message>
@@ -77,394 +77,429 @@
     </message>
     <message>
         <location filename="../src/app/MainWindow.cpp" line="102"/>
+        <source>S&amp;hapes</source>
+        <translation>&amp;Formas</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="103"/>
+        <source>&amp;Align</source>
+        <translation>&amp;Alinear</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="104"/>
         <source>&amp;Body</source>
         <translation>&amp;Cuerpo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="103"/>
+        <location filename="../src/app/MainWindow.cpp" line="105"/>
         <source>&amp;View</source>
         <translation>&amp;Ver</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="104"/>
+        <location filename="../src/app/MainWindow.cpp" line="106"/>
         <source>&amp;AI agent</source>
         <translation>Agente &amp;IA</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="105"/>
+        <location filename="../src/app/MainWindow.cpp" line="107"/>
         <source>&amp;Help</source>
         <translation>A&amp;yuda</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="107"/>
+        <location filename="../src/app/MainWindow.cpp" line="109"/>
         <source>Main</source>
         <translation>Principal</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="126"/>
+        <location filename="../src/app/MainWindow.cpp" line="128"/>
         <source>&amp;New project</source>
         <translation>&amp;Nuevo proyecto</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="127"/>
+        <location filename="../src/app/MainWindow.cpp" line="129"/>
         <source>&amp;Open project…</source>
         <translation>&amp;Abrir proyecto…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="128"/>
+        <location filename="../src/app/MainWindow.cpp" line="130"/>
         <source>&amp;Save project</source>
         <translation>&amp;Guardar proyecto</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="129"/>
+        <location filename="../src/app/MainWindow.cpp" line="131"/>
         <source>Save project &amp;as…</source>
         <translation>Guardar proyecto &amp;como…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="131"/>
+        <location filename="../src/app/MainWindow.cpp" line="133"/>
         <source>&amp;Import mesh…</source>
         <translation>&amp;Importar malla…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="132"/>
+        <location filename="../src/app/MainWindow.cpp" line="134"/>
         <source>&amp;Export mesh…</source>
         <translation>&amp;Exportar malla…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="133"/>
+        <location filename="../src/app/MainWindow.cpp" line="135"/>
         <source>Export &amp;T-Spline for Fusion (.tsm)…</source>
         <translation>Exportar &amp;T-Spline para Fusion (.tsm)…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="135"/>
+        <location filename="../src/app/MainWindow.cpp" line="137"/>
         <source>&amp;Quit</source>
         <translation>&amp;Salir</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="138"/>
+        <location filename="../src/app/MainWindow.cpp" line="140"/>
         <source>&amp;Undo</source>
         <translation>&amp;Deshacer</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="139"/>
+        <location filename="../src/app/MainWindow.cpp" line="141"/>
         <source>&amp;Redo</source>
         <translation>&amp;Rehacer</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="155"/>
+        <location filename="../src/app/MainWindow.cpp" line="165"/>
         <source>Isometric</source>
         <translation>Isométrica</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="155"/>
+        <location filename="../src/app/MainWindow.cpp" line="165"/>
         <source>Front</source>
         <translation>Frontal</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="155"/>
+        <location filename="../src/app/MainWindow.cpp" line="165"/>
         <source>Back</source>
         <translation>Posterior</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="156"/>
+        <location filename="../src/app/MainWindow.cpp" line="166"/>
         <source>Left</source>
         <translation>Izquierda</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="156"/>
+        <location filename="../src/app/MainWindow.cpp" line="166"/>
         <source>Right</source>
         <translation>Derecha</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="156"/>
+        <location filename="../src/app/MainWindow.cpp" line="166"/>
         <source>Top</source>
         <translation>Superior</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="156"/>
+        <location filename="../src/app/MainWindow.cpp" line="166"/>
         <source>Bottom</source>
         <translation>Inferior</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="160"/>
+        <location filename="../src/app/MainWindow.cpp" line="170"/>
         <source>&amp;Fit all</source>
         <translation>&amp;Encuadrar todo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="170"/>
+        <location filename="../src/app/MainWindow.cpp" line="180"/>
         <source>Mesh edges</source>
         <translation>Aristas de la malla</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="171"/>
+        <location filename="../src/app/MainWindow.cpp" line="181"/>
         <source>Open edges</source>
         <translation>Bordes abiertos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="172"/>
+        <location filename="../src/app/MainWindow.cpp" line="182"/>
         <source>Flat shading</source>
         <translation>Sombreado plano</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="176"/>
+        <location filename="../src/app/MainWindow.cpp" line="183"/>
+        <source>Shapes by colour</source>
+        <translation>Formas por colores</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="187"/>
         <source>Copy configuration for Claude &amp;Desktop</source>
         <translation>Copiar configuración para Claude &amp;Desktop</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="177"/>
+        <location filename="../src/app/MainWindow.cpp" line="188"/>
         <source>Copy command for Claude &amp;Code</source>
         <translation>Copiar comando para Claude &amp;Code</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="179"/>
+        <location filename="../src/app/MainWindow.cpp" line="190"/>
         <source>&amp;Settings…</source>
         <translation>&amp;Ajustes…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="181"/>
+        <location filename="../src/app/MainWindow.cpp" line="192"/>
         <source>&amp;Guide</source>
         <translation>&amp;Guía</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="182"/>
+        <location filename="../src/app/MainWindow.cpp" line="193"/>
         <source>Source code (GitHub)</source>
         <translation>Código fuente (GitHub)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="183"/>
+        <location filename="../src/app/MainWindow.cpp" line="194"/>
         <source>&amp;About OpenRevers</source>
         <translation>&amp;Acerca de OpenRevers</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="184"/>
+        <location filename="../src/app/MainWindow.cpp" line="195"/>
         <source>Se&amp;ttings…</source>
         <translation>A&amp;justes…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="197"/>
+        <location filename="../src/app/MainWindow.cpp" line="208"/>
         <source>Body</source>
         <translation>Cuerpo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="197"/>
-        <location filename="../src/app/MainWindow.cpp" line="286"/>
+        <location filename="../src/app/MainWindow.cpp" line="208"/>
+        <location filename="../src/app/MainWindow.cpp" line="306"/>
         <source>Triangles</source>
         <translation>Triángulos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="213"/>
+        <location filename="../src/app/MainWindow.cpp" line="225"/>
         <source>Model</source>
         <translation>Modelo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="216"/>
+        <location filename="../src/app/MainWindow.cpp" line="228"/>
         <source>Property</source>
         <translation>Propiedad</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="216"/>
+        <location filename="../src/app/MainWindow.cpp" line="228"/>
         <source>Value</source>
         <translation>Valor</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="221"/>
+        <location filename="../src/app/MainWindow.cpp" line="233"/>
         <source>Properties</source>
         <translation>Propiedades</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="225"/>
+        <location filename="../src/app/MainWindow.cpp" line="237"/>
+        <source>Shape</source>
+        <translation>Forma</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="237"/>
+        <source>Size</source>
+        <translation>Medida</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="237"/>
+        <source>σ (mm)</source>
+        <translation>σ (mm)</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="241"/>
+        <source>Shapes</source>
+        <translation>Formas</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="244"/>
         <source>History</source>
         <translation>Historial</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="230"/>
+        <location filename="../src/app/MainWindow.cpp" line="249"/>
         <source>Log</source>
         <translation>Registro</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="254"/>
+        <location filename="../src/app/MainWindow.cpp" line="274"/>
         <source>%1 points</source>
         <translation>%1 puntos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="280"/>
+        <location filename="../src/app/MainWindow.cpp" line="300"/>
         <source>Name</source>
         <translation>Nombre</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="281"/>
+        <location filename="../src/app/MainWindow.cpp" line="301"/>
         <source>Reference</source>
         <translation>Referencia</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="283"/>
+        <location filename="../src/app/MainWindow.cpp" line="303"/>
         <source>Points</source>
         <translation>Puntos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="284"/>
+        <location filename="../src/app/MainWindow.cpp" line="304"/>
         <source>Normals</source>
         <translation>Normales</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="284"/>
+        <location filename="../src/app/MainWindow.cpp" line="304"/>
         <source>Yes</source>
         <translation>Sí</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="284"/>
+        <location filename="../src/app/MainWindow.cpp" line="304"/>
         <source>No</source>
         <translation>No</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="287"/>
+        <location filename="../src/app/MainWindow.cpp" line="307"/>
         <source>Vertices</source>
         <translation>Vértices</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="289"/>
+        <location filename="../src/app/MainWindow.cpp" line="309"/>
         <source>Quads</source>
         <translation>Quads</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="290"/>
+        <location filename="../src/app/MainWindow.cpp" line="310"/>
         <source>Size X × Y × Z (mm)</source>
         <translation>Tamaño X × Y × Z (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="291"/>
+        <location filename="../src/app/MainWindow.cpp" line="311"/>
         <source>Minimum (mm)</source>
         <translation>Mínimo (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="292"/>
+        <location filename="../src/app/MainWindow.cpp" line="312"/>
         <source>Maximum (mm)</source>
         <translation>Máximo (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="293"/>
+        <location filename="../src/app/MainWindow.cpp" line="313"/>
         <source>Area (mm²)</source>
         <translation>Área (mm²)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="294"/>
+        <location filename="../src/app/MainWindow.cpp" line="314"/>
         <source>Source</source>
         <translation>Origen</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="312"/>
+        <location filename="../src/app/MainWindow.cpp" line="358"/>
         <source>Untitled</source>
         <translation>Sin título</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="318"/>
+        <location filename="../src/app/MainWindow.cpp" line="364"/>
         <source>AI agent connected</source>
         <translation>Agente IA conectado</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="318"/>
+        <location filename="../src/app/MainWindow.cpp" line="364"/>
         <source>AI agent: ready on 127.0.0.1:%1</source>
         <translation>Agente IA: listo en 127.0.0.1:%1</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="319"/>
+        <location filename="../src/app/MainWindow.cpp" line="365"/>
         <source>What the agent reads goes to its AI model. Nothing else leaves this computer.</source>
         <translation>Lo que lee el agente va a su modelo de IA. Nada más sale de este equipo.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="321"/>
+        <location filename="../src/app/MainWindow.cpp" line="367"/>
         <source>AI agent: off</source>
         <translation>Agente IA: desactivado</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="321"/>
+        <location filename="../src/app/MainWindow.cpp" line="367"/>
         <source>AI agent: port %1 busy</source>
         <translation>Agente IA: puerto %1 ocupado</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="327"/>
+        <location filename="../src/app/MainWindow.cpp" line="373"/>
         <source>ERROR </source>
         <translation>ERROR </translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="349"/>
+        <location filename="../src/app/MainWindow.cpp" line="395"/>
         <source>Import a mesh first (File → Import mesh).</source>
         <translation>Importa primero una malla (Archivo → Importar malla).</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="363"/>
+        <location filename="../src/app/MainWindow.cpp" line="411"/>
         <source>Mesh analysis</source>
         <translation>Análisis de la malla</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="373"/>
+        <location filename="../src/app/MainWindow.cpp" line="421"/>
         <source>Import mesh</source>
         <translation>Importar malla</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="373"/>
+        <location filename="../src/app/MainWindow.cpp" line="421"/>
         <source>Meshes and points (*.stl *.obj *.ply *.3mf *.e57 *.xyz *.pts);;All files (*)</source>
         <translation>Mallas y puntos (*.stl *.obj *.ply *.3mf *.e57 *.xyz *.pts);;Todos los archivos (*)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="392"/>
-        <location filename="../src/app/MainWindow.cpp" line="405"/>
+        <location filename="../src/app/MainWindow.cpp" line="440"/>
+        <location filename="../src/app/MainWindow.cpp" line="453"/>
         <source>Select a body to export.</source>
         <translation>Selecciona un cuerpo para exportarlo.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="396"/>
+        <location filename="../src/app/MainWindow.cpp" line="444"/>
         <source>Export mesh</source>
         <translation>Exportar malla</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="396"/>
+        <location filename="../src/app/MainWindow.cpp" line="444"/>
         <source>STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf);;XYZ points (*.xyz)</source>
         <translation>STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf);;Puntos XYZ (*.xyz)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="409"/>
+        <location filename="../src/app/MainWindow.cpp" line="457"/>
         <source>Export T-Spline</source>
         <translation>Exportar T-Spline</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="409"/>
+        <location filename="../src/app/MainWindow.cpp" line="457"/>
         <source>T-Spline (*.tsm)</source>
         <translation>T-Spline (*.tsm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="418"/>
+        <location filename="../src/app/MainWindow.cpp" line="466"/>
         <source>Open project</source>
         <translation>Abrir proyecto</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="418"/>
-        <location filename="../src/app/MainWindow.cpp" line="428"/>
+        <location filename="../src/app/MainWindow.cpp" line="466"/>
+        <location filename="../src/app/MainWindow.cpp" line="476"/>
         <source>OpenRevers project (*.orvp)</source>
         <translation>Proyecto de OpenRevers (*.orvp)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="428"/>
+        <location filename="../src/app/MainWindow.cpp" line="476"/>
         <source>Save project</source>
         <translation>Guardar proyecto</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="438"/>
+        <location filename="../src/app/MainWindow.cpp" line="486"/>
         <source>Unsaved changes</source>
         <translation>Cambios sin guardar</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="438"/>
+        <location filename="../src/app/MainWindow.cpp" line="486"/>
         <source>The project has unsaved changes. Save them first?</source>
         <translation>El proyecto tiene cambios sin guardar. ¿Quieres guardarlos antes?</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="487"/>
+        <location filename="../src/app/MainWindow.cpp" line="535"/>
         <source>Copied</source>
         <translation>Copiado</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="488"/>
+        <location filename="../src/app/MainWindow.cpp" line="536"/>
         <source>Paste this command in a terminal:
 
 %1</source>
@@ -473,7 +508,7 @@
 %1</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="489"/>
+        <location filename="../src/app/MainWindow.cpp" line="537"/>
         <source>In Claude Desktop: Settings → Developer → Edit Config, paste the &quot;openrevers&quot; entry inside &quot;mcpServers&quot;, then quit Claude Desktop completely and open it again.
 
 %1</source>
@@ -482,27 +517,27 @@
 %1</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="496"/>
+        <location filename="../src/app/MainWindow.cpp" line="544"/>
         <source>Language</source>
         <translation>Idioma</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="496"/>
+        <location filename="../src/app/MainWindow.cpp" line="544"/>
         <source>The new language is used the next time OpenRevers starts.</source>
         <translation>El nuevo idioma se aplicará la próxima vez que abras OpenRevers.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="503"/>
+        <location filename="../src/app/MainWindow.cpp" line="551"/>
         <source>OpenRevers guide</source>
         <translation>Guía de OpenRevers</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="510"/>
+        <location filename="../src/app/MainWindow.cpp" line="558"/>
         <source>About OpenRevers</source>
         <translation>Acerca de OpenRevers</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="511"/>
+        <location filename="../src/app/MainWindow.cpp" line="559"/>
         <source>&lt;h3&gt;OpenRevers %1&lt;/h3&gt;&lt;p&gt;Reverse engineering of scanned meshes into parametric solids, entirely on this computer.&lt;/p&gt;&lt;p&gt;© 2026 MakerManiac3d. Free software under the GNU General Public License, version 3 or later.&lt;/p&gt;&lt;p&gt;Built on Qt, PMP Library, Eigen and nlohmann/json; see THIRD_PARTY.md.&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;%2&quot;&gt;%2&lt;/a&gt;&lt;/p&gt;</source>
         <translation>&lt;h3&gt;OpenRevers %1&lt;/h3&gt;&lt;p&gt;Ingeniería inversa de mallas escaneadas a sólidos paramétricos, completamente en este equipo.&lt;/p&gt;&lt;p&gt;© 2026 MakerManiac3d. Software libre bajo la Licencia Pública General de GNU, versión 3 o posterior.&lt;/p&gt;&lt;p&gt;Hecho con Qt, PMP Library, Eigen y nlohmann/json; consulta THIRD_PARTY.md.&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;%2&quot;&gt;%2&lt;/a&gt;&lt;/p&gt;</translation>
     </message>
@@ -574,7 +609,7 @@
 <context>
     <name>orv::Viewport</name>
     <message>
-        <location filename="../src/app/Viewport.cpp" line="118"/>
+        <location filename="../src/app/Viewport.cpp" line="124"/>
         <source>The 3D view needs OpenGL 3.3, and this computer offers %1.%2. Update the graphics driver; on a computer without a graphics card, start OpenRevers with QT_OPENGL=software.</source>
         <translation>La vista 3D necesita OpenGL 3.3 y este equipo ofrece el %1.%2. Actualiza el controlador de la tarjeta gráfica; en un equipo sin tarjeta gráfica, abre OpenRevers con QT_OPENGL=software.</translation>
     </message>

@@ -99,6 +99,8 @@ void MainWindow::buildActions() {
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
     auto* meshMenu = menuBar()->addMenu(tr("&Mesh"));
     auto* pointsMenu = menuBar()->addMenu(tr("&Points"));
+    auto* shapesMenu = menuBar()->addMenu(tr("S&hapes"));
+    auto* alignMenu = menuBar()->addMenu(tr("&Align"));
     auto* bodyMenu = menuBar()->addMenu(tr("&Body"));
     auto* viewMenu = menuBar()->addMenu(tr("&View"));
     auto* agentMenu = menuBar()->addMenu(tr("&AI agent"));
@@ -146,6 +148,14 @@ void MainWindow::buildActions() {
         auto* a = add(meshMenu, cmdText(name), [this, name]() { runFromUi(name); }, {}, QStyle::SP_CustomBase, onTb);
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
+    for (const char* name : {"features.segment", "features.fit", "features.refit", "features.measure", "features.rename", "features.delete"}) {
+        auto* a = add(shapesMenu, cmdText(name), [this, name]() { runFromUi(name); });
+        a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
+    }
+    for (const char* name : {"align.principal", "align.datums", "align.best_fit", "align.move"}) {
+        auto* a = add(alignMenu, cmdText(name), [this, name]() { runFromUi(name); });
+        a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
+    }
     for (const char* name : {"points.thin", "points.estimate_normals", "points.to_mesh"}) {
         auto* a = add(pointsMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
@@ -170,6 +180,7 @@ void MainWindow::buildActions() {
     toggle(tr("Mesh edges"), false, [this](bool on) { viewport_->setWireframe(on); });
     toggle(tr("Open edges"), true, [this](bool on) { viewport_->setOpenEdges(on); });
     toggle(tr("Flat shading"), false, [this](bool on) { viewport_->setFlatShading(on); });
+    toggle(tr("Shapes by colour"), true, [this](bool on) { viewport_->setShowShapes(on); });
     viewMenu->addSeparator();
     viewMenu->setObjectName("viewMenu");
 
@@ -203,6 +214,7 @@ void MainWindow::buildDocks() {
         selected_ = items.isEmpty() ? 0 : items.first()->data(0, Qt::UserRole).toULongLong();
         viewport_->setSelected(selected_);
         refreshProperties();
+        refreshShapes();
     });
     connect(tree_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int col) {
         if (updatingTree_ || col != 0) return;
@@ -220,6 +232,13 @@ void MainWindow::buildDocks() {
     props_->setWordWrap(false);
     dock(tr("Properties"), "PropertiesDock", props_, Qt::LeftDockWidgetArea);
     resizeDocks({findChild<QDockWidget*>("ModelDock")}, {340}, Qt::Horizontal);
+
+    shapes_ = new QTreeWidget();
+    shapes_->setHeaderLabels({tr("Shape"), tr("Size"), tr("σ (mm)")});
+    shapes_->setRootIsDecorated(false);
+    shapes_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    connect(shapes_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem*, int) { runFromUi("features.rename"); });
+    dock(tr("Shapes"), "ShapesDock", shapes_, Qt::RightDockWidgetArea);
 
     history_ = new QListWidget();
     dock(tr("History"), "HistoryDock", history_, Qt::RightDockWidgetArea);
@@ -241,6 +260,7 @@ void MainWindow::refresh() {
     viewport_->setSelected(selected_);
     refreshTree();
     refreshProperties();
+    refreshShapes();
     refreshHistory();
     refreshTitle();
     if (auto* u = findChild<QAction*>("undo")) u->setEnabled(doc_.canUndo());
@@ -294,6 +314,32 @@ void MainWindow::refreshProperties() {
     if (!b->source.empty()) row(tr("Source"), QString::fromStdString(b->source));
     props_->resizeColumnsToContents();
     props_->horizontalHeader()->setStretchLastSection(true);
+}
+
+void MainWindow::refreshShapes() {
+    shapes_->clear();
+    auto b = doc_.findBody(selectedRef().toStdString());
+    if (!b || !b->features) return;
+    QLocale loc;
+    auto n = [&](double v, int d = 3) { return loc.toString(v, 'f', d); };
+    for (const auto& f : b->features->list) {
+        const Primitive& s = f.shape;
+        QString size;
+        switch (s.type) {
+            case PrimitiveType::Plane: size = n(f.area, 1) + " mm²"; break;
+            case PrimitiveType::Sphere:
+            case PrimitiveType::Cylinder: size = "Ø " + n(2 * s.radius); break;
+            case PrimitiveType::Cone: size = n(2 * s.angle * 180 / 3.14159265358979323846, 2) + "°"; break;
+            case PrimitiveType::Torus: size = "R " + n(s.radius) + " / r " + n(s.radius2); break;
+        }
+        auto* item = new QTreeWidgetItem(shapes_, {QString::fromStdString(f.name), size, n(s.rms, 4)});
+        item->setToolTip(0, QString::fromStdString(f.ref() + " · " + primitiveName(s.type)));
+        item->setData(0, Qt::UserRole, QString::fromStdString(f.ref()));
+        item->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
+        item->setTextAlignment(2, Qt::AlignRight | Qt::AlignVCenter);
+    }
+    shapes_->resizeColumnToContents(1);
+    shapes_->resizeColumnToContents(2);
 }
 
 void MainWindow::refreshHistory() {
@@ -353,7 +399,9 @@ void MainWindow::runFromUi(const QString& name) {
     if (props.size() == 1 && needsBody && !selectedRef().isEmpty()) {
         params = {{"body", selectedRef().toStdString()}};
     } else {
-        CommandDialog dlg(*c, bodies, selectedRef(), lang_, this);
+        QString feature;
+        if (shapes_ && !shapes_->selectedItems().isEmpty()) feature = shapes_->selectedItems().first()->data(0, Qt::UserRole).toString();
+        CommandDialog dlg(*c, bodies, selectedRef(), lang_, this, feature);
         if (dlg.exec() != QDialog::Accepted) return;
         params = dlg.values();
     }

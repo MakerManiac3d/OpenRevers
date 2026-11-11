@@ -66,6 +66,10 @@ json CommandRegistry::validate(const Command& c, const json& in) {
             if (s.contains("maximum") && d > s["maximum"].get<long long>()) bad("must be at most " + s["maximum"].dump());
         } else if (type == "boolean") {
             if (!v.is_boolean()) bad("must be true or false");
+        } else if (type == "array") {
+            if (!v.is_array() || v.size() != 3) bad("must be three numbers [x, y, z]");
+            for (const auto& x : v)
+                if (!x.is_number() || !std::isfinite(x.get<double>())) bad("must be three finite numbers [x, y, z]");
         } else if (type == "string") {
             if (!v.is_string()) bad("must be a string");
             if (s.contains("enum")) {
@@ -151,6 +155,12 @@ json number(const Text& d, double def, double min, double max, const char* unit)
 
 json integer(const Text& d, long long def, long long min, long long max) {
     return described({{"type", "integer"}, {"default", def}, {"minimum", min}, {"maximum", max}}, d);
+}
+
+json point(const Text& d, const char* unit) {
+    json j = {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"x-kind", "point"}};
+    if (unit) j["x-unit"] = unit;
+    return described(j, d);
 }
 
 json boolean(const Text& d, bool def) { return described({{"type", "boolean"}, {"default", def}}, d); }

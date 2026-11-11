@@ -16,13 +16,15 @@ void registerAppCommands(CommandRegistry& R, Viewport& vp) {
            {"Turn the view to a standard direction and fit the visible bodies.", "Gira la vista a una dirección estándar y encuadra los cuerpos visibles."},
            object({{"view", choice({"Direction", "Dirección"}, {"iso", "front", "back", "left", "right", "top", "bottom"}, "iso")},
                    {"wireframe", boolean({"Show the mesh edges (the quads' on a quad mesh)", "Mostrar las aristas de la malla (las de los quads en una malla de quads)"}, false)},
-                   {"openEdges", boolean({"Show open and non-manifold edges", "Mostrar bordes abiertos y no manifold"}, true)}}),
+                   {"openEdges", boolean({"Show open and non-manifold edges", "Mostrar bordes abiertos y no manifold"}, true)},
+                   {"shapes", boolean({"Colour found shapes by region", "Colorear las formas encontradas por región"}, true)}}),
            false, true,
            [v](CommandContext&, const json& in) {
                bool ok = false;
                v->setView(Viewport::viewFromName(QString::fromStdString(in["view"].get<std::string>()), &ok));
                v->setWireframe(in["wireframe"].get<bool>());
                v->setOpenEdges(in["openEdges"].get<bool>());
+               v->setShowShapes(in["shapes"].get<bool>());
                return json{{"view", in["view"]}};
            }});
 

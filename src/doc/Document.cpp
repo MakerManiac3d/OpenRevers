@@ -90,9 +90,16 @@ Body Document::addBody(std::string name, std::shared_ptr<const TriMesh> mesh, st
     return b;
 }
 
-void Document::setMesh(std::uint64_t id, std::shared_ptr<const TriMesh> mesh) {
+void Document::setMesh(std::uint64_t id, std::shared_ptr<const TriMesh> mesh, std::shared_ptr<const Features> features) {
     std::lock_guard lock(m_);
-    find(id)->mesh = std::move(mesh);
+    Body* b = find(id);
+    b->mesh = std::move(mesh);
+    b->features = std::move(features);
+}
+
+void Document::setFeatures(std::uint64_t id, std::shared_ptr<const Features> features) {
+    std::lock_guard lock(m_);
+    find(id)->features = std::move(features);
 }
 
 void Document::renameBody(std::uint64_t id, const std::string& name) {

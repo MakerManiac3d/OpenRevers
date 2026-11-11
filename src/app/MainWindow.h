@@ -42,6 +42,7 @@ private:
     void refresh();
     void refreshTree();
     void refreshProperties();
+    void refreshShapes();
     void refreshHistory();
     void refreshTitle();
     void refreshAgentStatus();
@@ -73,6 +74,7 @@ private:
 
     QTreeWidget* tree_{nullptr};
     QTableWidget* props_{nullptr};
+    QTreeWidget* shapes_{nullptr};
     QListWidget* history_{nullptr};
     QPlainTextEdit* log_{nullptr};
     QLabel* status_{nullptr};

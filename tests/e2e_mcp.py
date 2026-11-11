@@ -169,6 +169,18 @@ def main() -> int:
         check(r["undone"] == "Remallar", "undo takes the remesh back")
         err, r, _ = agent.call("session_state")
         check(r["undo"] == ["Importar malla", "Reparar malla", "Rellenar agujeros"], "the history shows every step")
+        err, r, _ = agent.call("features_segment", {"body": "b1"})
+        planes = [f for f in (r or {}).get("features", []) if f["type"] == "plane"]
+        check(not err and len(planes) >= 5, f"shapes found: {len(planes)} planes, noise {r.get('noise') if r else None} mm")
+        if a.picture:
+            agent.call("view_set", {"view": "iso"})
+            err2, r2, content2 = agent.call("view_capture", {"width": 800, "height": 600})
+            imgs = [c for c in content2 if c.get("type") == "image"]
+            if imgs:
+                p = Path(a.picture)
+                p.with_name(p.stem + "-shapes" + p.suffix).write_bytes(base64.b64decode(imgs[0]["data"]))
+        err, r, _ = agent.call("align_principal", {"body": "b1"})
+        check(not err and abs(r["bounds"]["max"][0] + r["bounds"]["min"][0]) < 1.0, "align to principal axes centres the part")
         err, r, _ = agent.call("mesh_remesh_quads", {"body": "b1", "targetFaces": 1500})
         check(not err and r["quads"] > 800 and r["tsmReady"] is False, f"quad remesh: {r.get('quads')} quads, open so not a T-Spline yet")
         err, _, content = agent.call("mesh_export_tsm", {"body": "b1", "path": str(work / "part.tsm")})

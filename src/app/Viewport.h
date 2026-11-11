@@ -33,6 +33,9 @@ public:
     void setView(View v);
     void fitAll();
     void setWireframe(bool on);
+    /// Colour the faces of bodies with found shapes by their region.
+    void setShowShapes(bool on);
+    bool showShapes() const { return shapes_; }
     void setOpenEdges(bool on);
     void setFlatShading(bool on);
     bool wireframe() const { return wireframe_; }
@@ -66,6 +69,11 @@ private:
         QOpenGLBuffer ibo{QOpenGLBuffer::IndexBuffer};
         int indexCount{0};
         int pointCount{0};  // a point cloud: drawn as points, not triangles
+        // Shapes view: one vertex per face corner, coloured by its region.
+        QOpenGLVertexArrayObject regionVao;
+        QOpenGLBuffer regionVbo{QOpenGLBuffer::VertexBuffer};
+        int regionVertexCount{0};
+        std::shared_ptr<const Features> regionSource;
         // A quad mesh draws its wireframe as the quads' edges, not the triangles'.
         QOpenGLVertexArrayObject wireVao;
         QOpenGLBuffer wireIbo{QOpenGLBuffer::IndexBuffer};
@@ -79,6 +87,7 @@ private:
         std::shared_ptr<std::vector<float>> edgeLines;
     };
     void upload(GpuMesh& g, const TriMesh& m);
+    void uploadRegions(GpuMesh& g, const TriMesh& m, const Features* f);
     void requestOpenEdges(GpuMesh& g);
     void uploadOpenEdges(GpuMesh& g);
     QMatrix4x4 viewMatrix() const;
@@ -103,7 +112,7 @@ private:
     float distance_{100.f};
     float yaw_{-45.f}, pitch_{30.f};
     float sceneRadius_{50.f};
-    bool wireframe_{false}, openEdges_{true}, flat_{false};
+    bool wireframe_{false}, openEdges_{true}, flat_{false}, shapes_{true};
 
     QPoint lastPos_;
     Qt::MouseButton dragButton_{Qt::NoButton};

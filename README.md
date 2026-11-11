@@ -12,13 +12,15 @@ compatible con MCP) puede manejar paso a paso, delante de ti.
 
 ![La ventana de OpenRevers con un escaneo reparado](docs/images/ventana-es.png)
 
-> **Estado: versión 0.2, fase 1 de 5.** Hoy prepara mallas: análisis,
-> reparación, relleno de agujeros, suavizado, diezmado, remallado que conserva
-> las aristas vivas y remallado en quads con exportación T-Spline, con proyecto, deshacer y servidor MCP. Las primitivas, el
-> sólido paramétrico (STEP), las superficies libres y la inspección llegan en
-> las fases siguientes: consulta la [hoja de ruta](docs/hoja-de-ruta.md).
+> **Estado: versión 0.3, fase 2 de 5.** Prepara mallas y nubes de puntos
+> (análisis, reparación, relleno, suavizado, diezmado, remallado que conserva
+> las aristas vivas, quads y T-Spline, Poisson), encuentra las formas de la
+> pieza (planos, cilindros, conos, esferas, toros) y la alinea (3-2-1 y mejor
+> ajuste), con proyecto, deshacer y servidor MCP. El sólido paramétrico
+> (STEP), las superficies libres y la inspección llegan en las fases
+> siguientes: consulta la [hoja de ruta](docs/hoja-de-ruta.md).
 
-## Qué hace (versión 0.2)
+## Qué hace (versión 0.3)
 
 | Área | Funciones |
 | --- | --- |
@@ -26,10 +28,12 @@ compatible con MCP) puede manejar paso a paso, delante de ti.
 | Análisis | Agujeros y su tamaño, bordes abiertos y no manifold, caras degeneradas, duplicadas e invertidas, piezas sueltas, área, volumen, longitud media de arista |
 | Reparación | Unir vértices, quitar caras defectuosas y piezas sueltas, orientar las caras hacia fuera, rellenar agujeros con un parche suave |
 | Procesado | Suavizado laplaciano, diezmado con error máximo, remallado uniforme o adaptativo conservando las aristas vivas, remallado en quads |
+| Formas | Segmentación automática y ajuste de planos, esferas, cilindros, conos y toros con su σ; medir entre formas |
+| Alineación | Ejes principales, 3-2-1 por datums (caras, ejes, centros) y mejor ajuste (ICP robusto) con informe de desviación |
 | Nubes de puntos | Aclarar, calcular y orientar normales, reconstruir una malla cerrada (Poisson apantallado) con recorte de lo que no estaba escaneado |
 | Superficies | Exportar una malla de quads cerrada como T-Spline (`.tsm`) para Autodesk Fusion |
 | Trabajo | Deshacer y rehacer de cada operación, historial, registro, visor 3D con bordes abiertos marcados |
-| IA (MCP) | 29 herramientas, capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
+| IA (MCP) | 39 herramientas, capturas de la vista para el agente, guía de trabajo, carpetas permitidas |
 | Idiomas | Español e inglés |
 
 ## Instalación
@@ -86,7 +90,7 @@ sale del equipo es lo que el agente de IA lee, que va a su proveedor del modelo.
 | [Manual (es)](docs/usuario/es/manual.md) · [Manual (en)](docs/usuario/en/manual.md) | Uso del programa |
 | [docs/mcp](docs/mcp/README.md) | Conectar un agente de IA, herramientas, seguridad |
 | [docs/desarrollo](docs/desarrollo/arquitectura.md) | Arquitectura, compilación, formato de proyecto, rendimiento con mallas grandes, cómo añadir un comando |
-| [docs/algoritmos](docs/algoritmos/mallas.md) | Cada algoritmo, su referencia bibliográfica y sus límites |
+| [docs/algoritmos](docs/algoritmos/mallas.md) | Cada algoritmo, su referencia bibliográfica y sus límites (mallas; [formas y alineación](docs/algoritmos/primitivas.md)) |
 | [Hoja de ruta](docs/hoja-de-ruta.md) | Las cinco fases |
 | [THIRD_PARTY.md](THIRD_PARTY.md) | Librerías de terceros y sus licencias |
 | [CHANGELOG.md](CHANGELOG.md) | Cambios por versión |
@@ -109,11 +113,12 @@ a native desktop program (C++ and Qt) that runs **entirely on your computer**,
 and that an AI agent (Claude or any MCP client) can drive step by step, in
 front of you.
 
-**Status: version 0.2, phase 1 of 5** — mesh preparation: analysis, repair,
-hole filling, smoothing, decimation, edge-preserving remeshing, and quad
-remeshing with T-Spline export, with
-projects, undo and an MCP server. Primitives, parametric solids (STEP),
-freeform surfaces and inspection follow ([roadmap](docs/hoja-de-ruta.md)).
+**Status: version 0.3, phase 2 of 5** — prepares meshes and point clouds
+(analysis, repair, hole filling, smoothing, decimation, edge-preserving
+remeshing, quads and T-Splines, Poisson), finds the part's shapes (planes,
+cylinders, cones, spheres, tori) and aligns it (3-2-1 and best fit), with
+projects, undo and an MCP server. Parametric solids (STEP), freeform
+surfaces and inspection follow ([roadmap](docs/hoja-de-ruta.md)).
 
 - **Install (Windows):** run `OpenRevers-<version>-win64.exe` from
   [Releases](https://github.com/MakerManiac3d/OpenRevers/releases) or the

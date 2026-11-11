@@ -1,4 +1,4 @@
-# Manual de OpenRevers (versión 0.2)
+# Manual de OpenRevers (versión 0.3)
 
 OpenRevers prepara mallas escaneadas para la ingeniería inversa. Esta versión
 cubre la **fase 1**: abrir el escaneo, ver qué le pasa, repararlo y dejarlo
@@ -101,6 +101,56 @@ primero hay que reconstruir la superficie, desde el menú *Puntos*:
 Después, la malla sigue el flujo normal desde el paso 2.
 
 Prueba una operación sobre una copia con *Cuerpo → Duplicar cuerpo*, y compara.
+
+## Formas y alineación
+
+Para piezas mecánicas (caras planas, taladros, ejes, conos):
+
+1. **Formas → Detectar formas.** La malla se divide en regiones y a cada una
+   se le ajusta un plano, esfera, cilindro, cono o toro. El visor las pinta
+   por colores:
+   - azul: planos;
+   - verde: cilindros;
+   - naranja: conos;
+   - violeta: esferas;
+   - amarillo: toros;
+   - gris: lo que no es ninguna forma (redondeos, zonas libres).
+
+   El panel *Formas* lista cada una con su medida (Ø, ángulo, área) y su
+   **σ**, la desviación típica de la malla respecto a la forma. Una σ
+   parecida al ruido del escáner, que también se muestra, indica que la
+   forma es real.
+   - *noise*: el ruido del escáner, si lo conoces (0 para estimarlo).
+   - *tolerance*: cuántas veces el ruido puede separarse una cara de la
+     forma y seguir dentro.
+   - *angle*: desviación máxima de la normal.
+2. **Formas → Ajustar una forma aquí**, para un taladro o una cara que no
+   salió. Indica un punto de su superficie y un radio.
+3. **Formas → Reajustar forma como…**, si una región salió con otro tipo (un
+   cilindro corto tomado por plano, por ejemplo).
+4. **Formas → Medir entre formas**: ángulo y distancia entre dos formas, por
+   ejemplo:
+   - el grosor entre dos caras paralelas;
+   - la distancia entre dos taladros;
+   - la distancia de un eje a una cara;
+   - el punto donde un eje corta a una cara.
+5. **Alinear** coloca la pieza en el origen:
+   - **Alinear por datums (3-2-1):** como en una máquina de medir.
+     - **Primario:** una cara grande o un eje. La pieza se apoya en esa cara y
+       Z entra en ella.
+     - **Secundario:** una cara lateral o un eje; fija X.
+     - **Terciario:** otra cara o un taladro; fija el origen que falta.
+
+     Con una cara y dos taladros, el origen queda en el primer taladro y X
+     va hacia el segundo.
+   - **Alinear a los ejes principales:** rápido; centra la pieza y pone su
+     lado mayor en X.
+   - **Alineación de mejor ajuste:** lleva un escaneo sobre otro cuerpo (otro
+     escaneo o la malla nominal) y da la desviación que queda. Si están lejos
+     o girados, activa *coarse*.
+   - **Mover o girar:** a mano.
+
+   Las formas se mueven con la pieza.
 
 ## Ajustes
 

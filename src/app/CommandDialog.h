@@ -17,7 +17,9 @@ namespace orv {
 class CommandDialog : public QDialog {
     Q_OBJECT
 public:
-    CommandDialog(const Command& command, const std::vector<Body>& bodies, const QString& selectedBody, const QString& lang, QWidget* parent = nullptr);
+    /// `selectedFeature` prefills the first shape field (the shape picked in the Shapes panel).
+    CommandDialog(const Command& command, const std::vector<Body>& bodies, const QString& selectedBody, const QString& lang, QWidget* parent = nullptr,
+                  const QString& selectedFeature = {});
     json values() const;
 
 private:
