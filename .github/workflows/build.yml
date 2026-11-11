@@ -20,19 +20,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Dependencies
-        # The Ubuntu mirrors sometimes stall: each attempt is limited to 6
-        # minutes, with network retries and timeouts, and three attempts.
-        timeout-minutes: 20
+        # The runner's Ubuntu mirror sometimes stalls or fails: each attempt
+        # is limited and retried, and after the first failure the main Ubuntu
+        # archive is used instead of the runner's mirror.
+        timeout-minutes: 25
         run: |
-          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Dpkg::Use-Pty=0"
+          PKGS="ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools qt6-qpa-plugins libgl1-mesa-dev libgl1-mesa-dri libeigen3-dev nlohmann-json3-dev libgtest-dev xvfb"
           for attempt in 1 2 3; do
-            if timeout 360 sudo apt-get $APT update -qq && \
-               timeout 360 sudo apt-get $APT install -y -qq ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
-                 qt6-qpa-plugins libgl1-mesa-dev libgl1-mesa-dri libeigen3-dev nlohmann-json3-dev libgtest-dev xvfb; then
+            if timeout 420 sudo apt-get $APT update && timeout 420 sudo apt-get $APT install -y $PKGS; then
               exit 0
             fi
-            echo "apt attempt $attempt failed; retrying"
-            sleep 20
+            echo "::warning::apt attempt $attempt failed; switching to archive.ubuntu.com and retrying"
+            sudo sed -i -E 's#https?://[a-z0-9.-]*(azure|mirror)[a-z0-9.-]*/ubuntu#http://archive.ubuntu.com/ubuntu#g' \
+              /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
+            sleep 15
           done
           exit 1
       - name: Configure
