@@ -15,8 +15,12 @@
   - comparar con el escaneo: distancias con signo, mediana, percentil 95 y
     parte dentro de una tolerancia;
   - exportar e importar STEP; el proyecto (formato 5) guarda la pieza.
-- **Sección de una malla con un plano**, simplificada: el contorno del que
-  sacar un boceto.
+- **Boceto desde una sección:** corta el escaneo y convierte cada contorno
+  en rectas y arcos dentro de una tolerancia (círculos enteros, esquinas vivas
+  donde se cruzan rectas, arcos tangentes). En una placa de prueba escaneada:
+  29,996 × 11,997 mm y taladros de Ø2,743 a 2,754 (reales 30 × 12 y 2,75);
+  el sólido extruido deja el 100 % del escaneo dentro de ±0,05 mm.
+- **Sección de una malla con un plano**, simplificada.
 - **Ruido amplio** (corrección de la 0.3.1 tras probarla en la leva): en
   discos del 6 % del tamaño de la pieza que no se doblan por los cantos.
   En piezas finas la 0.3.1 medía la curvatura de los cantos (0,08 mm).

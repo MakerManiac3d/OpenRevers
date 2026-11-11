@@ -386,6 +386,17 @@ TEST(Commands, ParametricPartFromSketchToStep) {
     EXPECT_NEAR(std::abs(sec["polylines"][0]["area"].get<double>()), 360.0, 0.5);
     EXPECT_LE(sec["polylines"][0]["points"].size(), 8u);  // simplified to its corners
 
+    // The scan's section as a sketch: one rectangle of four lines, 30 × 12.
+    f.run("part.new", {{"name", "From scan"}});
+    const json fs = f.run("part.sketch_from_section", {{"body", "b3"}, {"scan", "b2"}, {"origin", {0.0, 0.0, 1.5}}, {"normal", {0.0, 0.0, 1.0}}, {"xDir", {1.0, 0.0, 0.0}}});
+    ASSERT_EQ(fs["loops"].size(), 1u);
+    EXPECT_EQ(fs["loops"][0]["segments"].size(), 4u);
+    EXPECT_NEAR(fs["loops"][0]["area"].get<double>(), 360.0, 0.2);
+    const json fe = f.run("part.extrude", {{"body", "b3"}, {"sketch", "s1"}, {"start", -1.5}, {"end", 1.5}, {"mode", "new"}});
+    EXPECT_NEAR(fe["solid"]["volume"].get<double>(), 30 * 12 * 3, 2.0);
+    EXPECT_GT(f.run("part.compare", {{"body", "b3"}, {"scan", "b2"}, {"tolerance", 0.05}})["withinPercent"].get<double>(), 99.0);
+    f.run("body.delete", {{"body", "b3"}});
+
     // STEP out and in; the project keeps the part.
     f.run("part.export_step", {{"body", "b1"}, {"path", (dir / "plate.step").string()}});
     const json imp = f.run("part.import_step", {{"path", (dir / "plate.step").string()}});
@@ -399,6 +410,7 @@ TEST(Commands, ParametricPartFromSketchToStep) {
     EXPECT_EQ(back["parameters"]["thickness"], 3.0);
     // Undo takes the fillet back.
     f.run("history.undo");  // the STEP import
+    for (int k = 0; k < 4; ++k) f.run("history.undo");  // delete, extrude, sketch and new part from the scan
     f.run("history.undo");  // the scan import
     f.run("history.undo");  // the fillet
     EXPECT_NEAR(f.run("part.list", {{"body", "b1"}})["solid"]["volume"].get<double>(), 3.0 * area, 1e-3);

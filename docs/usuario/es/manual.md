@@ -180,7 +180,11 @@ cambiarla.
 2. **Pieza → Sección con un plano**, sobre el escaneo ya alineado: da el
    contorno de la pieza a esa altura, en coordenadas del plano. Es la base
    del boceto.
-3. **Pieza → Añadir boceto:** lazos cerrados de rectas, arcos y círculos
+3. **Pieza → Boceto desde una sección:** corta el escaneo y convierte cada
+   contorno cerrado en rectas y arcos (tolerancia 0,05 mm por defecto); los
+   taladros salen como círculos, las esquinas vivas donde se cruzan rectas y
+   los arcos tangentes a las rectas que tocan. Da la medida de cada segmento
+   para compararla con el calibre. O bien **Pieza → Añadir boceto:** lazos cerrados de rectas, arcos y círculos
    (en JSON; un editor de bocetos llegará más adelante). Un lazo dentro de
    otro es un agujero. Lo más cómodo hoy es pedírselo al agente de IA, que
    lee la sección y propone el boceto.

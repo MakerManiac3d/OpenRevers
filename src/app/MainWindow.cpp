@@ -183,7 +183,7 @@ void MainWindow::buildActions() {
         auto* a = add(pointsMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
-    for (const char* name : {"part.new", "part.sketch", "part.extrude", "part.revolve", "part.fillet", "part.parameter", "part.edit", "part.delete", "part.list",
+    for (const char* name : {"part.new", "part.sketch_from_section", "part.sketch", "part.extrude", "part.revolve", "part.fillet", "part.parameter", "part.edit", "part.delete", "part.list",
                              "part.compare", "mesh.section"}) {
         auto* a = add(partMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));

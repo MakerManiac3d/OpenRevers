@@ -30,6 +30,7 @@ add_library(orv_core STATIC
   core/fit/Align.cpp
   core/solid/Profile.cpp
   core/solid/Solid.cpp
+  core/solid/SketchFit.cpp
   core/mesh/Distance.cpp
   core/points/E57.cpp
   core/util/Xml.cpp

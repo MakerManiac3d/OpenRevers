@@ -26,7 +26,7 @@ jobs:
         timeout-minutes: 25
         run: |
           APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Dpkg::Use-Pty=0"
-          PKGS="ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools qt6-qpa-plugins libgl1-mesa-dev libgl1-mesa-dri libeigen3-dev nlohmann-json3-dev libgtest-dev xvfb libocct-foundation-dev libocct-modeling-data-dev libocct-modeling-algorithms-dev libocct-data-exchange-dev"
+          PKGS="ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools qt6-qpa-plugins libgl1-mesa-dev libgl1-mesa-dri libeigen3-dev nlohmann-json3-dev libgtest-dev xvfb libocct-foundation-dev libocct-modeling-data-dev libocct-modeling-algorithms-dev libocct-data-exchange-dev libtbb-dev"
           for attempt in 1 2 3; do
             if timeout 420 sudo apt-get $APT update && timeout 420 sudo apt-get $APT install -y $PKGS; then
               exit 0
@@ -63,7 +63,7 @@ jobs:
           cache: true
       - name: Open CASCADE from the cache
         id: occt
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/occt
           key: occt-7.9.3-minimal-v1-${{ runner.os }}
@@ -80,6 +80,12 @@ jobs:
             -DUSE_DRACO=OFF -DUSE_TBB=OFF -DUSE_FREEIMAGE=OFF -DUSE_FFMPEG=OFF -DUSE_OPENVR=OFF -DBUILD_DOC_Overview=OFF
           cmake --build occt-build --config Release --parallel
           cmake --install occt-build --config Release
+      - name: Keep the Open CASCADE build (saved now, even if a later step fails)
+        if: steps.occt.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/occt
+          key: occt-7.9.3-minimal-v1-${{ runner.os }}
       - name: Open CASCADE on the path
         run: echo "${{ github.workspace }}\occt\win64\vc14\bin" >> $env:GITHUB_PATH
       - name: Configure

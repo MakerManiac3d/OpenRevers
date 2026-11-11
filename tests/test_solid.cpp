@@ -100,3 +100,52 @@ TEST(Solid, StepBrepAndTriangles) {
     EXPECT_GT(t.mesh.signedVolume(), 0);
     EXPECT_FALSE(occtVersion().empty());
 }
+
+#include "core/solid/SketchFit.h"
+#include <random>
+
+TEST(SketchFit, OutlineOfLinesArcsAndAHole) {
+    // A lever-like outline: sharp corners, a round end of R6, a stepped notch;
+    // sampled every 0.05 mm with 0.01 mm of noise, as a section of a scan.
+    Loop truth;
+    truth.segments = {Segment::line({0, 0}, {40, 0}), Segment::arc({40, 0}, {40, 12}, {40, 6}, true), Segment::line({40, 12}, {30, 12}),
+                      Segment::line({30, 12}, {30, 9}), Segment::line({30, 9}, {25, 9}), Segment::line({25, 9}, {25, 12}),
+                      Segment::line({25, 12}, {0, 12}), Segment::line({0, 12}, {0, 0})};
+    std::mt19937 g(3);
+    std::normal_distribution<double> e(0, 0.01);
+    auto pts = truth.polygon(0.05);
+    for (auto& p : pts) p += Vec2d(e(g), e(g));
+    SketchFitOptions o;
+    o.tolerance = 0.05;
+    const LoopFit f = fitLoop(pts, o);
+    ASSERT_FALSE(f.loop.segments.empty());
+    EXPECT_LT(f.maxDeviation, 0.06);
+    int lines = 0, arcs = 0;
+    for (const auto& s : f.loop.segments) {
+        if (s.kind == Segment::Kind::Line) ++lines;
+        if (s.kind == Segment::Kind::Arc) {
+            ++arcs;
+            EXPECT_NEAR(s.radius, 6.0, 0.03);
+            EXPECT_NEAR((s.centre - Vec2d(40, 6)).norm(), 0.0, 0.03);
+        }
+    }
+    EXPECT_EQ(arcs, 1);
+    EXPECT_EQ(lines, 7);
+    // Sharp corners where lines meet: the notch's corner at (30, 9).
+    double nearest = 1e9;
+    for (const auto& s : f.loop.segments) nearest = std::min(nearest, (s.a - Vec2d(30, 9)).norm());
+    EXPECT_LT(nearest, 0.03);
+    // It closes and extrudes.
+    Profile p;
+    p.loops = {f.loop};
+    EXPECT_EQ(p.problem(), "");
+    EXPECT_NEAR(Solid::extrude(p, 0, 1).volume(), std::abs(truth.area()), 0.5);
+
+    // A hole: a whole circle.
+    std::vector<Vec2d> hole;
+    for (int k = 0; k < 200; ++k) hole.push_back(Vec2d(10, 6) + 1.375 * Vec2d(std::cos(k * 0.0314159), std::sin(k * 0.0314159)) + Vec2d(e(g), e(g)));
+    const LoopFit h = fitLoop(hole, o);
+    ASSERT_EQ(h.loop.segments.size(), 1u);
+    EXPECT_EQ(h.loop.segments[0].kind, Segment::Kind::Circle);
+    EXPECT_NEAR(h.loop.segments[0].radius, 1.375, 0.005);
+}

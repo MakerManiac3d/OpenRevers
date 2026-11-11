@@ -170,7 +170,11 @@ operations under it; double-click an operation to change it.
 1. **Part → New part.**
 2. **Part → Section with a plane**, on the aligned scan: the part's outline
    at that height, in the plane's coordinates, to draw the sketch from.
-3. **Part → Add a sketch:** closed loops of lines, arcs and circles (as JSON;
+3. **Part → Sketch from a section:** cuts the scan and turns each closed
+   outline into lines and arcs (0.05 mm tolerance by default); holes come out
+   as circles, corners sharp where lines cross, arcs tangent to the lines they
+   touch. It gives every segment's size, to check against the calipers. Or
+   **Part → Add a sketch:** closed loops of lines, arcs and circles (as JSON;
    a sketch editor comes later). A loop inside another is a hole. The easiest
    way today is to ask the AI agent, which reads the section and proposes
    the sketch.

@@ -7,6 +7,7 @@
 #include "commands/PartCommands.h"
 
 #include "core/mesh/Distance.h"
+#include "core/solid/SketchFit.h"
 #include "doc/Document.h"
 
 #include <cmath>
@@ -169,6 +170,73 @@ void registerPartCommands(CommandRegistry& R) {
                return json{{"body", b.ref()}, {"ref", s.ref()}, {"name", s.name}, {"loops", s.profile.loops.size()},
                            {"summary", ctx.say("Added " + s.name + " (" + s.ref() + ") with " + std::to_string(s.profile.loops.size()) + " loops.",
                                                "Añadido " + s.name + " (" + s.ref() + ") con " + std::to_string(s.profile.loops.size()) + " lazos.")}};
+           }});
+
+    R.add({"part.sketch_from_section", "part", {"Sketch from a section", "Boceto desde una sección"},
+           {"Cut a scan (a mesh body) with a plane and turn each closed outline into a loop of lines and arcs within 'tolerance' (a whole circle when it is one; sharp corners where lines meet; arcs tangent to the lines they touch), added to a part as a sketch. Returns every segment's size, to check against the drawing or the person's measurements before extruding.",
+            "Corta un escaneo (un cuerpo de malla) con un plano y convierte cada contorno cerrado en un lazo de rectas y arcos a menos de 'tolerance' (un círculo entero cuando lo es; esquinas vivas donde se cruzan rectas; arcos tangentes a las rectas que tocan), y lo añade a una pieza como boceto. Devuelve la medida de cada segmento, para compararla con el plano o con las medidas de la persona antes de extruir."},
+           object({{"body", body(kPart)}, {"scan", body({"The scan (a mesh body)", "El escaneo (un cuerpo de malla)"})},
+                   {"origin", point({"A point of the plane", "Un punto del plano"})}, {"normal", point({"The plane's normal", "La normal del plano"}, nullptr)},
+                   {"xDir", point({"The sketch's x direction (default: any in the plane)", "La dirección x del boceto (por defecto, cualquiera del plano)"}, nullptr)},
+                   {"tolerance", number({"Largest distance from the section", "Distancia máxima a la sección"}, 0.05, 0.001, 5.0, "mm")},
+                   {"minSegment", number({"Shortest segment", "Segmento más corto"}, 0.3, 0.0, 100.0, "mm")},
+                   {"minLoop", number({"Ignore closed outlines shorter than", "Ignorar contornos cerrados más cortos que"}, 1.0, 0.0, 10000.0, "mm")},
+                   {"name", string({"Name", "Nombre"})}},
+                  {"body", "scan", "origin", "normal"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               const Body scan = ctx.doc.body(in["scan"]);
+               if (scan.mesh->faces.empty()) throw CommandError("invalid_input", ctx.say(scan.name + " has no triangles.", scan.name + " no tiene triángulos."));
+               const Vec3d o = v3(in["origin"]), n = v3(in["normal"]);
+               if (n.norm() < 1e-12) throw CommandError("invalid_input", ctx.say("The normal cannot be zero.", "La normal no puede ser cero."));
+               Profile prof;
+               prof.plane.origin = o;
+               prof.plane.normal = n;
+               prof.plane.xDir = in.contains("xDir") ? v3(in["xDir"]) : n.unitOrthogonal();
+               prof.plane.normalize();
+               SketchFitOptions fo;
+               fo.tolerance = in["tolerance"].get<double>();
+               fo.minSegment = in["minSegment"].get<double>();
+               const auto polys = sectionMesh(*scan.mesh, prof.plane.origin, prof.plane.normal, prof.plane.xDir);
+               json loops = json::array();
+               std::size_t open = 0;
+               for (const auto& pl : polys) {
+                   if (!pl.closed) { ++open; continue; }
+                   double len = 0;
+                   for (std::size_t i = 0; i < pl.points.size(); ++i) len += (pl.points[(i + 1) % pl.points.size()] - pl.points[i]).norm();
+                   if (len < in["minLoop"].get<double>()) continue;
+                   const LoopFit f = fitLoop(pl.points, fo);
+                   if (f.loop.segments.empty()) continue;
+                   json segs = json::array();
+                   for (const auto& sg : f.loop.segments) {
+                       json js{{"type", segmentKindName(sg.kind)}};
+                       if (sg.kind == Segment::Kind::Circle) { js["centre"] = j2(sg.centre); js["diameter"] = r4(2 * sg.radius); }
+                       else {
+                           js["from"] = j2(sg.a);
+                           js["to"] = j2(sg.b);
+                           js["length"] = r4(sg.length());
+                           if (sg.kind == Segment::Kind::Arc) { js["centre"] = j2(sg.centre); js["radius"] = r4(sg.radius); js["ccw"] = sg.ccw; }
+                       }
+                       segs.push_back(js);
+                   }
+                   loops.push_back({{"segments", segs}, {"maxDeviation", r4(f.maxDeviation)}, {"area", r4(std::abs(f.loop.area()))}});
+                   prof.loops.push_back(f.loop);
+               }
+               if (prof.loops.empty())
+                   throw CommandError("failed", ctx.say("The plane cuts no closed outline of " + scan.name + " (" + std::to_string(open) + " open ones: is the scan closed at that height?).",
+                                                        "El plano no corta ningún contorno cerrado de " + scan.name + " (" + std::to_string(open) + " abiertos: ¿está cerrado el escaneo a esa altura?)."));
+               auto m = std::make_shared<Model>(*b.model);
+               Sketch sk;
+               sk.id = m->nextId++;
+               sk.profile = prof;
+               sk.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Sketch", "Boceto"));
+               m->sketches.push_back(sk);
+               ctx.doc.setPart(b.id, m, b.solid, b.mesh, b.buildError);
+               return json{{"body", b.ref()}, {"ref", sk.ref()}, {"name", sk.name}, {"plane", {{"origin", j3(prof.plane.origin)}, {"normal", j3(prof.plane.normal)}, {"xDir", j3(prof.plane.xDir)}}},
+                           {"loops", loops}, {"openOutlinesSkipped", open},
+                           {"summary", ctx.say("Added " + sk.name + " (" + sk.ref() + ") with " + std::to_string(prof.loops.size()) + " loops from the section.",
+                                               "Añadido " + sk.name + " (" + sk.ref() + ") con " + std::to_string(prof.loops.size()) + " lazos de la sección.")}};
            }});
 
     R.add({"part.edit_sketch", "part", {"Edit a sketch", "Editar boceto"},

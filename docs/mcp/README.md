@@ -90,6 +90,7 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `points_to_mesh` | Malla cerrada desde la nube (Poisson apantallado), con recorte opcional de lo inventado | Sí |
 | `mesh_section` | Dónde corta un plano a una malla: polilíneas en coordenadas del plano, simplificadas. El contorno del que sacar un boceto | No |
 | `part_new` | Pieza paramétrica vacía | Sí |
+| `part_sketch_from_section` | Corta el escaneo con un plano y convierte cada contorno cerrado en rectas y arcos dentro de una tolerancia (círculos enteros, esquinas vivas, arcos tangentes); devuelve la medida de cada segmento | Sí |
 | `part_sketch` · `part_edit_sketch` | Boceto: lazos cerrados de rectas, arcos y círculos en un plano (un lazo dentro de otro es un agujero) | Sí |
 | `part_extrude` · `part_revolve` · `part_fillet` | Operaciones; se combinan con la pieza (`new`, `join`, `cut`, `intersect`). Los valores pueden ser números o nombres de parámetros | Sí |
 | `part_parameter` | Crea o cambia un parámetro con nombre; la pieza se reconstruye | Sí |

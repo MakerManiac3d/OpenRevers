@@ -59,7 +59,7 @@ Los sólidos exactos y el STEP usan [Open CASCADE Technology](https://github.com
 sudo apt install build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools \
   qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools libgl1-mesa-dev libeigen3-dev \
   nlohmann-json3-dev libgtest-dev libocct-foundation-dev libocct-modeling-data-dev \
-  libocct-modeling-algorithms-dev libocct-data-exchange-dev
+  libocct-modeling-algorithms-dev libocct-data-exchange-dev libtbb-dev
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build
