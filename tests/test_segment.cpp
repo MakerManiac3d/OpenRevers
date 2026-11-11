@@ -165,3 +165,56 @@ TEST(Segment, ScannedBlockWithAHole) {
             EXPECT_LT((d - d.dot(r.shape.axis) * r.shape.axis).norm(), 0.05);  // its position
         }
 }
+
+TEST(Segment, SmoothedScanOfAThinPlateWithSmallHoles) {
+    // What a scanner's software delivers on a small part: a 30×12×2.5 plate
+    // with four Ø2.75 holes 4 mm apart, its points rippled by a smooth wave of
+    // a few hundredths (not by white noise: the software has smoothed that
+    // away) and rebuilt finely. The holes are shallower than they are wide.
+    TriMesh cloud;
+    std::mt19937 g(21);
+    std::uniform_real_distribution<float> u(0.f, 1.f);
+    std::normal_distribution<float> e(0.f, 0.002f);
+    auto ripple = [](Vec3f p) {
+        return 0.012f * std::sin(7.1f * p.x() + 2.3f * p.y() + 1.1f * p.z()) + 0.009f * std::sin(3.3f * p.y() - 5.2f * p.x() + 0.7f) +
+               0.006f * std::sin(11.f * p.x() + 9.f * p.z() + 2.f);
+    };
+    auto add = [&](Vec3f p, Vec3f n) { cloud.vertices.push_back(p + n * (ripple(p) + e(g))); cloud.normals.push_back(n); };
+    const float hx[4] = {9, 13, 17, 21}, hy = 6, r = 1.375f, T = 2.5f;
+    auto inHole = [&](float x, float y) {
+        for (float c : hx)
+            if (std::hypot(x - c, y - hy) < r) return true;
+        return false;
+    };
+    for (int i = 0; i < 120000; ++i) {
+        const float x = 30 * u(g), y = 12 * u(g);
+        if (!inHole(x, y)) { add({x, y, T}, {0, 0, 1}); add({x, y, 0}, {0, 0, -1}); }
+    }
+    for (int i = 0; i < 25000; ++i) {
+        const float a = 30 * u(g), b = 12 * u(g), z = T * u(g);
+        add({a, 0, z}, {0, -1, 0}); add({a, 12, z}, {0, 1, 0});
+        add({0, b, z}, {-1, 0, 0}); add({30, b, z}, {1, 0, 0});
+    }
+    for (float c : hx)
+        for (int i = 0; i < 6000; ++i) {
+            const float t = 6.2831853f * u(g), z = T * u(g);
+            add({c + r * std::cos(t), hy + r * std::sin(t), z}, {-std::cos(t), -std::sin(t), 0});
+        }
+    TriMesh m;
+    PoissonOptions po;
+    po.depth = 9;
+    reconstructPoisson(cloud, po, m);
+    const Segmentation s = segment(m);
+    EXPECT_GT(s.noise, 0.006);  // the ripple, not the smoothed-away noise
+    const auto c = countTypes(s, 0.01);
+    EXPECT_LE(c.count(PrimitiveType::Plane) ? c.at(PrimitiveType::Plane) : 0, 8);
+    int holes = 0;
+    for (const auto& reg : s.regions) {
+        if (reg.shape.type != PrimitiveType::Cylinder || reg.shape.radius > 2) continue;
+        ++holes;
+        EXPECT_NEAR(2 * reg.shape.radius, 2.75, 0.06);
+        EXPECT_GT(std::abs(reg.shape.axis.z()), 0.995);
+    }
+    EXPECT_EQ(holes, 4);
+    EXPECT_LT(s.regions.size(), 30u);
+}

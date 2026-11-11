@@ -73,7 +73,7 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `mesh_remesh` | Remallado uniforme o adaptativo que conserva las aristas vivas | Sí |
 | `mesh_remesh_quads` | Remallado en quads que siguen la forma y las aristas vivas (QuadriFlow); dice si sirve para T-Spline | Sí |
 | `mesh_export` | Escribe STL, OBJ, PLY o 3MF; una nube, en PLY, XYZ u OBJ con sus normales (no sobrescribe sin `overwrite`); una malla de quads sale en quads en OBJ y PLY | No |
-| `features_segment` | Divide la malla en regiones y ajusta a cada una plano, esfera, cilindro, cono o toro, con su σ | Sí |
+| `features_segment` | Divide la malla en regiones y ajusta a cada una plano, esfera, cilindro, cono o toro, con su σ. Lista las 40 mayores (`maxListed`) y dice cuántas hay (`total`) | Sí |
 | `features_fit` | Ajusta una forma a las caras alrededor de un punto | Sí |
 | `features_refit` | Vuelve a ajustar una región como otro tipo de forma | Sí |
 | `features_list` | Formas del cuerpo con medidas, posición y σ | No |

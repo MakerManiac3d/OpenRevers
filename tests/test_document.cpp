@@ -288,3 +288,56 @@ TEST(Mcp, HandshakeListAndCall) {
     EXPECT_EQ((*unknown)["error"]["code"], -32601);
     EXPECT_NE(s.handleLine("{not json")->find("-32700"), std::string::npos);
 }
+
+TEST(Commands, HolesFittedOnASpotAndTheirPitch) {
+    // Two Ø2.75 bores 4 mm apart through a 10 mm plate, the second one fitted
+    // 3° off (as a fitted axis always is a little); a ring of the plate's
+    // top face round the first. Fitting in a ball around a spot on the wall
+    // must keep the wall only, and the pitch must be the centre distance.
+    const auto dir = tempDir("holes");
+    TriMesh m;
+    auto tube = [&](Vec3d c, Vec3d axis) {
+        const Vec3d u = axis.unitOrthogonal(), v = axis.cross(u);
+        const int nu = 64, nv = 40;
+        const auto b = static_cast<std::uint32_t>(m.vertices.size());
+        for (int j = 0; j <= nv; ++j)
+            for (int i = 0; i < nu; ++i) {
+                const double t = 2 * 3.14159265358979 * i / nu, z = 10.0 * j / nv - 5.0;
+                m.vertices.push_back((c + 1.375 * (std::cos(t) * u + std::sin(t) * v) + z * axis).cast<float>());
+            }
+        for (int j = 0; j < nv; ++j)
+            for (int i = 0; i < nu; ++i) {
+                auto id = [&](int ii, int jj) { return b + static_cast<std::uint32_t>(jj * nu + ii % nu); };
+                m.faces.push_back({id(i, j), id(i + 1, j + 1), id(i + 1, j)});
+                m.faces.push_back({id(i, j), id(i, j + 1), id(i + 1, j + 1)});
+            }
+    };
+    tube(Vec3d(0, 0, 5), Vec3d::UnitZ());
+    tube(Vec3d(4, 0, 5), Vec3d(0, std::sin(3 * 3.14159265358979 / 180), std::cos(3 * 3.14159265358979 / 180)));
+    {  // the top face round the first bore
+        const int nu = 64, nr = 8;
+        const auto b = static_cast<std::uint32_t>(m.vertices.size());
+        for (int j = 0; j <= nr; ++j)
+            for (int i = 0; i < nu; ++i) {
+                const double t = 2 * 3.14159265358979 * i / nu, r = 1.375 + 1.6 * j / nr;
+                m.vertices.push_back(Vec3f(static_cast<float>(r * std::cos(t)), static_cast<float>(r * std::sin(t)), 10.f));
+            }
+        for (int j = 0; j < nr; ++j)
+            for (int i = 0; i < nu; ++i) {
+                auto id = [&](int ii, int jj) { return b + static_cast<std::uint32_t>(jj * nu + ii % nu); };
+                m.faces.push_back({id(i, j), id(i + 1, j), id(i + 1, j + 1)});
+                m.faces.push_back({id(i, j), id(i + 1, j + 1), id(i, j + 1)});
+            }
+    }
+    writeMesh(m, dir / "holes.stl");
+    Fixture f;
+    f.run("mesh.import", {{"path", (dir / "holes.stl").string()}});
+    const json a = f.run("features.fit", {{"body", "b1"}, {"at", {1.375, 0.0, 8.8}}, {"radius", 2.0}, {"type", "cylinder"}});
+    EXPECT_NEAR(a["diameter"].get<double>(), 2.75, 0.01);
+    EXPECT_GT(a["area"].get<double>(), 5.0);
+    const json b = f.run("features.fit", {{"body", "b1"}, {"at", {5.375, 0.0, 5.0}}, {"radius", 2.0}, {"type", "cylinder"}});
+    EXPECT_NEAR(b["diameter"].get<double>(), 2.75, 0.01);
+    const json d = f.run("features.measure", {{"body", "b1"}, {"a", a["ref"]}, {"b", b["ref"]}});
+    EXPECT_NEAR(d["angleDeg"].get<double>(), 3.0, 0.05);
+    EXPECT_NEAR(d["distance"].get<double>(), 4.0, 0.15);  // not the 0.0x where the two lines pass closest
+}

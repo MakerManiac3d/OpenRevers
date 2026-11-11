@@ -98,6 +98,142 @@ bool sameShape(const Primitive& a, const Primitive& b, double tol) {
     return false;
 }
 
+/// Pieces of one curved face that came out as separate small regions (a
+/// shallow hole's wall cut into flat facets or into short cylinders of
+/// different radii, a fillet into strips): join neighbouring regions while
+/// their union fits one cylinder, cone or sphere within the tolerance, and is
+/// really curved (no single plane fits it).
+void joinIntoCurved(const TriMesh& m, const FaceData& d, Segmentation& s, double tol) {
+    const std::size_t R = s.regions.size(), F = m.faces.size();
+    if (R < 2) return;
+    std::vector<std::vector<std::uint32_t>> facesOf(R);
+    for (std::size_t f = 0; f < F; ++f)
+        if (s.faceRegion[f] != Segmentation::kNone) facesOf[static_cast<std::size_t>(s.faceRegion[f])].push_back(static_cast<std::uint32_t>(f));
+    // Neighbours: touching, or across a gap of up to three free faces (the
+    // strip the growth left between two pieces).
+    std::vector<std::vector<std::uint32_t>> nbrs(R);
+    {
+        std::vector<std::int32_t> owner(F, Segmentation::kNone);  // region that reached a free face first
+        std::vector<std::uint32_t> front;
+        for (std::size_t f = 0; f < F; ++f)
+            if (s.faceRegion[f] != Segmentation::kNone) { owner[f] = s.faceRegion[f]; front.push_back(static_cast<std::uint32_t>(f)); }
+        auto link = [&](std::int32_t a, std::int32_t b) {
+            if (a == b || a == Segmentation::kNone || b == Segmentation::kNone) return;
+            nbrs[static_cast<std::size_t>(a)].push_back(static_cast<std::uint32_t>(b));
+            nbrs[static_cast<std::size_t>(b)].push_back(static_cast<std::uint32_t>(a));
+        };
+        for (int ring = 0; ring <= 3 && !front.empty(); ++ring) {
+            std::vector<std::uint32_t> next;
+            for (auto f : front)
+                for (auto g : d.nbr[f]) {
+                    if (g == UINT32_MAX) continue;
+                    if (owner[g] == Segmentation::kNone) {
+                        if (ring < 3) { owner[g] = owner[f]; next.push_back(g); }
+                    } else {
+                        link(owner[f], owner[g]);
+                    }
+                }
+            front = std::move(next);
+        }
+        for (auto& v : nbrs) { std::sort(v.begin(), v.end()); v.erase(std::unique(v.begin(), v.end()), v.end()); }
+    }
+    double largest = 0;
+    for (const auto& r : s.regions) largest = std::max(largest, r.area);
+
+    std::vector<Vec3d> p, n;
+    FitOptions fo;
+    fo.maxIterations = 30;
+    auto extent = [&](const std::vector<std::uint32_t>& faces) {
+        Eigen::AlignedBox3d box;
+        for (auto f : faces) box.extend(d.centre[f]);
+        return box.diagonal().norm();
+    };
+    // A union worth keeping as one curved shape: fits, few outliers, and is
+    // not a nearly flat piece of a huge cylinder or sphere.
+    auto curvedFit = [&](const std::vector<std::uint32_t>& faces) -> std::optional<Primitive> {
+        samples(d, faces, p, n);
+        std::optional<Primitive> best;
+        for (auto t : {PrimitiveType::Cylinder, PrimitiveType::Sphere, PrimitiveType::Cone}) {
+            auto sh = fitPrimitive(t, p, n, fo);
+            if (!sh || sh->rms > tol || sh->outliers * 20 > p.size()) continue;
+            const double ext = extent(faces);
+            if (t != PrimitiveType::Cone && sh->radius > 2 * ext) continue;
+            if (t == PrimitiveType::Cone) {  // apex near the piece, and not nearly a plane or a cylinder
+                Vec3d c = Vec3d::Zero();
+                for (const auto& q : p) c += q;
+                c /= static_cast<double>(p.size());
+                if ((sh->origin - c).norm() > 4 * ext || sh->angle < 5 * kPi / 180 || sh->angle > 80 * kPi / 180) continue;
+            }
+            if (!best || sh->rms < best->rms * 0.8) best = sh;  // the simpler type unless clearly worse
+        }
+        if (!best) return best;
+        auto flat = fitPrimitive(PrimitiveType::Plane, p, n, fo);
+        if (flat && flat->rms <= tol) return std::nullopt;  // a plane does: leave it to the plane merge
+        return best;
+    };
+
+    std::vector<std::int32_t> group(R, -1);  // region -> leader it was joined to
+    std::vector<char> alive(R, 1);
+    std::vector<std::size_t> order(R);
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return s.regions[a].area < s.regions[b].area; });
+    bool changed = false;
+    for (auto lead : order) {
+        if (!alive[lead] || s.regions[lead].area > 0.25 * largest) continue;
+        std::vector<std::uint32_t> faces = facesOf[lead], members{static_cast<std::uint32_t>(lead)};
+        std::optional<Primitive> shape;
+        if (s.regions[lead].shape.type != PrimitiveType::Plane) shape = s.regions[lead].shape;
+        bool grew = true;
+        while (grew) {
+            grew = false;
+            std::vector<std::uint32_t> cand;
+            for (auto r : members)
+                for (auto q : nbrs[r])
+                    if (alive[q] && std::find(members.begin(), members.end(), q) == members.end()) cand.push_back(q);
+            std::sort(cand.begin(), cand.end());
+            cand.erase(std::unique(cand.begin(), cand.end()), cand.end());
+            double area = 0;
+            for (auto r : members) area += s.regions[r].area;
+            for (auto q : cand) {
+                if (s.regions[q].area > 0.25 * largest && s.regions[q].area > 4 * area) continue;  // a main face is not part of a fillet
+                std::vector<std::uint32_t> both = faces;
+                both.insert(both.end(), facesOf[q].begin(), facesOf[q].end());
+                auto u = curvedFit(both);
+                if (!u) continue;
+                faces = std::move(both);
+                members.push_back(q);
+                shape = u;
+                grew = true;
+            }
+        }
+        if (members.size() < 2 || !shape) continue;
+        for (auto r : members) {
+            if (r == lead) continue;
+            alive[r] = 0;
+            facesOf[r].clear();
+        }
+        facesOf[lead] = std::move(faces);
+        s.regions[lead].shape = *shape;
+        // the joined region is no longer small: its neighbours are the union's
+        for (auto r : members)
+            if (r != lead) nbrs[lead].insert(nbrs[lead].end(), nbrs[r].begin(), nbrs[r].end());
+        changed = true;
+    }
+    if (!changed) return;
+    std::vector<Region> kept;
+    std::fill(s.faceRegion.begin(), s.faceRegion.end(), Segmentation::kNone);
+    for (std::size_t r = 0; r < R; ++r) {
+        if (!alive[r]) continue;
+        const auto id = static_cast<std::int32_t>(kept.size());
+        Region reg;
+        reg.shape = s.regions[r].shape;
+        reg.faces = facesOf[r].size();
+        for (auto f : facesOf[r]) { reg.area += d.area[f]; s.faceRegion[f] = id; }
+        kept.push_back(reg);
+    }
+    s.regions = std::move(kept);
+}
+
 }  // namespace
 
 double estimateNoise(const TriMesh& m) {
@@ -145,7 +281,53 @@ double estimateNoise(const TriMesh& m) {
     }
     if (sig.empty()) return 0.0;
     std::sort(sig.begin(), sig.end());
-    return sig[sig.size() / 4];
+    const double local = sig[sig.size() / 4];
+
+    // A scanner's software smooths its mesh: at a few faces' size there is
+    // almost no noise left, yet the surface still ripples by a few hundredths
+    // over a millimetre or two, and that is what a face of the part deviates
+    // by. So the noise is also measured as the flatness of the flattest spots
+    // a few percent of the part's size across.
+    Eigen::AlignedBox3d box;
+    double faceArea = 0;
+    for (std::size_t f = 0; f < m.faces.size(); ++f) { box.extend(d.centre[f]); faceArea += d.area[f]; }
+    faceArea /= static_cast<double>(m.faces.size());
+    const double R = 0.03 * box.diagonal().norm();
+    const auto count = static_cast<std::size_t>(std::clamp(kPi * R * R / std::max(faceArea, 1e-12), 200.0, 5000.0));
+    std::vector<double> wide;
+    std::fill(mark.begin(), mark.end(), 0u);
+    for (int i = 0; i < 200; ++i) {
+        const auto f = static_cast<std::uint32_t>(pick(g));
+        auto patch = patchAround(d, f, count, std::cos(25 * kPi / 180), nullptr, mark, static_cast<std::uint32_t>(i + 1));
+        if (patch.size() < count / 2) continue;
+        std::vector<std::uint32_t> verts;
+        for (auto face : patch)
+            for (auto v : m.faces[face]) verts.push_back(v);
+        std::sort(verts.begin(), verts.end());
+        verts.erase(std::unique(verts.begin(), verts.end()), verts.end());
+        Vec3d c = Vec3d::Zero();
+        for (auto v : verts) c += m.vertices[v].cast<double>();
+        c /= static_cast<double>(verts.size());
+        Eigen::Matrix3d C = Eigen::Matrix3d::Zero();
+        for (auto v : verts) { const Vec3d q = m.vertices[v].cast<double>() - c; C += q * q.transpose(); }
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(C);
+        // A quadratic height field takes out the curvature of a curved spot
+        // (a part may have no flat face); the ripple, shorter than the patch, stays.
+        const Vec3d ax = es.eigenvectors().col(0), ux = ax.unitOrthogonal(), vx = ax.cross(ux);
+        Eigen::MatrixXd A(static_cast<Eigen::Index>(verts.size()), 6);
+        Eigen::VectorXd z(static_cast<Eigen::Index>(verts.size()));
+        for (std::size_t k = 0; k < verts.size(); ++k) {
+            const Vec3d q = m.vertices[verts[k]].cast<double>() - c;
+            const double x = q.dot(ux), y = q.dot(vx);
+            A.row(static_cast<Eigen::Index>(k)) << x * x, x * y, y * y, x, y, 1.0;
+            z[static_cast<Eigen::Index>(k)] = q.dot(ax);
+        }
+        const Eigen::VectorXd coef = A.colPivHouseholderQr().solve(z);
+        wide.push_back(std::sqrt((A * coef - z).squaredNorm() / static_cast<double>(verts.size() - 6)));
+    }
+    if (wide.size() < 10) return local;
+    std::sort(wide.begin(), wide.end());
+    return std::max(local, wide[wide.size() / 5]);
 }
 
 Segmentation segment(const TriMesh& m, const SegmentOptions& o) {
@@ -310,6 +492,7 @@ Segmentation segment(const TriMesh& m, const SegmentOptions& o) {
             merged.push_back(r);
         }
         s.regions = std::move(merged);
+        joinIntoCurved(m, d, s, tol);
     }
     // Final pass with the final shapes: each region takes in the free faces
     // next to it that lie on its shape, and a small region is absorbed by a
@@ -374,7 +557,7 @@ Segmentation segment(const TriMesh& m, const SegmentOptions& o) {
             Region reg;
             samples(d, facesOf[r], p, n);
             auto sh = fitPrimitive(s.regions[r].shape.type, p, n);
-            reg.shape = sh ? *sh : s.regions[r].shape;
+            reg.shape = sh && sh->rms <= std::max(2 * s.regions[r].shape.rms, tol) ? *sh : s.regions[r].shape;
             reg.faces = facesOf[r].size();
             for (auto f : facesOf[r]) reg.area += d.area[f];
             kept.push_back(reg);

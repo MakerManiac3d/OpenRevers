@@ -1,5 +1,30 @@
 # Cambios · Changelog
 
+## 0.3.1 — 11 de noviembre de 2026
+
+Correcciones tras la primera pieza real (una leva escaneada, 84 × 15 × 3,6 mm,
+334 000 triángulos):
+
+- **Ruido en mallas suavizadas por el escáner:** se medía a la escala de unas
+  pocas caras, donde el software del escáner ya lo ha borrado (0,001 mm), y la
+  pieza se rompía en cientos de formas. Ahora también se mide la planitud de
+  las zonas más planas a un 3 % del tamaño de la pieza, y vale el mayor.
+- **Taladros cortos y redondeos troceados:** las regiones vecinas cuya unión
+  encaja en un cilindro, cono o esfera (y no en un plano) se unen en una sola
+  forma. En una placa de prueba con cuatro taladros Ø2,75 de 2,5 mm de
+  profundidad: de 101 formas a 17, y los taladros a ±0,01 mm.
+- **Distancia entre ejes casi paralelos** (`features.measure`): ahora es la
+  distancia entre centros, medida a media altura. Antes daba la distancia
+  mínima entre las rectas, que en ejes casi paralelos no significa nada (2,23
+  en vez de 4 mm). La mínima sigue en `shortestDistance`.
+- **Ajustar aquí** (`features.fit`) se queda solo con las caras que están sobre
+  la forma y miran como ella, en varias vueltas: los redondeos de la boca de
+  un taladro y la cara de alrededor ya no agrandan el diámetro. Informa del
+  área.
+- `features.segment` lista como mucho `maxListed` formas (40 por defecto, de
+  mayor a menor) e informa de `total` y `listed`: la respuesta ya no desborda
+  al agente en piezas complejas.
+
 ## 0.3.0 — 11 de noviembre de 2026
 
 - **Formas** (menú *Formas*, panel *Formas*):

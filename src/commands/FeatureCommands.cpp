@@ -6,10 +6,12 @@
 
 #include "core/fit/Align.h"
 #include "core/fit/Segmentation.h"
+#include "core/mesh/EdgeMap.h"
 #include "doc/Document.h"
 
 #include <cmath>
 #include <map>
+#include <numeric>
 
 namespace orv {
 namespace {
@@ -38,6 +40,17 @@ std::string typeName(CommandContext& ctx, PrimitiveType t) {
         case PrimitiveType::Cylinder: return ctx.say("Cylinder", "Cilindro");
         case PrimitiveType::Cone: return ctx.say("Cone", "Cono");
         case PrimitiveType::Torus: return ctx.say("Torus", "Toro");
+    }
+    return "?";
+}
+
+std::string pluralName(CommandContext& ctx, PrimitiveType t) {
+    switch (t) {
+        case PrimitiveType::Plane: return ctx.say("planes", "planos");
+        case PrimitiveType::Sphere: return ctx.say("spheres", "esferas");
+        case PrimitiveType::Cylinder: return ctx.say("cylinders", "cilindros");
+        case PrimitiveType::Cone: return ctx.say("cones", "conos");
+        case PrimitiveType::Torus: return ctx.say("tori", "toros");
     }
     return "?";
 }
@@ -126,8 +139,22 @@ json measurePair(const Primitive& a, const Primitive& b) {
         }
     } else if (isAxis(a) && isAxis(b)) {
         const Vec3d w = b.origin - a.origin, c = a.axis.cross(b.axis);
-        if (c.norm() < 1e-6) j["distance"] = r4((w - w.dot(a.axis) * a.axis).norm());  // parallel axes: centre distance
-        else j["distance"] = r4(std::abs(w.dot(c.normalized())));                       // skew axes: shortest distance
+        if (std::abs(a.axis.dot(b.axis)) > std::cos(10.0 * kPi / 180)) {
+            // Nominally parallel axes (holes of a pattern, a shaft and its
+            // bore): the centre distance, measured across the mean direction
+            // half way between the two shapes. A fitted axis is never exactly
+            // parallel, and the shortest distance between two lines that
+            // almost are means nothing (it falls anywhere along them).
+            Vec3d m = a.axis + (a.axis.dot(b.axis) < 0 ? -b.axis : b.axis);
+            m.normalize();
+            const double t = 0.5 * (a.origin.dot(m) + b.origin.dot(m));
+            auto at = [&](const Primitive& p) { return Vec3d(p.origin + p.axis * ((t - p.origin.dot(m)) / p.axis.dot(m))); };
+            const Vec3d d = at(b) - at(a);
+            j["distance"] = r4((d - d.dot(m) * m).norm());
+            if (c.norm() > 1e-9) j["shortestDistance"] = r4(std::abs(w.dot(c.normalized())));
+        } else {
+            j["distance"] = r4(std::abs(w.dot(c.normalized())));  // crossing axes: shortest distance
+        }
     } else {
         j["distance"] = r4((centre(a) - centre(b)).norm());
     }
@@ -234,7 +261,8 @@ void registerFeatureCommands(CommandRegistry& R) {
                    {"noise", number({"Scanner noise (0: estimate)", "Ruido del escáner (0: estimarlo)"}, 0.0, 0.0, 10.0, "mm")},
                    {"tolerance", number({"Tolerance, in multiples of the noise", "Tolerancia, en múltiplos del ruido"}, 3.0, 1.0, 20.0)},
                    {"angle", number({"Largest normal deviation", "Desviación máxima de la normal"}, 12.0, 1.0, 45.0, "deg")},
-                   {"minFaces", integer({"Smallest region, in faces (0: automatic)", "Región más pequeña, en caras (0: automática)"}, 0, 0, 1000000)}},
+                   {"minFaces", integer({"Smallest region, in faces (0: automatic)", "Región más pequeña, en caras (0: automática)"}, 0, 0, 1000000)},
+                   {"maxListed", integer({"Shapes to list in the answer, largest first (features.list gives all)", "Formas a listar en la respuesta, de mayor a menor (features.list da todas)"}, 40, 0, 100000)}},
                   {"body"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
@@ -262,15 +290,16 @@ void registerFeatureCommands(CommandRegistry& R) {
                ctx.doc.setFeatures(b.id, fs);
                std::map<std::string, int> count;
                json list = json::array();
+               const auto maxListed = static_cast<std::size_t>(in["maxListed"].get<long long>());
                for (const auto& f : fs->list) {
-                   ++count[primitiveName(f.shape.type)];
-                   list.push_back(featureJson(f));
+                   ++count[pluralName(ctx, f.shape.type)];
+                   if (list.size() < maxListed) list.push_back(featureJson(f));
                }
                const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
                std::string sum;
                for (const auto& [k, n] : count) sum += (sum.empty() ? "" : ", ") + std::to_string(n) + " " + k;
                const double un = b.mesh->faces.empty() ? 0.0 : 100.0 * static_cast<double>(s.unassignedFaces) / static_cast<double>(b.mesh->faces.size());
-               return json{{"body", b.ref()}, {"noise", r4(s.noise)}, {"features", list}, {"unassignedFacesPercent", r4(un)}, {"seconds", r4(secs)},
+               return json{{"body", b.ref()}, {"noise", r4(s.noise)}, {"features", list}, {"total", fs->list.size()}, {"listed", list.size()}, {"unassignedFacesPercent", r4(un)}, {"seconds", r4(secs)},
                            {"summary", ctx.say("Found " + std::to_string(fs->list.size()) + " shapes (" + sum + "); noise " + std::to_string(r4(s.noise)).substr(0, 6) + " mm.",
                                                "Encontradas " + std::to_string(fs->list.size()) + " formas (" + sum + "); ruido " + std::to_string(r4(s.noise)).substr(0, 6) + " mm.")}};
            }});
@@ -290,28 +319,89 @@ void registerFeatureCommands(CommandRegistry& R) {
                const Vec3d at = v3(in["at"]);
                const double rad = in["radius"].get<double>();
                std::vector<Vec3d> p, n;
+               std::vector<double> area;
+               std::vector<std::uint32_t> faceOf;
                const TriMesh& m = *b.mesh;
-               for (const Tri& t : m.faces) {
+               std::vector<std::int32_t> slot(m.faces.size(), -1);
+               for (std::size_t f = 0; f < m.faces.size(); ++f) {
+                   const Tri& t = m.faces[f];
                    const Vec3d a = m.vertices[t[0]].cast<double>(), bb = m.vertices[t[1]].cast<double>(), c = m.vertices[t[2]].cast<double>();
                    const Vec3d cen = (a + bb + c) / 3.0;
                    if ((cen - at).norm() > rad) continue;
                    const Vec3d nn = (bb - a).cross(c - a);
                    if (nn.norm() <= 0) continue;
+                   slot[f] = static_cast<std::int32_t>(p.size());
                    p.push_back(cen);
                    n.push_back(nn.normalized());
+                   area.push_back(0.5 * nn.norm());
+                   faceOf.push_back(static_cast<std::uint32_t>(f));
                }
                if (p.size() < 12)
                    throw CommandError("failed", ctx.say("Too few faces near that point (" + std::to_string(p.size()) + "); use a larger radius or a point on the surface.",
                                                         "Muy pocas caras cerca de ese punto (" + std::to_string(p.size()) + "); usa un radio mayor o un punto sobre la superficie."));
                const std::string type = in["type"];
                const double noise = b.features ? b.features->noise : 0.0;
-               std::optional<Primitive> s = type == "auto" ? fitBest(p, n, noise) : fitPrimitive(*primitiveFromName(type), p, n);
+               auto fitAll = [&](const std::vector<Vec3d>& pp, const std::vector<Vec3d>& nn) {
+                   return type == "auto" ? fitBest(pp, nn, noise) : fitPrimitive(*primitiveFromName(type), pp, nn);
+               };
+               // First guess on the faces joined smoothly to the one under the
+               // point: across a sharp edge lies another face of the part.
+               std::vector<Vec3d> p0, n0;
+               {
+                   std::size_t nearest = 0;
+                   for (std::size_t i = 1; i < p.size(); ++i)
+                       if ((p[i] - at).squaredNorm() < (p[nearest] - at).squaredNorm()) nearest = i;
+                   const EdgeMap em(m);
+                   std::vector<char> seen(p.size(), 0);
+                   std::vector<std::size_t> queue{nearest};
+                   seen[nearest] = 1;
+                   for (std::size_t q = 0; q < queue.size(); ++q) {
+                       const std::size_t i = queue[q];
+                       for (std::size_t k = 0; k < 3; ++k) {
+                           const auto e = em.edgeOf(faceOf[i], k);
+                           if (e == EdgeMap::kNone) continue;
+                           for (auto g : em.faces(em.edge(e))) {
+                               const auto j = slot[g];
+                               if (j < 0 || seen[static_cast<std::size_t>(j)] || n[i].dot(n[static_cast<std::size_t>(j)]) < std::cos(30.0 * kPi / 180)) continue;
+                               seen[static_cast<std::size_t>(j)] = 1;
+                               queue.push_back(static_cast<std::size_t>(j));
+                           }
+                       }
+                   }
+                   for (auto i : queue) { p0.push_back(p[i]); n0.push_back(n[i]); }
+               }
+               std::optional<Primitive> s = p0.size() >= 12 ? fitAll(p0, n0) : fitAll(p, n);
                if (!s) throw CommandError("failed", ctx.say("No " + type + " fits the faces there.", "Ninguna forma (" + type + ") encaja con las caras de ahí."));
+               // Keep only the faces that belong to the shape: on it and facing
+               // its way. A ball around a hole also takes the rounded mouths and
+               // a ring of the face around it, which pull the diameter.
+               double kept = std::accumulate(area.begin(), area.end(), 0.0);
+               std::size_t keptFaces = p.size();
+               for (int round = 0; round < 4; ++round) {
+                   const double tol = std::max({2.5 * s->rms, 2.0 * noise, 0.005});
+                   std::vector<Vec3d> p2, n2;
+                   double a2 = 0;
+                   for (std::size_t i = 0; i < p.size(); ++i) {
+                       if (std::abs(s->distance(p[i])) > tol || std::abs(s->normal(p[i]).dot(n[i])) < std::cos(20.0 * kPi / 180)) continue;
+                       p2.push_back(p[i]);
+                       n2.push_back(n[i]);
+                       a2 += area[i];
+                   }
+                   if (p2.size() < 12) break;
+                   auto s2 = type == "auto" ? fitPrimitive(s->type, p2, n2) : fitAll(p2, n2);
+                   if (!s2) break;
+                   const bool settled = p2.size() == keptFaces;
+                   s = s2;
+                   kept = a2;
+                   keptFaces = p2.size();
+                   if (settled) break;
+               }
                auto fs = std::make_shared<Features>(b.features ? *b.features : Features{});
                Feature f;
                f.id = fs->nextId++;
                f.shape = *s;
-               f.faces = p.size();
+               f.faces = keptFaces;
+               f.area = kept;
                f.name = in.contains("name") ? in["name"].get<std::string>() : nextName(ctx, *fs, s->type);
                fs->list.push_back(f);
                ctx.doc.setFeatures(b.id, fs);
