@@ -25,6 +25,8 @@ add_library(orv_core STATIC
   core/mesh/MeshQuad.cpp
   core/mesh/ThreeMf.cpp
   core/points/PointCloud.cpp
+  core/fit/Primitive.cpp
+  core/fit/Segmentation.cpp
   core/points/E57.cpp
   core/util/Xml.cpp
   core/util/Config.cpp
