@@ -5,6 +5,8 @@
 #include "core/mesh/MeshIO.h"
 #include "core/mesh/MeshRepair.h"
 #include "core/solid/BSpline.h"
+#include "core/solid/SketchFit.h"
+#include "core/mesh/Distance.h"
 #include "doc/Project.h"
 #include "mcp/LocalBackend.h"
 #include "mcp/McpServer.h"
@@ -624,4 +626,124 @@ TEST(Commands, SketchFromSectionWithSplines) {
     for (const auto& sg : s["loops"][0]["segments"]) splines += sg["type"] == "spline";
     EXPECT_GE(splines, 1);
     EXPECT_LT(s["loops"][0]["maxDeviation"].get<double>(), 0.05);
+}
+
+// ---- 0.7.1: what the air-box test of 0.6.0 found ----------------------------
+
+TEST(Commands, NumbersWrittenAsTextAndMinusAParameter) {
+    Fixture f;
+    f.run("part.new", {{"name", "Plate"}});
+    f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({json::array({{{"type", "circle"}, {"centre", {0.0, 0.0}}, {"radius", 10.0}}})})}});
+    // "-4.5" is a number, not a parameter's name (some clients send text).
+    const json e = f.run("part.extrude", {{"body", "b1"}, {"sketch", "s1"}, {"start", "-4.5"}, {"end", "1,5"}, {"mode", "new"}});
+    EXPECT_NEAR(e["solid"]["volume"].get<double>(), 3.14159265358979323846 * 100 * 6, 1.0);
+    // "-depth": minus the parameter.
+    f.run("part.parameter", {{"body", "b1"}, {"name", "depth"}, {"value", 2.0}});
+    const json g = f.run("part.edit", {{"body", "b1"}, {"operation", "o2"}, {"start", "-depth"}});
+    EXPECT_EQ(g["operations"][0]["start"], "-depth");
+    EXPECT_NEAR(g["solid"]["volume"].get<double>(), 3.14159265358979323846 * 100 * 3.5, 1.0);
+}
+
+TEST(Commands, HollowLoftAndPickingLoopsOfASection) {
+    const auto dir = tempDir("hollowloft");
+    Fixture f;
+    const double pi = 3.14159265358979323846;
+    // A tube Ø20/Ø16, 10 high, as the "scan".
+    f.run("part.new", {{"name", "Tube"}});
+    f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({json::array({{{"type", "circle"}, {"centre", {0.0, 0.0}}, {"radius", 10.0}}}),
+                                                                 json::array({{{"type", "circle"}, {"centre", {0.0, 0.0}}, {"radius", 8.0}}})})}});
+    f.run("part.extrude", {{"body", "b1"}, {"sketch", "s1"}, {"end", 10.0}, {"mode", "new"}});
+    f.run("mesh.export", {{"body", "b1"}, {"path", (dir / "tube.stl").string()}, {"overwrite", true}});
+    f.run("mesh.import", {{"path", (dir / "tube.stl").string()}});
+    f.run("part.new", {{"name", "Wall"}});
+    auto section = [&](double z, const std::string& keep) {
+        return f.run("part.sketch_from_section", {{"body", "b3"}, {"scan", "b2"}, {"origin", {0.0, 0.0, z}}, {"normal", {0.0, 0.0, 1.0}},
+                                                  {"xDir", {1.0, 0.0, 0.0}}, {"tolerance", 0.05}, {"keep", keep}});
+    };
+    const json outer = section(2, "outer");
+    ASSERT_EQ(outer["loops"].size(), 1u);
+    EXPECT_EQ(outer["loops"][0]["index"], 0);
+    EXPECT_NEAR(outer["loops"][0]["segments"][0]["diameter"].get<double>(), 20.0, 0.1);
+    const json inner = section(2, "inner");
+    ASSERT_EQ(inner["loops"].size(), 1u);
+    EXPECT_NEAR(inner["loops"][0]["segments"][0]["diameter"].get<double>(), 16.0, 0.1);
+    const json only = f.run("part.sketch_from_section", {{"body", "b3"}, {"scan", "b2"}, {"origin", {0.0, 0.0, 3.0}}, {"normal", {0.0, 0.0, 1.0}}, {"keepLoops", {1}}});
+    ASSERT_EQ(only["loops"].size(), 1u);
+    EXPECT_EQ(only["loops"][0]["index"], 1);
+    // Both loops at two heights: a hollow loft, the wall alone.
+    section(1, "all");
+    section(9, "all");
+    const json l = f.run("part.loft", {{"body", "b3"}, {"sections", {"s4", "s5"}}, {"mode", "new"}});
+    const double wall = pi * (100 - 64) * 8;
+    EXPECT_NEAR(l["solid"]["volume"].get<double>(), wall, 0.01 * wall);
+    // The geometry of a sketch comes back in full, to edit.
+    const json lst = f.run("part.list", {{"body", "b3"}, {"sketch", "s4"}});
+    ASSERT_TRUE(lst["sketches"][3].contains("loopsGeometry"));
+    EXPECT_EQ(lst["sketches"][3]["loopsGeometry"].size(), 2u);
+    EXPECT_FALSE(lst["sketches"][0].contains("loopsGeometry"));
+}
+
+TEST(Commands, CutBySurfaceRefusesASurfaceThatDoesNotCoverThePart) {
+    const auto dir = tempDir("shortsurface");
+    Fixture f;
+    TriMesh scan;
+    const int nx = 81, ny = 61;
+    for (int j = 0; j < ny; ++j)
+        for (int i = 0; i < nx; ++i) {
+            const double x = -20 + 0.5 * i, y = -15 + 0.5 * j;
+            scan.vertices.emplace_back(static_cast<float>(x), static_cast<float>(y), static_cast<float>(5 + (x * x + y * y) / 400));
+        }
+    for (int j = 0; j + 1 < ny; ++j)
+        for (int i = 0; i + 1 < nx; ++i) {
+            const auto a = static_cast<std::uint32_t>(i + nx * j), b = a + 1, c = a + static_cast<std::uint32_t>(nx), d = c + 1;
+            scan.faces.push_back({a, b, d});
+            scan.faces.push_back({a, d, c});
+        }
+    writeMesh(scan, dir / "top.stl");
+    f.run("mesh.import", {{"path", (dir / "top.stl").string()}});
+    f.run("part.new", {{"name", "Lid"}});
+    json rect = json::array();
+    rect.push_back(json::array({{{"type", "line"}, {"from", {-20, -15}}, {"to", {20, -15}}}, {{"type", "line"}, {"from", {20, -15}}, {"to", {20, 15}}},
+                                {{"type", "line"}, {"from", {20, 15}}, {"to", {-20, 15}}}, {{"type", "line"}, {"from", {-20, 15}}, {"to", {-20, -15}}}}));
+    f.run("part.sketch", {{"body", "b2"}, {"loops", rect}});
+    f.run("part.extrude", {{"body", "b2"}, {"sketch", "s1"}, {"end", 12.0}, {"mode", "new"}});
+    // A surface fitted to a small patch only: it cannot cut the whole top.
+    f.run("part.surface_from_scan", {{"body", "b2"}, {"scan", "b1"}, {"centre", {0.0, 0.0, 5.0}}, {"radius", 6.0}, {"margin", 1.0}});
+    const double before = f.run("part.list", {{"body", "b2"}})["solid"]["volume"].get<double>();
+    try {
+        f.run("part.cut_by_surface", {{"body", "b2"}, {"surface", "sf3"}, {"keep", "below"}});
+        FAIL() << "a short surface must be refused";
+    } catch (const CommandError& e) {
+        EXPECT_NE(std::string(e.what()).find("cover"), std::string::npos) << e.what();
+    }
+    EXPECT_NEAR(f.run("part.list", {{"body", "b2"}})["solid"]["volume"].get<double>(), before, 1e-6);
+}
+
+TEST(Distance, SignAtAnEdgeOrACornerIsRight) {
+    // A 10 mm cube: points just outside its edges and corners are outside.
+    TriMesh cube;
+    cube.vertices = {{0, 0, 0}, {10, 0, 0}, {10, 10, 0}, {0, 10, 0}, {0, 0, 10}, {10, 0, 10}, {10, 10, 10}, {0, 10, 10}};
+    cube.faces = {{0, 2, 1}, {0, 3, 2}, {4, 5, 6}, {4, 6, 7}, {0, 1, 5}, {0, 5, 4}, {1, 2, 6}, {1, 6, 5}, {2, 3, 7}, {2, 7, 6}, {3, 0, 4}, {3, 4, 7}};
+    const MeshDistance md(cube);
+    for (const Vec3d& p : {Vec3d(12, 12, 5), Vec3d(11, 5, 11), Vec3d(5, -3, 13), Vec3d(13, 13, 13), Vec3d(-15, -15, -15), Vec3d(25, 5, 25)})
+        EXPECT_GT(md.signedDistance(p), 0) << p.transpose();
+    for (const Vec3d& p : {Vec3d(9.5, 9.5, 5), Vec3d(5, 5, 9.9), Vec3d(9.9, 9.9, 9.9)})
+        EXPECT_LT(md.signedDistance(p), 0) << p.transpose();
+}
+
+TEST(SketchFit, LongOrganicSplinesMeetTheTolerance) {
+    // A wavy outline that needs far more than 40 poles in one run.
+    std::vector<Vec2d> pts;
+    const int n = 3000;
+    for (int i = 0; i < n; ++i) {
+        const double t = 2 * 3.14159265358979323846 * i / n;
+        const double r = 40 + 1.5 * std::sin(17 * t) + 0.8 * std::sin(29 * t + 0.3);
+        pts.emplace_back(r * std::cos(t), 0.6 * r * std::sin(t));
+    }
+    SketchFitOptions o;
+    o.tolerance = 0.1;
+    o.splines = true;
+    const LoopFit f = fitLoop(pts, o);
+    EXPECT_LE(f.maxDeviation, 0.12);
+    EXPECT_TRUE(f.loop.segments.size() >= 1);
 }

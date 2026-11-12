@@ -934,7 +934,9 @@ Pick Viewport::pickAt(const QPoint& pos) const {
         return QPointF((c.x() / c.w() * 0.5 + 0.5) * sx, (0.5 - c.y() / c.w() * 0.5) * sy);
     };
     const QPointF click(pos);
-    double bestPx = 6.0;
+    // Over a face, an edge wins only right on it (3 px); in the empty space
+    // beside a part, a little farther (6 px).
+    double bestPx = best.hit() ? 3.0 : 6.0;
     for (const auto& body : bodies_) {
         if (!body.visible || !body.view) continue;
         for (std::size_t e = 0; e < body.view->edges.size(); ++e) {
@@ -952,7 +954,7 @@ Pick Viewport::pickAt(const QPoint& pos) const {
                 const Vec3d w = (pts[k].cast<double>() * (1 - t) + pts[k + 1].cast<double>() * t);
                 const double along = (w - o).dot(d);
                 if (best.hit() && best.body != body.id && along > bestT + 1e-3 * sceneRadius_) continue;  // behind another body
-                if (best.hit() && along > bestT + 0.02 * sceneRadius_) continue;  // behind a face of this one
+                if (best.hit() && along > bestT + 0.005 * sceneRadius_) continue;  // behind a face of this one
                 bestPx = px;
                 best.solidEdge = static_cast<int>(e);
                 if (!best.hit() || best.body != body.id) {

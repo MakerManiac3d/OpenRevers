@@ -22,6 +22,7 @@ namespace orv {
 struct Value {
     double number{0.0};
     std::string parameter;  // empty: use number
+    bool negate{false};     // "-name": minus the parameter
 };
 
 struct Sketch {

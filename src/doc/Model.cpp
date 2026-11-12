@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "doc/Model.h"
+#include <algorithm>
+#include <cstdlib>
+#include <cctype>
 
 #include <cmath>
 #include <map>
@@ -31,7 +34,7 @@ double Model::value(const Value& v) const {
     if (v.parameter.empty()) return v.number;
     const auto it = parameters.find(v.parameter);
     if (it == parameters.end()) throw SolidError("no parameter called \"" + v.parameter + "\"");
-    return it->second;
+    return v.negate ? -it->second : it->second;
 }
 
 BuildResult rebuild(const Model& m) {
@@ -158,13 +161,36 @@ Vec3d v3(const json& j, const char* what) {
 }
 }  // namespace
 
-json valueToJson(const Value& v) { return v.parameter.empty() ? json(v.number) : json(v.parameter); }
+json valueToJson(const Value& v) { return v.parameter.empty() ? json(v.number) : json((v.negate ? "-" : "") + v.parameter); }
 
 Value valueFromJson(const json& j) {
     Value v;
-    if (j.is_number()) v.number = j.get<double>();
-    else if (j.is_string()) v.parameter = j.get<std::string>();
-    else throw std::invalid_argument("a value must be a number or the name of a parameter");
+    if (j.is_number()) {
+        v.number = j.get<double>();
+        return v;
+    }
+    if (!j.is_string()) throw std::invalid_argument("a value must be a number or the name of a parameter");
+    // A number written as text ("-4.5", "-4,5") is a number, not a name: some
+    // clients send every value as a string.
+    std::string t = j.get<std::string>();
+    while (!t.empty() && std::isspace(static_cast<unsigned char>(t.front()))) t.erase(t.begin());
+    while (!t.empty() && std::isspace(static_cast<unsigned char>(t.back()))) t.pop_back();
+    if (t.empty()) throw std::invalid_argument("a value cannot be empty");
+    std::string dot = t;
+    std::replace(dot.begin(), dot.end(), ',', '.');
+    char* end = nullptr;
+    const double d = std::strtod(dot.c_str(), &end);
+    if (end && *end == '\0' && std::isfinite(d)) {
+        v.number = d;
+        return v;
+    }
+    if (t.front() == '-' || t.front() == '+') {  // "-pared": minus the parameter
+        v.negate = t.front() == '-';
+        t.erase(t.begin());
+        while (!t.empty() && std::isspace(static_cast<unsigned char>(t.front()))) t.erase(t.begin());
+        if (t.empty()) throw std::invalid_argument("a value must be a number or the name of a parameter");
+    }
+    v.parameter = t;
     return v;
 }
 

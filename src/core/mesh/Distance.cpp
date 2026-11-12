@@ -89,22 +89,32 @@ MeshDistance::~MeshDistance() = default;
 
 double MeshDistance::signedDistance(const Vec3d& p) const {
     if (d_->tri.empty()) return 0;
-    constexpr std::size_t K = 16;
+    constexpr std::size_t K = 32;
     std::array<std::uint32_t, K> idx{};
     std::array<float, K> d2{};
     const Vec3f q = p.cast<float>();
     const std::size_t n = d_->tree->knnSearch(q.data(), K, idx.data(), d2.data());
-    double best = 1e300, sign = 1;
+    std::array<double, K> dist{};
+    std::array<Vec3d, K> closest{};
+    double best = 1e300;
     for (std::size_t i = 0; i < n; ++i) {
         const auto& t = d_->tri[idx[i]];
-        const Vec3d c = closestOnTriangle(p, t[0], t[1], t[2]);
-        const double d = (p - c).norm();
-        if (d < best) {
-            best = d;
-            sign = (p - c).dot(d_->normal[idx[i]]) >= 0 ? 1.0 : -1.0;
-        }
+        closest[i] = closestOnTriangle(p, t[0], t[1], t[2]);
+        dist[i] = (p - closest[i]).norm();
+        best = std::min(best, dist[i]);
     }
-    return sign * best;
+    // When the nearest place is an edge or a corner, several faces are as
+    // near: their normals together (a pseudo-normal) tell inside from
+    // outside; one of them alone can say the opposite.
+    const double tie = 1e-6 * std::max(1.0, best);
+    Vec3d sum = Vec3d::Zero(), at = Vec3d::Zero();
+    for (std::size_t i = 0; i < n; ++i) {
+        if (dist[i] > best + tie) continue;
+        sum += d_->normal[idx[i]];
+        at = closest[i];
+    }
+    const double side = (p - at).dot(sum);
+    return (side >= 0 ? 1.0 : -1.0) * best;
 }
 
 DeviationStats deviation(const std::vector<Vec3f>& points, const TriMesh& mesh, double tol, std::size_t maxPoints, std::vector<double>* out) {

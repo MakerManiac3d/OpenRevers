@@ -69,6 +69,7 @@
 #include <gp_Vec.hxx>
 
 #include <algorithm>
+#include <cstdio>
 #include <cmath>
 #include <numeric>
 #include <sstream>
@@ -310,21 +311,66 @@ TopoDS_Face surfaceFace(const HeightSurface& hs) {
 
 Solid Solid::loft(const std::vector<Profile>& sections, bool ruled) {
     if (sections.size() < 2) throw SolidError("a loft needs two sections at least");
+    const std::size_t k = sections.front().loops.size();
     for (const auto& p : sections) {
         if (const auto why = p.problem(); !why.empty()) throw SolidError(why);
-        if (p.loops.size() != 1) throw SolidError("each section of a loft must be one closed loop");
+        if (p.loops.empty()) throw SolidError("a section of a loft has no loop");
+        if (p.loops.size() != k)
+            throw SolidError("every section of a loft must have the same number of loops (one outline, or an outline and the same holes)");
     }
-    return guarded("loft", [&] {
-        BRepOffsetAPI_ThruSections ts(Standard_True, ruled ? Standard_True : Standard_False);
-        for (const auto& p : sections) {
-            SketchPlane pl = p.plane;
-            pl.normalize();
-            ts.AddWire(wireOf(p.loops.front(), pl));
+    // Each section's loops in order: the largest (the outline) first, then
+    // each hole matched to the nearest one of the section before.
+    auto centre = [](const Loop& l, const SketchPlane& pl) {
+        const auto poly = l.polygon(0.5);
+        Vec2d c = Vec2d::Zero();
+        for (const auto& q : poly) c += q;
+        if (!poly.empty()) c /= static_cast<double>(poly.size());
+        return pl.toWorld(c);
+    };
+    std::vector<std::vector<const Loop*>> order(sections.size());
+    for (std::size_t s = 0; s < sections.size(); ++s) {
+        SketchPlane pl = sections[s].plane;
+        pl.normalize();
+        std::vector<const Loop*> ls;
+        for (const auto& l : sections[s].loops) ls.push_back(&l);
+        std::sort(ls.begin(), ls.end(), [](const Loop* a, const Loop* b) { return std::abs(a->area()) > std::abs(b->area()); });
+        if (s == 0) { order[s] = ls; continue; }
+        SketchPlane prev = sections[s - 1].plane;
+        prev.normalize();
+        std::vector<const Loop*> o{ls.front()};
+        std::vector<bool> used(ls.size(), false);
+        used[0] = true;
+        for (std::size_t i = 1; i < k; ++i) {
+            const Vec3d want = centre(*order[s - 1][i], prev);
+            std::size_t best = 0;
+            double bestD = 1e300;
+            for (std::size_t j = 1; j < ls.size(); ++j) {
+                if (used[j]) continue;
+                const double d = (centre(*ls[j], pl) - want).norm();
+                if (d < bestD) { bestD = d; best = j; }
+            }
+            used[best] = true;
+            o.push_back(ls[best]);
         }
-        ts.Build();
-        if (!ts.IsDone()) throw SolidError("the loft failed (do the sections face the same way, with their starts lined up?)");
-        return make(ts.Shape());
-    });
+        order[s] = o;
+    }
+    auto loftOf = [&](std::size_t i) {
+        return guarded("loft", [&] {
+            BRepOffsetAPI_ThruSections ts(Standard_True, ruled ? Standard_True : Standard_False);
+            for (std::size_t s = 0; s < sections.size(); ++s) {
+                SketchPlane pl = sections[s].plane;
+                pl.normalize();
+                ts.AddWire(wireOf(*order[s][i], pl));
+            }
+            ts.Build();
+            if (!ts.IsDone()) throw SolidError("the loft failed (do the sections face the same way, with their starts lined up?)");
+            return make(ts.Shape());
+        });
+    };
+    // The outline's loft, less the holes' lofts: a hollow loft (a wall).
+    Solid out = loftOf(0);
+    for (std::size_t i = 1; i < k; ++i) out = out.cut(loftOf(i));
+    return out;
 }
 
 Solid Solid::thicken(const HeightSurface& hs, double thickness) {
@@ -356,6 +402,24 @@ Solid Solid::thicken(const HeightSurface& hs, double thickness) {
 
 Solid Solid::cutBySurface(const HeightSurface& hs, bool keepBelow) const {
     if (empty()) throw SolidError("there is nothing to cut yet");
+    // The surface must cover the whole part seen from its plane: a smaller
+    // one cuts only inside its own outline and leaves stray pieces.
+    {
+        const auto b = bounds();
+        const auto t = tessellate(std::max(0.05, (b.max() - b.min()).norm() / 300.0), 30.0);
+        double short_ = 0;
+        for (const auto& p : t.mesh.vertices) {
+            const Vec3d d = p.cast<double>() - hs.origin;
+            const double x = d.dot(hs.xDir), y = d.dot(hs.yDir);
+            short_ = std::max({short_, hs.x0 - x, x - (hs.x0 + hs.width), hs.y0 - y, y - (hs.y0 + hs.height)});
+        }
+        if (short_ > 1e-3) {
+            char buf[64];
+            std::snprintf(buf, sizeof buf, "%.2f", short_);
+            throw SolidError(std::string("the surface does not cover the part: it falls ") + buf +
+                             " mm short of its edge seen from the surface's plane (fit it with a larger margin, or over a larger zone)");
+        }
+    }
     return guarded("cut by surface", [&] {
         // The surface swept far to the side to remove: a solid to cut away.
         const auto b = bounds();

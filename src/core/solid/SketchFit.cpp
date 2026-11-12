@@ -6,6 +6,7 @@
 #include <Eigen/Dense>
 
 #include <algorithm>
+#include <functional>
 #include <cmath>
 #include <optional>
 
@@ -338,7 +339,26 @@ LoopFit fitLoop(const std::vector<Vec2d>& raw, const SketchFitOptions& o) {
         if (pc.spline) {
             std::vector<Vec2d> pts;
             for (std::size_t t = pc.from + 1; t < (pc.to < pc.from ? pc.to + n : pc.to); ++t) pts.push_back(q[t % n]);
-            l.segments.push_back(Segment::spline(fitCurve(pts, a, b, o.tolerance).poles));
+            // As many poles as the run needs (up to 200); a run that still
+            // misses the tolerance is split at its middle point, each half
+            // fitted again (a slight corner at the split, within tolerance).
+            const std::function<void(const std::vector<Vec2d>&, Vec2d, Vec2d, int)> addSpline =
+                [&](const std::vector<Vec2d>& ps, Vec2d from, Vec2d to, int depth) {
+                    const int maxPoles = std::clamp(static_cast<int>(ps.size() / 2), 40, 200);
+                    const CurveFit f = fitCurve(ps, from, to, o.tolerance, maxPoles);
+                    if (f.maxDeviation <= o.tolerance || ps.size() < 16 || depth >= 5) {
+                        l.segments.push_back(Segment::spline(f.poles));
+                        pieceOf.push_back(k);
+                        return;
+                    }
+                    const std::size_t mid = ps.size() / 2;
+                    const std::vector<Vec2d> left(ps.begin(), ps.begin() + static_cast<std::ptrdiff_t>(mid));
+                    const std::vector<Vec2d> right(ps.begin() + static_cast<std::ptrdiff_t>(mid) + 1, ps.end());
+                    addSpline(left, from, ps[mid], depth + 1);
+                    addSpline(right, ps[mid], to, depth + 1);
+                };
+            pieceOf.pop_back();  // added below, once per spline
+            addSpline(pts, a, b, 0);
             continue;
         }
         if (!pc.arc) {

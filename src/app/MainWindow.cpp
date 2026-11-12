@@ -703,7 +703,7 @@ json valueFromText(const QString& text, bool* ok) {
     *ok = good || (!t.isEmpty() && t.front().isLetter());
     return good ? json(v) : json(t.toStdString());
 }
-QString valueText(const Value& v) { return v.parameter.empty() ? QLocale().toString(v.number, 'g', 8) : QString::fromStdString(v.parameter); }
+QString valueText(const Value& v) { return v.parameter.empty() ? QLocale().toString(v.number, 'g', 8) : QString::fromStdString((v.negate ? "-" : "") + v.parameter); }
 }  // namespace
 
 void MainWindow::showPartProperties(const Body& b) {

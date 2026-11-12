@@ -203,6 +203,9 @@ void registerPartCommands(CommandRegistry& R) {
                    {"minSegment", number({"Shortest segment", "Segmento más corto"}, 0.3, 0.0, 100.0, "mm")},
                    {"minLoop", number({"Ignore closed outlines shorter than", "Ignorar contornos cerrados más cortos que"}, 1.0, 0.0, 10000.0, "mm")},
                    {"splines", boolean({"Free-form runs (an organic outline the fit breaks into many smooth arcs) as splines", "Tramos libres (un contorno orgánico que el ajuste rompe en muchos arcos suaves) como splines"}, false)},
+                   {"keep", choice({"Which loops to keep: all, the outer one (largest), or the inner ones", "Qué lazos conservar: todos, el exterior (el mayor) o los interiores"}, {"all", "outer", "inner"}, "all")},
+                   {"keepLoops", json{{"type", "array"}, {"items", {{"type", "integer"}, {"minimum", 0}}},
+                                      {"description", "Only these loops, by their index in a previous answer (largest first); overrides keep"}}},
                    {"name", string({"Name", "Nombre"})}},
                   {"body", "scan", "origin", "normal"}),
            true, false,
@@ -221,14 +224,33 @@ void registerPartCommands(CommandRegistry& R) {
                fo.tolerance = in["tolerance"].get<double>();
                fo.minSegment = in["minSegment"].get<double>();
                fo.splines = in["splines"].get<bool>();
-               const auto polys = sectionMesh(*scan.mesh, prof.plane.origin, prof.plane.normal, prof.plane.xDir);
+               auto polys = sectionMesh(*scan.mesh, prof.plane.origin, prof.plane.normal, prof.plane.xDir);
+               // Largest outline first, so indices mean the same from one call to the next.
+               auto polyArea = [](const std::vector<Vec2d>& p) {
+                   double a = 0;
+                   for (std::size_t i = 0; i < p.size(); ++i) {
+                       const Vec2d& u = p[i];
+                       const Vec2d& v = p[(i + 1) % p.size()];
+                       a += u.x() * v.y() - v.x() * u.y();
+                   }
+                   return std::abs(0.5 * a);
+               };
+               std::stable_sort(polys.begin(), polys.end(), [&](const auto& x, const auto& y) {
+                   if (x.closed != y.closed) return x.closed;
+                   return polyArea(x.points) > polyArea(y.points);
+               });
+               const std::string keep = in["keep"];
+               std::vector<std::size_t> only;
+               if (in.contains("keepLoops")) for (const auto& v : in["keepLoops"]) only.push_back(v.get<std::size_t>());
                json loops = json::array();
-               std::size_t open = 0;
+               std::size_t open = 0, index = 0;
                for (const auto& pl : polys) {
                    if (!pl.closed) { ++open; continue; }
                    double len = 0;
                    for (std::size_t i = 0; i < pl.points.size(); ++i) len += (pl.points[(i + 1) % pl.points.size()] - pl.points[i]).norm();
                    if (len < in["minLoop"].get<double>()) continue;
+                   const std::size_t my = index++;
+                   if (!only.empty() ? std::find(only.begin(), only.end(), my) == only.end() : (keep == "outer" && my != 0) || (keep == "inner" && my == 0)) continue;
                    const LoopFit f = fitLoop(pl.points, fo);
                    if (f.loop.segments.empty()) continue;
                    json segs = json::array();
@@ -249,7 +271,7 @@ void registerPartCommands(CommandRegistry& R) {
                        }
                        segs.push_back(js);
                    }
-                   loops.push_back({{"segments", segs}, {"maxDeviation", r4(f.maxDeviation)}, {"area", r4(std::abs(f.loop.area()))}});
+                   loops.push_back({{"index", my}, {"segments", segs}, {"maxDeviation", r4(f.maxDeviation)}, {"area", r4(std::abs(f.loop.area()))}});
                    prof.loops.push_back(f.loop);
                }
                if (prof.loops.empty())
@@ -502,8 +524,8 @@ void registerPartCommands(CommandRegistry& R) {
            }});
 
     R.add({"part.loft", "part", {"Loft through sections", "Loft por secciones"},
-           {"A solid through two or more sketches, in order (each one closed loop: a blade's sections at several radii, a duct's ends), smooth through them or flat between (ruled), combined with the part. Sections whose starts are far apart twist the loft: start each loop at the matching place (the leading edge, say).",
-            "Un sólido que pasa por dos o más bocetos, en orden (cada uno, un lazo cerrado: las secciones de un álabe a varios radios, los extremos de un conducto), suave a través de ellos o plano entre ellos (ruled), combinado con la pieza. Si los inicios de las secciones quedan lejos, el loft se retuerce: empieza cada lazo en el mismo sitio (el borde de ataque, por ejemplo)."},
+           {"A solid through two or more sketches, in order (a blade's sections at several radii, a duct's ends), smooth through them or flat between (ruled), combined with the part. Each section is one closed loop, or an outline and the same holes in every section (a hollow loft: a wall; part.sketch_from_section gives both with keep all).  Sections whose starts are far apart twist the loft: start each loop at the matching place (the leading edge, say).",
+            "Un sólido que pasa por dos o más bocetos, en orden (las secciones de un álabe a varios radios, los extremos de un conducto), suave a través de ellos o plano entre ellos (ruled), combinado con la pieza. Cada sección es un lazo cerrado, o un contorno con los mismos huecos en todas (un loft hueco: una pared; part.sketch_from_section da los dos con keep all).  Si los inicios de las secciones quedan lejos, el loft se retuerce: empieza cada lazo en el mismo sitio (el borde de ataque, por ejemplo)."},
            object({{"body", body(kPart)}, {"sections", listSchema({"The sketches, in order: [\"s1\", \"s2\", ...]", "Los bocetos, en orden: [\"s1\", \"s2\", ...]"})},
                    {"ruled", boolean({"Flat between sections", "Plano entre secciones"}, false)},
                    {"mode", choice(kMode, {"new", "join", "cut", "intersect"}, "join")}, {"name", string({"Name", "Nombre"})}},
@@ -714,10 +736,25 @@ void registerPartCommands(CommandRegistry& R) {
            }});
 
     R.add({"part.list", "part", {"Part history", "Historial de la pieza"},
-           {"A part's parameters, sketches and operations in order, and its solid's volume, area, faces and size.",
-            "Los parámetros, bocetos y operaciones de una pieza, en orden, y el volumen, área, caras y tamaño de su sólido."},
-           object({{"body", body(kPart)}}, {"body"}), false, false,
-           [](CommandContext& ctx, const json& in) { return partJson(partBody(ctx, in["body"])); }});
+           {"A part's parameters, sketches and operations in order, and its solid's volume, area, faces and size. With sketch (a ref or name, or \"all\"), that sketch's full geometry too: its loops with every segment (lines, arcs, circles, and splines with their poles), in the form part.sketch and part.edit_sketch take, to edit and send back.",
+            "Los parámetros, bocetos y operaciones de una pieza, en orden, y el volumen, área, caras y tamaño de su sólido. Con sketch (una referencia o nombre, o \"all\"), también la geometría completa de ese boceto: sus lazos con cada segmento (rectas, arcos, círculos y splines con sus polos), en la forma que aceptan part.sketch y part.edit_sketch, para editarla y devolverla."},
+           object({{"body", body(kPart)}, {"sketch", string({"Sketch whose geometry to give (ref, name or all)", "Boceto cuya geometría dar (referencia, nombre o all)"})}}, {"body"}), false, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               json out = partJson(b);
+               if (in.contains("sketch")) {
+                   const std::string want = in["sketch"];
+                   bool found = false;
+                   for (std::size_t i = 0; i < b.model->sketches.size(); ++i) {
+                       const auto& s = b.model->sketches[i];
+                       if (want != "all" && s.ref() != want && s.name != want) continue;
+                       found = true;
+                       out["sketches"][i]["loopsGeometry"] = profileToJson(s.profile)["loops"];
+                   }
+                   if (!found) throw CommandError("not_found", ctx.say("No sketch " + want + " in " + b.name + ".", "No hay ningún boceto " + want + " en " + b.name + "."));
+               }
+               return out;
+           }});
 
     R.add({"part.export_step", "file", {"Export STEP", "Exportar STEP"},
            {"Write a part's solid as STEP (AP214, millimetres), for Fusion, FreeCAD, SolidWorks... Refuses to overwrite unless overwrite is true.",
@@ -771,7 +808,8 @@ void registerPartCommands(CommandRegistry& R) {
             "y dónde se agrupan los puntos fuera de ella (zonas: centro, tamaño, parte del escaneo, distancia media), de mayor a menor. Con colorMap, el escaneo se colorea por su distancia en la vista. Los dos deben estar en el mismo sitio (alinea antes el escaneo)."},
            object({{"body", body(kPart)}, {"scan", body({"The scan (a mesh body)", "El escaneo (un cuerpo de malla)"})},
                    {"tolerance", number({"Tolerance", "Tolerancia"}, 0.2, 0.0001, 100.0, "mm")},
-                   {"colorMap", boolean({"Colour the scan by its distance in the view", "Colorear el escaneo por su distancia en la vista"}, true)}},
+                   {"colorMap", boolean({"Colour the scan by its distance in the view", "Colorear el escaneo por su distancia en la vista"}, true)},
+                   {"range", number({"Colour scale: full red or blue at ±range (0: five times the tolerance, so the ±tolerance band shows)", "Escala de color: rojo o azul pleno a ±range (0: cinco veces la tolerancia, para que se vea la banda de ±tolerancia)"}, 0, 0, 1000, "mm")}},
                   {"body", "scan"}),
            false, false,
            [](CommandContext& ctx, const json& in) {
@@ -831,7 +869,8 @@ void registerPartCommands(CommandRegistry& R) {
                    map->part = b.ref();
                    map->mesh = s.mesh.get();
                    map->tolerance = static_cast<float>(tol);
-                   map->range = static_cast<float>(std::max(3 * tol, d.p95));
+                   const double range = in["range"].get<double>();
+                   map->range = static_cast<float>(range > tol ? range : 5 * tol);
                    map->distance.assign(dist.begin(), dist.end());
                    ctx.doc.setDeviation(s.id, map);
                }

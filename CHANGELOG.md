@@ -1,5 +1,33 @@
 # Cambios · Changelog
 
+## 0.7.1 — 12 de noviembre de 2026
+
+Correcciones de la prueba de la 0.6.0 con la caja de aire de un kart:
+
+- **Splines de una sección dentro de la tolerancia:** antes se quedaban en 40
+  polos aunque no llegaran (0,46–0,93 mm pedida a 0,1). Ahora usan hasta 200,
+  según la longitud del tramo, y un tramo que aún no llega se divide en dos.
+- **Loft hueco:** cada sección puede tener un contorno y los mismos huecos;
+  el loft es el del contorno menos el de los huecos (una pared). En
+  *Boceto desde una sección*, `keep` (todos, el exterior o los interiores) y
+  `keepLoops` (por índice) eligen los lazos; cada lazo devuelve su índice,
+  del mayor al menor.
+- **Números como texto:** `"-4.5"` o `"-4,5"` son números, no nombres de
+  parámetro; `"-pared"` es menos el parámetro `pared`.
+- **Cortar por una superficie** comprueba que la superficie cubra toda la
+  pieza vista desde su plano, y si no se niega diciendo cuánto le falta (antes
+  cortaba dentro de su huella y dejaba restos sin avisar).
+- **Signo de la comparación junto a aristas y vértices:** se usa la normal
+  conjunta de las caras igual de cercanas, no la de una sola (daba «sobra
+  material» de −15 mm dentro de un hueco).
+- **Escala del mapa de desviación:** por defecto, cinco veces la tolerancia,
+  para que se vea la banda de ±tolerancia; `range` la fija.
+- **Elegir en la vista:** sobre una cara, una arista solo gana si el clic
+  cae a 3 píxeles o menos de ella (antes, 6).
+- **`part_list` con `sketch`** devuelve la geometría completa de un boceto
+  (con los polos de las splines), en la forma que aceptan `part_sketch` y
+  `part_edit_sketch`.
+
 ## 0.7.0 — 12 de noviembre de 2026 (fase 6: escaneo directo, primer bloque)
 
 - **Menú Escanear y comandos `scan.*`:** conectar un escáner de CrealityScan
