@@ -1,4 +1,4 @@
-# OpenRevers manual (version 0.5)
+# OpenRevers manual (version 0.6)
 
 OpenRevers prepares scanned meshes for reverse engineering. This version
 covers **phase 1**: open the scan, see what is wrong with it, repair it and
@@ -190,6 +190,34 @@ it without leaving the program.
 6. **File → Export STEP.**
 
 A part's triangles only show it: the mesh tools do not change it.
+
+### Free-form shapes (phase 4)
+
+- **Organic outlines:** in *Sketch from a section*, tick *splines*: the
+  outline's smooth runs (which otherwise come out as many short arcs) become
+  splines within the tolerance. Sharp corners, long lines and clear arcs
+  stay.
+- **Loft through sections** (*Part → Loft through sections*): a solid through
+  several sketches in order. For a blade, draw or take from the scan its
+  section at several radii (each one closed loop starting at the leading
+  edge, the planes facing the same way). *Ruled* makes it flat between
+  sections.
+- **Circular pattern** (*Part → Circular pattern*): copies of what another
+  operation made (a blade, a hole) round an axis. The count and the angle may
+  be parameters.
+- **Surface from the scan** (*Part → Surface from the scan*): a smooth
+  free-form surface fitted to a zone of the scan, a segmented shape or the
+  points round a point. It gives its rms and worst deviation. It shows as a
+  violet grid in the view and, with its figures, in the *Model* panel. Its
+  context menu offers:
+  - **Cut the part by it** (keeping what is below or above): extrude a block
+    past the curved face, and the cut gives it the scan's shape;
+  - **Thicken** into a solid: a shell or a panel.
+- **In the sketch editor,** *To spline* turns a line or an arc into a spline,
+  bent by dragging its poles (the circles joined by a dashed line).
+
+A surface is seen from a plane: one that folds over itself seen from it is
+made by sections and a loft instead.
 
 ### Touching up the part by hand
 

@@ -509,6 +509,12 @@ void Viewport::uploadPart(GpuMesh& g, const Body& b) {
             addPolyline(sk, pts, c);
         }
     }
+    // Free surfaces: a grid of lines over them, violet (the picked one, orange).
+    for (const auto& f : b.model->surfaces) {
+        const bool lit = mine && std::find(partHighlight_.sketches.begin(), partHighlight_.sketches.end(), f.id) != partHighlight_.sketches.end();
+        const QVector3D c = lit ? QVector3D(1.0f, 0.55f, 0.10f) : QVector3D(0.62f, 0.35f, 0.85f);
+        for (const auto& line : f.surface.isoLines(9, 40)) addPolyline(sk, line, c);
+    }
     g.sketchVertexCount = lines(g.sketchVao, g.sketchVbo, sk);
     std::vector<float> le;
     std::vector<std::uint32_t> lit;

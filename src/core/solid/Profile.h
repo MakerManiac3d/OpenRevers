@@ -33,15 +33,19 @@ struct SketchPlane {
 
 /// One piece of a loop. A line goes from a to b. An arc goes from a to b
 /// round `centre`, counterclockwise (seen from the normal) when ccw. A circle
-/// is a whole loop by itself: centre and radius; a and b are not used.
+/// is a whole loop by itself: centre and radius; a and b are not used. A
+/// spline is a clamped cubic B-spline (BSpline.h) through its first pole (a)
+/// and its last (b), shaped by the poles between.
 struct Segment {
-    enum class Kind { Line, Arc, Circle };
+    enum class Kind { Line, Arc, Circle, Spline };
     Kind kind{Kind::Line};
     Vec2d a{Vec2d::Zero()}, b{Vec2d::Zero()}, centre{Vec2d::Zero()};
     double radius{0.0};
     bool ccw{true};
+    std::vector<Vec2d> poles;  // spline: from a to b
 
     static Segment line(Vec2d from, Vec2d to);
+    static Segment spline(std::vector<Vec2d> poles);
     static Segment arc(Vec2d from, Vec2d to, Vec2d centre, bool ccw);
     static Segment circle(Vec2d centre, double radius);
     double length() const;

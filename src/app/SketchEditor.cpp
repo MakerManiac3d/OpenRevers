@@ -2,6 +2,7 @@
 #include "app/SketchEditor.h"
 
 #include "core/mesh/Distance.h"
+#include "core/solid/BSpline.h"
 
 #include <QAction>
 #include <QActionGroup>
@@ -83,6 +84,16 @@ double distToSegment(const Vec2d& q, const Segment& s) {
         return (q - (s.a + t * ab)).norm();
     }
     if (s.kind == Segment::Kind::Circle) return std::abs((q - s.centre).norm() - s.radius);
+    if (s.kind == Segment::Kind::Spline) {
+        const auto pts = s.sample(std::max(0.01, s.length() / 200));
+        double best = 1e300;
+        for (std::size_t i = 0; i + 1 < pts.size(); ++i) {
+            const Vec2d ab = pts[i + 1] - pts[i];
+            const double t = std::clamp(ab.squaredNorm() > 0 ? (q - pts[i]).dot(ab) / ab.squaredNorm() : 0.0, 0.0, 1.0);
+            best = std::min(best, (q - (pts[i] + t * ab)).norm());
+        }
+        return best;
+    }
     const Vec2d u = s.a - s.centre, w = q - s.centre;
     double d = std::atan2(w.y(), w.x()) - std::atan2(u.y(), u.x());
     const double sw = sweepOf(s);
@@ -164,12 +175,12 @@ SketchPick SketchCanvas::hitTest(const QPointF& at) const {
     const double near = 7.0;  // pixels
     SketchPick best;
     double bestD = near;
-    auto consider = [&](const Vec2d& p, SketchPick::What w, int l, int s, double bonus = 0) {
+    auto consider = [&](const Vec2d& p, SketchPick::What w, int l, int s, double bonus = 0, int index = -1) {
         const QPointF q = toScreen(p);
         const double d = std::hypot(q.x() - at.x(), q.y() - at.y()) - bonus;
         if (d < bestD) {
             bestD = d;
-            best = {w, l, s};
+            best = {w, l, s, index};
         }
     };
     // Handles first (they sit on segments), then the segments themselves.
@@ -184,6 +195,8 @@ SketchPick SketchCanvas::hitTest(const QPointF& at) const {
             }
             consider(x.a, SketchPick::What::Vertex, l, s, 2);
             if (x.kind == Segment::Kind::Arc) consider(arcMiddle(x), SketchPick::What::ArcMiddle, l, s, 1);
+            if (x.kind == Segment::Kind::Spline)
+                for (int k = 1; k + 1 < static_cast<int>(x.poles.size()); ++k) consider(x.poles[static_cast<std::size_t>(k)], SketchPick::What::Pole, l, s, 0, k);
         }
     }
     if (best.what != SketchPick::What::None) return best;
@@ -328,8 +341,29 @@ void SketchCanvas::moveVertex(int l, int s, const Vec2d& to) {
     const std::size_t i = static_cast<std::size_t>(s), prev = (i + sg.size() - 1) % sg.size();
     sg[i].a = to;
     sg[prev].b = to;
+    if (sg[i].kind == Segment::Kind::Spline && !sg[i].poles.empty()) sg[i].poles.front() = to;
+    if (sg[prev].kind == Segment::Kind::Spline && !sg[prev].poles.empty()) sg[prev].poles.back() = to;
     refitArc(sg[i]);
     refitArc(sg[prev]);
+}
+
+void SketchCanvas::movePole(int l, int s, int index, const Vec2d& to) {
+    Segment& x = prof_.loops[static_cast<std::size_t>(l)].segments[static_cast<std::size_t>(s)];
+    if (x.kind != Segment::Kind::Spline || index <= 0 || index + 1 >= static_cast<int>(x.poles.size())) return;
+    x.poles[static_cast<std::size_t>(index)] = to;
+}
+
+void SketchCanvas::toSpline() {
+    if (pick_.what != SketchPick::What::Segment && pick_.what != SketchPick::What::ArcMiddle) return;
+    Segment& s = prof_.loops[static_cast<std::size_t>(pick_.loop)].segments[static_cast<std::size_t>(pick_.seg)];
+    if (s.kind != Segment::Kind::Line && s.kind != Segment::Kind::Arc) return;
+    pushUndo();
+    // Five poles along it: the same shape to start with, free to bend.
+    const auto pts = s.sample(std::max(1e-3, s.length() / 64));
+    s = Segment::spline(fitCurve(std::vector<Vec2d>(pts.begin() + 1, pts.end() - 1), s.a, s.b, 1e-4, 6).poles);
+    pick_.what = SketchPick::What::Segment;
+    edited();
+    emit picked();
 }
 
 void SketchCanvas::lineToArc() {
@@ -349,7 +383,7 @@ void SketchCanvas::lineToArc() {
 void SketchCanvas::arcToLine() {
     if (pick_.what != SketchPick::What::Segment && pick_.what != SketchPick::What::ArcMiddle) return;
     Segment& s = prof_.loops[static_cast<std::size_t>(pick_.loop)].segments[static_cast<std::size_t>(pick_.seg)];
-    if (s.kind != Segment::Kind::Arc) return;
+    if (s.kind != Segment::Kind::Arc && s.kind != Segment::Kind::Spline) return;
     pushUndo();
     s = Segment::line(s.a, s.b);
     pick_.what = SketchPick::What::Segment;
@@ -368,6 +402,14 @@ void SketchCanvas::split() {
         const Vec2d m = 0.5 * (s.a + s.b);
         sg[i] = Segment::line(s.a, m);
         sg.insert(sg.begin() + static_cast<std::ptrdiff_t>(i) + 1, Segment::line(m, s.b));
+    } else if (s.kind == Segment::Kind::Spline) {
+        // Each half refitted to its part of the curve.
+        const auto pts = s.sample(std::max(1e-3, s.length() / 200));
+        const std::size_t h = pts.size() / 2;
+        const std::vector<Vec2d> first(pts.begin() + 1, pts.begin() + static_cast<std::ptrdiff_t>(h)), second(pts.begin() + static_cast<std::ptrdiff_t>(h) + 1, pts.end() - 1);
+        const int n = std::max(4, static_cast<int>(s.poles.size()) / 2 + 2);
+        sg[i] = Segment::spline(fitCurve(first, s.a, pts[h], 1e-4, n).poles);
+        sg.insert(sg.begin() + static_cast<std::ptrdiff_t>(i) + 1, Segment::spline(fitCurve(second, pts[h], s.b, 1e-4, n).poles));
     } else {
         const Vec2d m = arcMiddle(s);
         sg[i] = Segment::arc(s.a, m, s.centre, s.ccw);
@@ -518,6 +560,18 @@ void SketchCanvas::paintEvent(QPaintEvent*) {
                 continue;
             }
             box(x.a, SketchPick::What::Vertex, false);
+            if (x.kind == Segment::Kind::Spline) {
+                p.setPen(QPen(dark ? QColor(130, 110, 170) : QColor(170, 140, 210), 1, Qt::DashLine));
+                p.setBrush(Qt::NoBrush);
+                for (std::size_t k = 0; k + 1 < x.poles.size(); ++k) p.drawLine(toScreen(x.poles[k]), toScreen(x.poles[k + 1]));
+                for (int k = 1; k + 1 < static_cast<int>(x.poles.size()); ++k) {
+                    const QPointF q = toScreen(x.poles[static_cast<std::size_t>(k)]);
+                    const bool lit = pick_.what == SketchPick::What::Pole && pick_.loop == static_cast<int>(l) && pick_.seg == static_cast<int>(s) && pick_.index == k;
+                    p.setPen(QPen(dark ? QColor(200, 180, 240) : QColor(120, 80, 170), 1));
+                    p.setBrush(lit ? QColor(255, 150, 20) : (dark ? QColor(60, 50, 80) : QColor(240, 230, 255)));
+                    p.drawEllipse(q, lit ? 5.0 : 3.5, lit ? 5.0 : 3.5);
+                }
+            }
             if (x.kind == Segment::Kind::Arc) {
                 box(arcMiddle(x), SketchPick::What::ArcMiddle, true);
                 const QPointF c = toScreen(x.centre);
@@ -638,6 +692,7 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* e) {
             case SketchPick::What::ArcMiddle:
                 if (auto a = arcThrough(s.a, at, s.b)) s = *a;
                 break;
+            case SketchPick::What::Pole: movePole(pick_.loop, pick_.seg, pick_.index, at); break;
             case SketchPick::What::Centre: s.centre = at; break;
             case SketchPick::What::Radius: s.radius = std::max(1e-3, (at - s.centre).norm()); break;
             default: break;
@@ -667,7 +722,7 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent*) {
                 same = before.loops[l].segments.size() == prof_.loops[l].segments.size();
                 for (std::size_t s = 0; same && s < prof_.loops[l].segments.size(); ++s) {
                     const auto &x = before.loops[l].segments[s], &y = prof_.loops[l].segments[s];
-                    same = x.a == y.a && x.b == y.b && x.centre == y.centre && x.radius == y.radius && x.ccw == y.ccw && x.kind == y.kind;
+                    same = x.a == y.a && x.b == y.b && x.centre == y.centre && x.radius == y.radius && x.ccw == y.ccw && x.kind == y.kind && x.poles == y.poles;
                 }
             }
             if (same) undo_.pop_back();
@@ -756,7 +811,8 @@ SketchEditor::SketchEditor(const Profile& profile, const QString& name, const st
         const Segment& s = canvas_->profile().loops[static_cast<std::size_t>(p.loop)].segments[static_cast<std::size_t>(p.seg)];
         if (s.kind == Segment::Kind::Line) canvas_->lineToArc();
         else canvas_->arcToLine();
-    })->setToolTip(tr("Turn the picked line into an arc, or the picked arc into a line"));
+    })->setToolTip(tr("Turn the picked line into an arc, or the picked arc or spline into a line"));
+    tb->addAction(tr("To spline"), this, [this]() { canvas_->toSpline(); })->setToolTip(tr("Turn the picked line or arc into a spline, to bend it freely by its poles"));
     tb->addAction(tr("Split"), this, [this]() { canvas_->split(); })->setToolTip(tr("Split the picked segment in two at its middle"));
     tb->addAction(tr("Delete vertex"), this, [this]() { canvas_->deleteVertex(); })->setToolTip(tr("Join the two segments at the picked vertex into one line (Del)"));
     tb->addAction(tr("Delete loop"), this, [this]() { canvas_->deleteLoop(); })->setToolTip(tr("Delete the whole loop the pick is on"));
@@ -901,6 +957,20 @@ void SketchEditor::updatePanel() {
         for (auto* b : {x, y, d}) connect(b, &QDoubleSpinBox::valueChanged, this, apply);
         return;
     }
+    if (p.what == SketchPick::What::Pole) {
+        const Vec2d q = s.poles[static_cast<std::size_t>(p.index)];
+        auto *x = spin(q.x()), *y = spin(q.y());
+        form_->addRow(tr("Pole x"), x);
+        form_->addRow(tr("Pole y"), y);
+        const int l = p.loop, sg = p.seg, k = p.index;
+        auto apply = [this, x, y, l, sg, k]() {
+            canvas_->movePole(l, sg, k, Vec2d(x->value(), y->value()));
+            canvas_->setPick({SketchPick::What::Pole, l, sg, k});
+            emit canvas_->changed();
+        };
+        for (auto* b : {x, y}) connect(b, &QDoubleSpinBox::editingFinished, this, apply);
+        return;
+    }
     if (p.what == SketchPick::What::Vertex) {
         auto *x = spin(s.a.x()), *y = spin(s.a.y());
         form_->addRow(tr("Vertex x"), x);
@@ -917,6 +987,11 @@ void SketchEditor::updatePanel() {
     QLocale loc;
     form_->addRow(tr("From"), new QLabel(loc.toString(s.a.x(), 'f', 4) + "; " + loc.toString(s.a.y(), 'f', 4)));
     form_->addRow(tr("To"), new QLabel(loc.toString(s.b.x(), 'f', 4) + "; " + loc.toString(s.b.y(), 'f', 4)));
+    if (s.kind == Segment::Kind::Spline) {
+        form_->addRow(tr("Spline"), new QLabel(tr("%1 poles, %2 mm long").arg(s.poles.size()).arg(loc.toString(s.length(), 'f', 3))));
+        form_->addRow(new QLabel(tr("Drag its poles (circles) to bend it.")));
+        return;
+    }
     if (s.kind == Segment::Kind::Line) {
         auto* len = spin(s.length(), 0.001);
         form_->addRow(tr("Length"), len);

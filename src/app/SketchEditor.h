@@ -28,10 +28,11 @@ namespace orv {
 
 /// What is picked in the editor.
 struct SketchPick {
-    enum class What { None, Vertex, Segment, ArcMiddle, Centre, Radius };
+    enum class What { None, Vertex, Segment, ArcMiddle, Centre, Radius, Pole };
     What what{What::None};
     int loop{-1}, seg{-1};  // a vertex is the start of segment `seg`
-    bool operator==(const SketchPick& o) const { return what == o.what && loop == o.loop && seg == o.seg; }
+    int index{-1};          // a pole of a spline (not its ends)
+    bool operator==(const SketchPick& o) const { return what == o.what && loop == o.loop && seg == o.seg && index == o.index; }
 };
 
 class SketchCanvas : public QWidget {
@@ -54,6 +55,7 @@ public:
 
     // Edits on the picked element; each is one step of the editor's undo.
     void lineToArc();
+    void toSpline();
     void arcToLine();
     void split();
     void deleteVertex();
@@ -62,6 +64,7 @@ public:
     void setArcRadius(double r);
     void setLineLength(double len);
     void setCircle(const Vec2d& centre, double radius);
+    void movePole(int loop, int seg, int index, const Vec2d& to);
     void undo();
     void redo();
     bool canUndo() const { return !undo_.empty(); }

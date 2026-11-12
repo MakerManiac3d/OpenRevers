@@ -56,7 +56,7 @@ claude mcp add --scope user openrevers -- "C:\Program Files\OpenRevers\bin\openr
 `--lang es` o `--lang en` fija el idioma de las descripciones; por defecto se
 usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 
-## Herramientas (versión 0.5)
+## Herramientas (versión 0.6)
 
 | Herramienta | Qué hace | Cambia el proyecto |
 | --- | --- | --- |
@@ -90,11 +90,15 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `points_to_mesh` | Malla cerrada desde la nube (Poisson apantallado), con recorte opcional de lo inventado | Sí |
 | `mesh_section` | Dónde corta un plano a una malla: polilíneas en coordenadas del plano, simplificadas. El contorno del que sacar un boceto | No |
 | `part_new` | Pieza paramétrica vacía | Sí |
-| `part_sketch_from_section` | Corta el escaneo con un plano y convierte cada contorno cerrado en rectas y arcos dentro de una tolerancia (círculos enteros, esquinas vivas, arcos tangentes); devuelve la medida de cada segmento | Sí |
-| `part_sketch` · `part_edit_sketch` | Boceto: lazos cerrados de rectas, arcos y círculos en un plano (un lazo dentro de otro es un agujero). `part_edit_sketch` cambia los lazos, el plano o el nombre, cada uno por separado | Sí |
+| `part_sketch_from_section` | Corta el escaneo con un plano y convierte cada contorno cerrado en rectas y arcos dentro de una tolerancia (círculos enteros, esquinas vivas, arcos tangentes); con `splines`, los tramos libres de un contorno orgánico salen como splines. Devuelve la medida de cada segmento | Sí |
+| `part_sketch` · `part_edit_sketch` | Boceto: lazos cerrados de rectas, arcos, círculos y splines (`{type: spline, poles: [[x, y], ...]}`, del primer polo al último) en un plano (un lazo dentro de otro es un agujero). `part_edit_sketch` cambia los lazos, el plano o el nombre, cada uno por separado | Sí |
+| `part_loft` | Sólido que pasa por varios bocetos en orden (secciones de un álabe, extremos de un conducto), suave o reglado | Sí |
+| `part_pattern` | Copias de lo que hizo otra operación alrededor de un eje (`count` y `angle` pueden ser parámetros) | Sí |
+| `part_surface_from_scan` | Superficie libre (B-spline bicúbica) ajustada a una zona del escaneo: una forma segmentada (`shape`) o una esfera (`centre`, `radius`); devuelve rms y máximo | Sí |
+| `part_cut_by_surface` · `part_thicken` | Quitar lo que queda por encima o por debajo de una superficie libre; engrosarla hasta un sólido | Sí |
 | `part_extrude` · `part_revolve` · `part_fillet` | Operaciones; se combinan con la pieza (`new`, `join`, `cut`, `intersect`). Los valores pueden ser números o nombres de parámetros | Sí |
 | `part_parameter` | Crea o cambia un parámetro con nombre; la pieza se reconstruye | Sí |
-| `part_edit` · `part_delete` · `part_move` | Cambiar valores, modo o supresión de una operación; borrar operaciones o bocetos; mover una operación en el historial. Un cambio que rompe la pieza no se aplica | Sí |
+| `part_edit` · `part_delete` · `part_move` | Cambiar valores, modo o supresión de una operación (también `count`, `thickness`, `keep`, `ruled`); borrar operaciones, bocetos o superficies; mover una operación en el historial. Un cambio que rompe la pieza no se aplica | Sí |
 | `part_list` | Parámetros, bocetos, operaciones y el sólido (volumen, área, caras, tamaño) | No |
 | `part_compare` | Distancias con signo del escaneo al sólido: mediana, percentiles 90 y 95, parte dentro de ±tolerancia y **zonas** fuera de ella (centro, tamaño, % del escaneo, distancia media y lado). Con `colorMap` colorea el escaneo en la vista (no es un paso de deshacer) | No |
 | `part_export_step` · `part_import_step` | STEP (AP214, mm) | No · Sí |

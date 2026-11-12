@@ -5,6 +5,7 @@
 #pragma once
 
 #include "core/mesh/TriMesh.h"
+#include "core/solid/BSpline.h"
 #include "core/solid/Profile.h"
 
 #include <Eigen/Geometry>
@@ -64,6 +65,16 @@ public:
     /// `axisPoint` along `axisDir`, both in the plane's 2D coordinates), by
     /// `angleDeg` (360: a full turn).
     static Solid revolve(const Profile& profile, const Vec2d& axisPoint, const Vec2d& axisDir, double angleDeg);
+    /// A solid through closed sections, in order (each profile must have one
+    /// loop); ruled: flat between sections, else smooth through them.
+    static Solid loft(const std::vector<Profile>& sections, bool ruled);
+    /// A free-form surface thickened into a solid: offset by `thickness`
+    /// along its normal (negative: the other way).
+    static Solid thicken(const HeightSurface& surface, double thickness);
+    /// The solid with what lies beyond a free-form surface removed: above it
+    /// (along its normal) when keepBelow, else below it. The surface must
+    /// reach past the solid on every side.
+    Solid cutBySurface(const HeightSurface& surface, bool keepBelow) const;
     Solid fused(const Solid& other) const;
     Solid cut(const Solid& other) const;
     Solid common(const Solid& other) const;

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/solid/SketchFit.h"
 
+#include "core/solid/BSpline.h"
+
 #include <Eigen/Dense>
 
 #include <algorithm>
@@ -14,6 +16,7 @@ constexpr double kPi = 3.14159265358979323846;
 
 struct Piece {
     bool arc{false};
+    bool spline{false};
     std::size_t from{0}, to{0};  // indices into the (unrolled) points, inclusive
     Vec2d p0{Vec2d::Zero()}, dir{Vec2d::UnitX()};  // line: a point and its direction
     Vec2d centre{Vec2d::Zero()};
@@ -79,6 +82,16 @@ double distToSegment(const Vec2d& q, const Segment& s) {
         return (q - (s.a + t * ab)).norm();
     }
     if (s.kind == Segment::Kind::Circle) return std::abs((q - s.centre).norm() - s.radius);
+    if (s.kind == Segment::Kind::Spline) {
+        const auto pts = s.sample(0.02);
+        double best = 1e300;
+        for (std::size_t i = 0; i + 1 < pts.size(); ++i) {
+            const Vec2d ab = pts[i + 1] - pts[i];
+            const double t = std::clamp(ab.squaredNorm() > 0 ? (q - pts[i]).dot(ab) / ab.squaredNorm() : 0.0, 0.0, 1.0);
+            best = std::min(best, (q - (pts[i] + t * ab)).norm());
+        }
+        return best;
+    }
     // Arc: the circle where q's angle falls inside the arc, else the nearer end.
     auto ang = [&](const Vec2d& v) { return std::atan2(v.y() - s.centre.y(), v.x() - s.centre.x()); };
     auto ccwFrom = [](double a, double b) {
@@ -204,6 +217,60 @@ LoopFit fitLoop(const std::vector<Vec2d>& raw, const SketchFitOptions& o) {
         }
     }
 
+    // Free-form runs: three or more short pieces, joined without a corner,
+    // become one spline (an organic outline otherwise comes out as many small
+    // arcs). Sharp corners, long lines and clear arcs stay as they are.
+    if (o.splines && pieces.size() >= 3) {
+        const auto np = pieces.size();
+        const double shortLen = std::max(6 * o.minSegment, 0.08 * perim);
+        auto lengthOf = [&](const Piece& pc) { return static_cast<double>((pc.to >= pc.from ? pc.to - pc.from : pc.to + n - pc.from)) * step; };
+        // The turn at the joint before piece k, from the section's points either side.
+        const std::size_t kk = std::max<std::size_t>(2, static_cast<std::size_t>(std::round(0.5 * o.minSegment / step)));
+        auto smoothBefore = [&](std::size_t k) {
+            const std::size_t at = pieces[k].from;
+            const Vec2d u = (q[(at + n) % n] - q[(at + n - kk) % n]).normalized(), v = (q[(at + kk) % n] - q[at % n]).normalized();
+            return std::acos(std::clamp(u.dot(v), -1.0, 1.0)) < 25.0 * kPi / 180;
+        };
+        // Soft: an arc, or a short line; a run must hold two arcs at least (a
+        // line and its fillet stay a line and an arc).
+        std::vector<bool> soft(np);
+        for (std::size_t k = 0; k < np; ++k) soft[k] = pieces[k].arc || lengthOf(pieces[k]) < shortLen;
+        std::vector<Piece> merged;
+        // Start the walk at a piece that does not continue a run, so no run wraps round the start.
+        std::size_t begin = 0;
+        for (std::size_t k = 0; k < np; ++k)
+            if (!soft[k] || !smoothBefore(k)) { begin = k; break; }
+        for (std::size_t c = 0; c < np;) {
+            const std::size_t k = (begin + c) % np;
+            std::size_t len = 1;
+            if (soft[k])
+                while (c + len < np && soft[(k + len) % np] && smoothBefore((k + len) % np)) ++len;
+            int arcs = 0;
+            for (std::size_t t = 0; t < len; ++t) arcs += pieces[(k + t) % np].arc;
+            if (len >= 3 && arcs >= 2) {
+                Piece sp;
+                sp.spline = true;
+                sp.from = pieces[k].from;
+                sp.to = pieces[(k + len - 1) % np].to;
+                if (sp.to <= sp.from) sp.to += n;
+                if (len == np) {  // the whole loop: two splines, so each has two distinct ends
+                    Piece half = sp;
+                    half.to = sp.from + (sp.to - sp.from) / 2;
+                    merged.push_back(half);
+                    half.from = half.to;
+                    half.to = sp.to;
+                    merged.push_back(half);
+                } else {
+                    merged.push_back(sp);
+                }
+            } else {
+                for (std::size_t t = 0; t < len; ++t) merged.push_back(pieces[(k + t) % np]);
+            }
+            c += len;
+        }
+        pieces = merged;
+    }
+
     // The joints: where two lines meet, their intersection (a sharp corner the
     // scan rounded a little); otherwise the section's own point.
     const std::size_t m = pieces.size();
@@ -213,7 +280,7 @@ LoopFit fitLoop(const std::vector<Vec2d>& raw, const SketchFitOptions& o) {
         const Piece& b = pieces[k];
         const Vec2d at = q[b.from % n];
         joint[k] = at;
-        if (!a.arc && !b.arc)
+        if (!a.arc && !b.arc && !a.spline && !b.spline)
             if (auto x = intersect(a, b); x && (*x - at).norm() < std::max(10 * o.tolerance, o.minSegment)) joint[k] = *x;
     }
     // Arcs that touch lines are made tangent to them: the centre at the
@@ -227,8 +294,8 @@ LoopFit fitLoop(const std::vector<Vec2d>& raw, const SketchFitOptions& o) {
         auto normalOf = [](const Piece& L) { return Vec2d(-L.dir.y(), L.dir.x()); };
         auto signedDist = [&](const Piece& L, const Vec2d& c) { return (c - L.p0).dot(normalOf(L)); };
         const double slack = std::max(3 * o.tolerance, 0.02 * pc.radius);
-        const bool t1 = !before.arc && std::abs(std::abs(signedDist(before, pc.centre)) - pc.radius) < slack;
-        const bool t2 = !after.arc && std::abs(std::abs(signedDist(after, pc.centre)) - pc.radius) < slack;
+        const bool t1 = !before.arc && !before.spline && std::abs(std::abs(signedDist(before, pc.centre)) - pc.radius) < slack;
+        const bool t2 = !after.arc && !after.spline && std::abs(std::abs(signedDist(after, pc.centre)) - pc.radius) < slack;
         Vec2d c = pc.centre;
         double r = pc.radius;
         if (t1 && t2) {
@@ -268,6 +335,12 @@ LoopFit fitLoop(const std::vector<Vec2d>& raw, const SketchFitOptions& o) {
         const Vec2d a = joint[k], b = joint[(k + 1) % m];
         if ((b - a).norm() < 1e-9) continue;
         pieceOf.push_back(k);
+        if (pc.spline) {
+            std::vector<Vec2d> pts;
+            for (std::size_t t = pc.from + 1; t < (pc.to < pc.from ? pc.to + n : pc.to); ++t) pts.push_back(q[t % n]);
+            l.segments.push_back(Segment::spline(fitCurve(pts, a, b, o.tolerance).poles));
+            continue;
+        }
         if (!pc.arc) {
             l.segments.push_back(Segment::line(a, b));
             continue;
@@ -325,9 +398,19 @@ LoopFit fitLoop(const std::vector<Vec2d>& raw, const SketchFitOptions& o) {
             }
         }
     out.loop = l;
+    // Splines as fine polylines, once (sampling one per point is slow).
+    std::vector<Segment> flat;
+    for (const auto& s : l.segments) {
+        if (s.kind != Segment::Kind::Spline) {
+            flat.push_back(s);
+            continue;
+        }
+        const auto pts = s.sample(std::max(0.005, 0.25 * o.tolerance));
+        for (std::size_t k = 0; k + 1 < pts.size(); ++k) flat.push_back(Segment::line(pts[k], pts[k + 1]));
+    }
     for (const auto& r : raw) {
         double d = 1e300;
-        for (const auto& s : l.segments) d = std::min(d, distToSegment(r, s));
+        for (const auto& s : flat) d = std::min(d, distToSegment(r, s));
         out.maxDeviation = std::max(out.maxDeviation, d);
     }
     return out;

@@ -228,3 +228,97 @@ TEST(Solid, ArcAfterArcWithRoundedCentres) {
     ASSERT_EQ(p.problem(), "");
     EXPECT_NO_THROW(Solid::extrude(p, 0, 2));
 }
+
+#include "core/solid/BSpline.h"
+
+namespace {
+/// A NACA 0012-like section, 40 mm chord, closed at a sharp trailing edge.
+std::vector<Vec2d> airfoil(double chord, double noise, unsigned seed) {
+    std::mt19937 g(seed);
+    std::normal_distribution<double> e(0, noise);
+    auto half = [&](double x) {
+        const double t = x / chord;
+        return 0.6 * chord * (0.2969 * std::sqrt(t) - 0.1260 * t - 0.3516 * t * t + 0.2843 * t * t * t - 0.1036 * t * t * t * t);
+    };
+    std::vector<Vec2d> pts;
+    const int n = 400;
+    for (int i = 0; i < n; ++i) {  // upper side from the tail to the nose, then the lower back
+        const double b = kPi * i / n;
+        const double x = 0.5 * chord * (1 + std::cos(b));
+        pts.emplace_back(x + e(g), half(x) + e(g));
+    }
+    for (int i = 0; i < n; ++i) {
+        const double b = kPi * i / n;
+        const double x = 0.5 * chord * (1 - std::cos(b));
+        pts.emplace_back(x + e(g), -half(x) + e(g));
+    }
+    return pts;
+}
+}  // namespace
+
+TEST(BSpline, CurveFitWithinTolerance) {
+    // Half a sine wave, 30 mm long and 4 mm high, sampled every 0.1 mm.
+    std::vector<Vec2d> pts;
+    for (double x = 0.1; x < 30; x += 0.1) pts.emplace_back(x, 4 * std::sin(kPi * x / 30));
+    const CurveFit f = fitCurve(pts, {0, 0}, {30, 0}, 0.01);
+    EXPECT_LE(f.maxDeviation, 0.01);
+    EXPECT_LE(f.poles.size(), 12u);
+    double nearest = 1e9;
+    for (const auto& q : sampleCurve(f.poles, 2000)) nearest = std::min(nearest, (q - Vec2d(15, 4)).norm());
+    EXPECT_LT(nearest, 0.02);
+    EXPECT_EQ(f.poles.front(), Vec2d(0, 0));
+    EXPECT_EQ(f.poles.back(), Vec2d(30, 0));
+}
+
+TEST(BSpline, HeightSurfaceFit) {
+    // A gentle dome z = 2 - (x² + y²)/200 over 40 × 30 mm, every 0.5 mm, 5 µm noise.
+    std::mt19937 g(5);
+    std::normal_distribution<double> e(0, 0.005);
+    std::vector<Vec3d> pts;
+    for (double x = -20; x <= 20; x += 0.5)
+        for (double y = -15; y <= 15; y += 0.5) pts.emplace_back(x, y, 2 - (x * x + y * y) / 200 + e(g));
+    const SurfaceFit f = fitHeightSurface(pts, Vec3d::Zero(), Vec3d::UnitZ(), Vec3d::UnitX(), 8, 8, 1.0);
+    EXPECT_LT(f.median, 0.01);
+    EXPECT_LT(f.maxDeviation, 0.03);
+    EXPECT_NEAR(f.surface.eval(0.5, 0.5).z(), 2.0, 0.01);
+    // Its 3-D poles make the same surface in Open CASCADE (checked in Solid tests through the volume).
+    EXPECT_EQ(f.surface.poles3().size(), 64u);
+}
+
+TEST(SketchFit, OrganicOutlineAsSplines) {
+    const auto pts = airfoil(40, 0.005, 9);
+    SketchFitOptions o;
+    o.tolerance = 0.05;
+    o.splines = true;
+    const LoopFit f = fitLoop(pts, o);
+    int splines = 0;
+    for (const auto& s : f.loop.segments) splines += s.kind == Segment::Kind::Spline;
+    EXPECT_GE(splines, 1);
+    EXPECT_LE(f.loop.segments.size(), 6u);  // not dozens of small arcs
+    EXPECT_LT(f.maxDeviation, 0.08);
+    Profile p;
+    p.loops = {f.loop};
+    ASSERT_EQ(p.problem(), "");
+    // Extruded, its volume is the outline's area times the length: Open
+    // CASCADE builds the same curve as the sketch.
+    double area = 0;
+    for (std::size_t i = 0; i < pts.size(); ++i) area += pts[i].x() * pts[(i + 1) % pts.size()].y() - pts[(i + 1) % pts.size()].x() * pts[i].y();
+    // Open CASCADE builds the same curve: its volume is the sketch's area times the length.
+    EXPECT_NEAR(Solid::extrude(p, 0, 10).volume(), 10 * std::abs(f.loop.area()), 10 * 0.002 * std::abs(f.loop.area()));
+    for (int np : {9, 27}) {  // and a spline with many knots alone, against its own area
+        std::vector<Vec2d> poles;
+        for (int i = 0; i < np; ++i) poles.emplace_back(10.0 * i / (np - 1), i == 0 || i == np - 1 ? 0.0 : 3.0 + std::sin(i));
+        Loop t;
+        t.segments = {Segment::spline(poles), Segment::line(poles.back(), poles.front())};
+        Profile tp;
+        tp.loops = {t};
+        EXPECT_NEAR(Solid::extrude(tp, 0, 1).volume(), std::abs(t.area()), 2e-3 * std::abs(t.area()));
+    }
+    EXPECT_NEAR(std::abs(f.loop.area()), std::abs(0.5 * area), 0.02 * std::abs(0.5 * area));  // within the tolerance all round
+
+    // A plate of lines and arcs stays lines and arcs with splines allowed.
+    Loop truth;
+    truth.segments = {Segment::line({0, 0}, {40, 0}), Segment::arc({40, 0}, {40, 12}, {40, 6}, true), Segment::line({40, 12}, {0, 12}), Segment::line({0, 12}, {0, 0})};
+    const LoopFit g = fitLoop(truth.polygon(0.05), o);
+    for (const auto& s : g.loop.segments) EXPECT_NE(s.kind, Segment::Kind::Spline);
+}

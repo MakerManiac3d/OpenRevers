@@ -7,8 +7,11 @@
 #include "commands/PartCommands.h"
 
 #include "core/mesh/Distance.h"
+#include "core/solid/BSpline.h"
 #include "core/solid/SketchFit.h"
 #include "doc/Document.h"
+
+#include <Eigen/Eigenvalues>
 
 #include <algorithm>
 #include <array>
@@ -62,10 +65,31 @@ json partJson(const Body& b) {
             case OpKind::Revolve: jo["sketch"] = sketchRef(o.sketch); jo["angle"] = valueToJson(o.angle); jo["axisPoint"] = j2(o.axisPoint); jo["axisDir"] = j2(o.axisDir); break;
             case OpKind::Fillet: jo["edges"] = o.edgePoints.size(); jo["radius"] = valueToJson(o.radius); break;
             case OpKind::Import: break;
+            case OpKind::Loft: {
+                json secs = json::array();
+                for (auto id : o.sections) secs.push_back(sketchRef(id));
+                jo["sections"] = secs;
+                jo["ruled"] = o.ruled;
+                break;
+            }
+            case OpKind::Pattern:
+                jo["source"] = "o" + std::to_string(o.source);
+                jo["axisOrigin"] = j3(o.axisOrigin);
+                jo["axisDirection"] = j3(o.axisDirection);
+                jo["count"] = valueToJson(o.count);
+                jo["angle"] = valueToJson(o.angle);
+                break;
+            case OpKind::SurfaceCut: jo["surface"] = "sf" + std::to_string(o.surface); jo["keep"] = o.keepBelow ? "below" : "above"; break;
+            case OpKind::Thicken: jo["surface"] = "sf" + std::to_string(o.surface); jo["thickness"] = valueToJson(o.thickness); break;
         }
         ops.push_back(jo);
     }
+    json surfaces = json::array();
+    for (const auto& f : m.surfaces)
+        surfaces.push_back({{"ref", f.ref()}, {"name", f.name}, {"poles", {f.surface.nu, f.surface.nv}}, {"rms", r4(f.rms)}, {"maxDeviation", r4(f.maxDeviation)},
+                            {"normal", j3(f.surface.normal)}, {"size", {r4(f.surface.width), r4(f.surface.height)}}});
     json out{{"body", b.ref()}, {"name", b.name}, {"parameters", m.parameters}, {"sketches", sketches}, {"operations", ops}};
+    if (!m.surfaces.empty()) out["surfaces"] = surfaces;
     if (!b.solid.empty()) {
         const auto bb = b.solid.bounds();
         out["solid"] = {{"volume", r4(b.solid.volume())}, {"area", r4(b.solid.area())}, {"faces", b.solid.faceCount()}, {"solids", b.solid.solidCount()},
@@ -104,6 +128,7 @@ std::string uniqueName(const Model& m, const std::string& base) {
         bool used = false;
         for (const auto& s : m.sketches) used |= s.name == n;
         for (const auto& o : m.operations) used |= o.name == n;
+        for (const auto& f : m.surfaces) used |= f.name == n;
         if (!used) return n;
     }
 }
@@ -177,6 +202,7 @@ void registerPartCommands(CommandRegistry& R) {
                    {"tolerance", number({"Largest distance from the section", "Distancia máxima a la sección"}, 0.05, 0.001, 5.0, "mm")},
                    {"minSegment", number({"Shortest segment", "Segmento más corto"}, 0.3, 0.0, 100.0, "mm")},
                    {"minLoop", number({"Ignore closed outlines shorter than", "Ignorar contornos cerrados más cortos que"}, 1.0, 0.0, 10000.0, "mm")},
+                   {"splines", boolean({"Free-form runs (an organic outline the fit breaks into many smooth arcs) as splines", "Tramos libres (un contorno orgánico que el ajuste rompe en muchos arcos suaves) como splines"}, false)},
                    {"name", string({"Name", "Nombre"})}},
                   {"body", "scan", "origin", "normal"}),
            true, false,
@@ -194,6 +220,7 @@ void registerPartCommands(CommandRegistry& R) {
                SketchFitOptions fo;
                fo.tolerance = in["tolerance"].get<double>();
                fo.minSegment = in["minSegment"].get<double>();
+               fo.splines = in["splines"].get<bool>();
                const auto polys = sectionMesh(*scan.mesh, prof.plane.origin, prof.plane.normal, prof.plane.xDir);
                json loops = json::array();
                std::size_t open = 0;
@@ -208,6 +235,12 @@ void registerPartCommands(CommandRegistry& R) {
                    for (const auto& sg : f.loop.segments) {
                        json js{{"type", segmentKindName(sg.kind)}};
                        if (sg.kind == Segment::Kind::Circle) { js["centre"] = j2(sg.centre); js["diameter"] = r4(2 * sg.radius); }
+                       else if (sg.kind == Segment::Kind::Spline) {
+                           js["from"] = j2(sg.a);
+                           js["to"] = j2(sg.b);
+                           js["length"] = r4(sg.length());
+                           js["poles"] = sg.poles.size();
+                       }
                        else {
                            js["from"] = j2(sg.a);
                            js["to"] = j2(sg.b);
@@ -383,6 +416,10 @@ void registerPartCommands(CommandRegistry& R) {
                    {"radius", json{{"type", json::array({"number", "string"})}, {"description", "Radius"}, {"x-es", "Radio"}}},
                    {"mode", json{{"type", "string"}, {"enum", json::array({"new", "join", "cut", "intersect"})}, {"description", kMode.en}, {"x-es", kMode.es}}},
                    {"suppressed", json{{"type", "boolean"}, {"description", "Leave it out of the part"}, {"x-es", "Dejarla fuera de la pieza"}}},
+                   {"count", json{{"type", json::array({"number", "string"})}, {"description", "Pattern: copies"}, {"x-es", "Patrón: copias"}}},
+                   {"thickness", json{{"type", json::array({"number", "string"})}, {"description", "Thicken: thickness"}, {"x-es", "Engrosar: espesor"}}},
+                   {"keep", json{{"type", "string"}, {"enum", json::array({"below", "above"})}, {"description", "Surface cut: the side kept"}, {"x-es", "Corte por superficie: el lado que queda"}}},
+                   {"ruled", json{{"type", "boolean"}, {"description", "Loft: flat between sections"}, {"x-es", "Loft: plano entre secciones"}}},
                    {"name", string({"New name", "Nombre nuevo"})}},
                   {"body", "operation"}),
            true, false,
@@ -396,6 +433,10 @@ void registerPartCommands(CommandRegistry& R) {
                if (in.contains("radius")) o.radius = valueFromJson(in["radius"]);
                if (in.contains("mode")) o.mode = *opModeFromName(in["mode"].get<std::string>());
                if (in.contains("suppressed")) o.suppressed = in["suppressed"].get<bool>();
+               if (in.contains("count")) o.count = valueFromJson(in["count"]);
+               if (in.contains("thickness")) o.thickness = valueFromJson(in["thickness"]);
+               if (in.contains("keep")) o.keepBelow = in["keep"].get<std::string>() == "below";
+               if (in.contains("ruled")) o.ruled = in["ruled"].get<bool>();
                if (in.contains("name")) o.name = in["name"].get<std::string>();
                json out = partJson(applyModel(ctx, b, m));
                out["summary"] = ctx.say("Changed " + o.name + " and rebuilt the part.", "Cambiada " + o.name + " y reconstruida la pieza.");
@@ -403,19 +444,26 @@ void registerPartCommands(CommandRegistry& R) {
            }});
 
     R.add({"part.delete", "part", {"Delete from the part", "Borrar de la pieza"},
-           {"Delete an operation (o1) or a sketch (s1) that no operation uses. The part is rebuilt.",
-            "Borra una operación (o1) o un boceto (s1) que ninguna operación use. La pieza se reconstruye."},
-           object({{"body", body(kPart)}, {"item", string({"o1, s1 or a name", "o1, s1 o un nombre"})}}, {"body", "item"}), true, false,
+           {"Delete an operation (o1), or a sketch (s1) or surface (sf1) that no operation uses. The part is rebuilt.",
+            "Borra una operación (o1), o un boceto (s1) o una superficie (sf1) que ninguna operación use. La pieza se reconstruye."},
+           object({{"body", body(kPart)}, {"item", string({"o1, s1, sf1 or a name", "o1, s1, sf1 o un nombre"})}}, {"body", "item"}), true, false,
            [](CommandContext& ctx, const json& in) {
                const Body b = partBody(ctx, in["body"]);
                auto m = std::make_shared<Model>(*b.model);
                const std::string item = in["item"];
                if (const Sketch* s = m->sketch(item)) {
                    for (const auto& o : m->operations)
-                       if ((o.kind == OpKind::Extrude || o.kind == OpKind::Revolve) && o.sketch == s->id)
+                       if (((o.kind == OpKind::Extrude || o.kind == OpKind::Revolve) && o.sketch == s->id) ||
+                           (o.kind == OpKind::Loft && std::find(o.sections.begin(), o.sections.end(), s->id) != o.sections.end()))
                            throw CommandError("refused", ctx.say(o.name + " uses " + s->name + "; delete it first.", o.name + " usa " + s->name + "; bórrala antes."));
                    const auto id = s->id;
                    std::erase_if(m->sketches, [&](const Sketch& x) { return x.id == id; });
+               } else if (const FreeSurface* f = m->surface(item)) {
+                   for (const auto& o : m->operations)
+                       if ((o.kind == OpKind::SurfaceCut || o.kind == OpKind::Thicken) && o.surface == f->id)
+                           throw CommandError("refused", ctx.say(o.name + " uses " + f->name + "; delete it first.", o.name + " usa " + f->name + "; bórrala antes."));
+                   const auto id = f->id;
+                   std::erase_if(m->surfaces, [&](const FreeSurface& x) { return x.id == id; });
                } else {
                    const auto id = findOperation(ctx, *m, in["item"]).id;
                    std::erase_if(m->operations, [&](const Operation& x) { return x.id == id; });
@@ -450,6 +498,218 @@ void registerPartCommands(CommandRegistry& R) {
                m->operations.insert(m->operations.begin() + static_cast<std::ptrdiff_t>(pos), o);
                json out = partJson(applyModel(ctx, b, m));
                out["summary"] = ctx.say("Moved " + o.name + " to position " + std::to_string(pos + 1) + ".", "Movida " + o.name + " a la posición " + std::to_string(pos + 1) + ".");
+               return out;
+           }});
+
+    R.add({"part.loft", "part", {"Loft through sections", "Loft por secciones"},
+           {"A solid through two or more sketches, in order (each one closed loop: a blade's sections at several radii, a duct's ends), smooth through them or flat between (ruled), combined with the part. Sections whose starts are far apart twist the loft: start each loop at the matching place (the leading edge, say).",
+            "Un sólido que pasa por dos o más bocetos, en orden (cada uno, un lazo cerrado: las secciones de un álabe a varios radios, los extremos de un conducto), suave a través de ellos o plano entre ellos (ruled), combinado con la pieza. Si los inicios de las secciones quedan lejos, el loft se retuerce: empieza cada lazo en el mismo sitio (el borde de ataque, por ejemplo)."},
+           object({{"body", body(kPart)}, {"sections", listSchema({"The sketches, in order: [\"s1\", \"s2\", ...]", "Los bocetos, en orden: [\"s1\", \"s2\", ...]"})},
+                   {"ruled", boolean({"Flat between sections", "Plano entre secciones"}, false)},
+                   {"mode", choice(kMode, {"new", "join", "cut", "intersect"}, "join")}, {"name", string({"Name", "Nombre"})}},
+                  {"body", "sections"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               auto m = std::make_shared<Model>(*b.model);
+               Operation o;
+               o.id = m->nextId++;
+               o.kind = OpKind::Loft;
+               if (!in["sections"].is_array() || in["sections"].size() < 2)
+                   throw CommandError("invalid_input", ctx.say("A loft needs two sections at least.", "Un loft necesita dos secciones como mínimo."));
+               for (const auto& r : in["sections"]) o.sections.push_back(findSketch(ctx, *m, r).id);
+               o.ruled = in["ruled"].get<bool>();
+               o.mode = *opModeFromName(in["mode"].get<std::string>());
+               o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, "Loft");
+               m->operations.push_back(o);
+               json out = partJson(applyModel(ctx, b, m));
+               out["ref"] = o.ref();
+               out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
+               return out;
+           }});
+
+    R.add({"part.pattern", "part", {"Circular pattern", "Patrón circular"},
+           {"Copies of what another operation made (a hole, a blade, a boss) round an axis: count copies in all, over angle degrees (360 spreads them evenly). They combine with the part as that operation did, unless mode is given. Values may be numbers or parameter names.",
+            "Copias de lo que hizo otra operación (un taladro, un álabe, un saliente) alrededor de un eje: count copias en total, en angle grados (360 las reparte por igual). Se combinan con la pieza como lo hizo esa operación, salvo que se dé mode. Los valores pueden ser números o nombres de parámetros."},
+           object({{"body", body(kPart)}, {"operation", string({"The operation to repeat: o1 or its name", "La operación que repetir: o1 o su nombre"})},
+                   {"axisOrigin", point({"A point of the axis", "Un punto del eje"})}, {"axisDirection", point({"The axis direction", "La dirección del eje"}, nullptr)},
+                   {"count", valueSchema({"Copies in all (with the first)", "Copias en total (con la primera)"}, 6.0)},
+                   {"angle", valueSchema({"Span (degrees; 360: a whole turn)", "Ángulo total (grados; 360: una vuelta)"}, 360.0)},
+                   {"mode", json{{"type", "string"}, {"enum", json::array({"new", "join", "cut", "intersect"})}, {"description", kMode.en}, {"x-es", kMode.es}}},
+                   {"name", string({"Name", "Nombre"})}},
+                  {"body", "operation", "axisOrigin", "axisDirection"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               auto m = std::make_shared<Model>(*b.model);
+               const Operation& src = findOperation(ctx, *m, in["operation"]);
+               if (src.kind == OpKind::Fillet || src.kind == OpKind::SurfaceCut)
+                   throw CommandError("invalid_input", ctx.say("A pattern repeats what an operation adds or cuts; " + src.name + " changes the part in place.",
+                                                               "Un patrón repite lo que una operación añade o corta; " + src.name + " cambia la pieza donde está."));
+               Operation o;
+               o.id = m->nextId++;
+               o.kind = OpKind::Pattern;
+               o.source = src.id;
+               o.mode = in.contains("mode") ? *opModeFromName(in["mode"].get<std::string>()) : (src.mode == OpMode::New ? OpMode::Join : src.mode);
+               o.axisOrigin = v3(in["axisOrigin"]);
+               o.axisDirection = v3(in["axisDirection"]);
+               o.count = valueFromJson(in["count"]);
+               o.angle = valueFromJson(in["angle"]);
+               o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Pattern", "Patrón"));
+               m->operations.push_back(o);
+               json out = partJson(applyModel(ctx, b, m));
+               out["ref"] = o.ref();
+               out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
+               return out;
+           }});
+
+    R.add({"part.surface_from_scan", "part", {"Surface from the scan", "Superficie desde el escaneo"},
+           {"Fit a smooth free-form surface (a bicubic B-spline) to a zone of a scan: a shape found by features.segment (shape: f3), or the points within radius of centre, or both. It is seen from a plane (default: the zone's best-fit plane, facing out of the scan) and must not fold over itself from it. The surface reaches margin past the zone, to cut the part with part.cut_by_surface or to thicken with part.thicken. Returns how far the points lie from it.",
+            "Ajusta una superficie libre y suave (una B-spline bicúbica) a una zona de un escaneo: una forma hallada con features.segment (shape: f3), o los puntos a menos de radius de centre, o las dos cosas. Se ve desde un plano (por defecto, el que mejor se ajusta a la zona, mirando hacia fuera del escaneo) y no debe volver sobre sí misma vista desde él. La superficie se extiende margin más allá de la zona, para cortar la pieza con part.cut_by_surface o engrosarla con part.thicken. Devuelve cuánto se alejan los puntos de ella."},
+           object({{"body", body(kPart)}, {"scan", body({"The scan (a mesh body)", "El escaneo (un cuerpo de malla)"})},
+                   {"shape", string({"A shape of the scan's segmentation (f3)", "Una forma de la segmentación del escaneo (f3)"})},
+                   {"centre", point({"Centre of a sphere of points", "Centro de una esfera de puntos"})},
+                   {"radius", number({"Radius of that sphere", "Radio de esa esfera"}, 5.0, 0.01, 100000.0, "mm")},
+                   {"plane", objectSchema({"The plane it is seen from: {origin, normal, xDir} (default: the zone's best fit)", "El plano desde el que se ve: {origin, normal, xDir} (por defecto, el que mejor se ajusta a la zona)"})},
+                   {"poles", integer({"Poles along each side (0: chosen from the points)", "Polos en cada lado (0: según los puntos)"}, 0, 0, 60)},
+                   {"margin", number({"How far it reaches past the zone", "Cuánto se extiende más allá de la zona"}, 2.0, 0.0, 10000.0, "mm")},
+                   {"smoothing", number({"Weight of bending against closeness", "Peso de la flexión frente a la cercanía"}, 1e-6, 0.0, 10.0)},
+                   {"name", string({"Name", "Nombre"})}},
+                  {"body", "scan"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               const Body scan = ctx.doc.body(in["scan"]);
+               if (scan.isPart() || scan.mesh->faces.empty())
+                   throw CommandError("invalid_input", ctx.say(scan.name + " is not a scan with triangles.", scan.name + " no es un escaneo con triángulos."));
+               const TriMesh& M = *scan.mesh;
+               // The zone: vertices of the shape's faces, and/or within the sphere.
+               std::vector<char> take(M.vertices.size(), in.contains("shape") ? 0 : 1);
+               if (in.contains("shape")) {
+                   const Feature* f = scan.features ? scan.features->find(in["shape"].get<std::string>()) : nullptr;
+                   if (!f || f->region < 0)
+                       throw CommandError("not_found", ctx.say("No segmented shape \"" + in["shape"].get<std::string>() + "\" on " + scan.name + " (run features.segment).",
+                                                               "No hay ninguna forma segmentada \"" + in["shape"].get<std::string>() + "\" en " + scan.name + " (usa features.segment)."));
+                   for (std::size_t t = 0; t < M.faces.size(); ++t)
+                       if (scan.features->faceRegion[t] == f->region)
+                           for (auto v : M.faces[t]) take[v] = 1;
+               }
+               if (in.contains("centre")) {
+                   const Vec3d c = v3(in["centre"]);
+                   const double r2 = in["radius"].get<double>() * in["radius"].get<double>();
+                   for (std::size_t v = 0; v < M.vertices.size(); ++v)
+                       if ((M.vertices[v].cast<double>() - c).squaredNorm() > r2) take[v] = 0;
+               }
+               std::vector<Vec3d> pts;
+               Vec3d nsum = Vec3d::Zero();
+               const auto normals = M.vertexNormals();
+               for (std::size_t v = 0; v < M.vertices.size(); ++v)
+                   if (take[v]) {
+                       pts.push_back(M.vertices[v].cast<double>());
+                       nsum += normals[v].cast<double>();
+                   }
+               if (pts.size() < 16) throw CommandError("failed", ctx.say("The zone has " + std::to_string(pts.size()) + " points; a surface needs 16 at least.",
+                                                                       "La zona tiene " + std::to_string(pts.size()) + " puntos; una superficie necesita 16 como mínimo."));
+               // The plane: given, or the zone's best fit, facing the way the scan faces.
+               Vec3d o = Vec3d::Zero(), n, x;
+               for (const auto& p : pts) o += p;
+               o /= static_cast<double>(pts.size());
+               if (in.contains("plane")) {
+                   const json& pl = in["plane"];
+                   if (pl.contains("origin")) o = v3(pl["origin"]);
+                   n = v3(pl.at("normal"));
+                   x = pl.contains("xDir") ? v3(pl["xDir"]) : n.unitOrthogonal();
+               } else {
+                   Eigen::Matrix3d C = Eigen::Matrix3d::Zero();
+                   for (const auto& p : pts) C += (p - o) * (p - o).transpose();
+                   Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(C);
+                   n = es.eigenvectors().col(0);
+                   x = es.eigenvectors().col(2);
+                   if (n.dot(nsum) < 0) n = -n;
+               }
+               if (n.norm() < 1e-12) throw CommandError("invalid_input", ctx.say("The normal cannot be zero.", "La normal no puede ser cero."));
+               // Poles: about one per six points along each side, 4 to 24, more along the longer side.
+               int nu = static_cast<int>(in["poles"].get<long long>()), nv = nu;
+               if (nu == 0) {
+                   double xmin = 1e300, xmax = -1e300, ymin = 1e300, ymax = -1e300;
+                   const Vec3d nn = n.normalized(), xx = (x - x.dot(nn) * nn).normalized(), yy = nn.cross(xx);
+                   for (const auto& p : pts) {
+                       xmin = std::min(xmin, (p - o).dot(xx)); xmax = std::max(xmax, (p - o).dot(xx));
+                       ymin = std::min(ymin, (p - o).dot(yy)); ymax = std::max(ymax, (p - o).dot(yy));
+                   }
+                   const double side = std::sqrt(static_cast<double>(pts.size())) / 6;
+                   const double aspect = std::sqrt(std::max(1e-6, xmax - xmin) / std::max(1e-6, ymax - ymin));
+                   nu = std::clamp(static_cast<int>(std::round(side * aspect)), 4, 24);
+                   nv = std::clamp(static_cast<int>(std::round(side / aspect)), 4, 24);
+               }
+               const SurfaceFit fit = fitHeightSurface(pts, o, n, x, nu, nv, in["margin"].get<double>(), in["smoothing"].get<double>());
+               auto m = std::make_shared<Model>(*b.model);
+               FreeSurface f;
+               f.id = m->nextId++;
+               f.surface = fit.surface;
+               f.rms = fit.rms;
+               f.maxDeviation = fit.maxDeviation;
+               f.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Surface", "Superficie"));
+               m->surfaces.push_back(f);
+               ctx.doc.setPart(b.id, m, b.solid, PartTriangles{b.mesh, b.view}, b.buildError);
+               return json{{"body", b.ref()}, {"ref", f.ref()}, {"name", f.name}, {"points", fit.points}, {"poles", {f.surface.nu, f.surface.nv}},
+                           {"rms", r4(fit.rms)}, {"median", r4(fit.median)}, {"maxDeviation", r4(fit.maxDeviation)}, {"normal", j3(f.surface.normal)},
+                           {"origin", j3(f.surface.origin)}, {"size", {r4(f.surface.width), r4(f.surface.height)}},
+                           {"summary", ctx.say("Added " + f.name + " (" + f.ref() + ") through " + std::to_string(fit.points) + " points: rms " + std::to_string(r4(fit.rms)).substr(0, 6) + " mm, worst " +
+                                                   std::to_string(r4(fit.maxDeviation)).substr(0, 6) + " mm.",
+                                               "Añadida " + f.name + " (" + f.ref() + ") por " + std::to_string(fit.points) + " puntos: rms " + std::to_string(r4(fit.rms)).substr(0, 6) + " mm, máximo " +
+                                                   std::to_string(r4(fit.maxDeviation)).substr(0, 6) + " mm.")}};
+           }});
+
+    R.add({"part.cut_by_surface", "part", {"Cut by a surface", "Cortar por una superficie"},
+           {"Remove from the part what lies beyond one of its free surfaces: above it (along its normal) when keep is below, below it when keep is above. A block cut by the surface fitted to a scan's curved top gets that top. The surface must reach past the part on every side.",
+            "Quita de la pieza lo que queda más allá de una de sus superficies libres: por encima (según su normal) si keep es below, por debajo si keep es above. Un bloque cortado por la superficie ajustada a la cara curva de un escaneo toma esa cara. La superficie debe extenderse más allá de la pieza por todos los lados."},
+           object({{"body", body(kPart)}, {"surface", string({"The surface: sf1 or its name", "La superficie: sf1 o su nombre"})},
+                   {"keep", choice({"The side kept", "El lado que queda"}, {"below", "above"}, "below")}, {"name", string({"Name", "Nombre"})}},
+                  {"body", "surface"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               auto m = std::make_shared<Model>(*b.model);
+               const FreeSurface* f = m->surface(in["surface"].get<std::string>());
+               if (!f) throw CommandError("not_found", ctx.say("No surface \"" + in["surface"].get<std::string>() + "\" in the part.", "No hay ninguna superficie \"" + in["surface"].get<std::string>() + "\" en la pieza."));
+               Operation o;
+               o.id = m->nextId++;
+               o.kind = OpKind::SurfaceCut;
+               o.surface = f->id;
+               o.keepBelow = in["keep"].get<std::string>() == "below";
+               o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Surface cut", "Corte por superficie"));
+               m->operations.push_back(o);
+               json out = partJson(applyModel(ctx, b, m));
+               out["ref"] = o.ref();
+               out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
+               return out;
+           }});
+
+    R.add({"part.thicken", "part", {"Thicken a surface", "Engrosar una superficie"},
+           {"Make a solid of one of the part's free surfaces, offset by thickness along its normal (negative: the other way): a shell, a panel, a blade from its mid surface. Combined with the part.",
+            "Hace un sólido con una de las superficies libres de la pieza, desplazada thickness según su normal (en negativo, al otro lado): una carcasa, un panel, un álabe desde su superficie media. Se combina con la pieza."},
+           object({{"body", body(kPart)}, {"surface", string({"The surface: sf1 or its name", "La superficie: sf1 o su nombre"})},
+                   {"thickness", valueSchema({"Thickness", "Espesor"}, 1.0)},
+                   {"mode", choice(kMode, {"new", "join", "cut", "intersect"}, "join")}, {"name", string({"Name", "Nombre"})}},
+                  {"body", "surface"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               auto m = std::make_shared<Model>(*b.model);
+               const FreeSurface* f = m->surface(in["surface"].get<std::string>());
+               if (!f) throw CommandError("not_found", ctx.say("No surface \"" + in["surface"].get<std::string>() + "\" in the part.", "No hay ninguna superficie \"" + in["surface"].get<std::string>() + "\" en la pieza."));
+               Operation o;
+               o.id = m->nextId++;
+               o.kind = OpKind::Thicken;
+               o.surface = f->id;
+               o.thickness = valueFromJson(in["thickness"]);
+               o.mode = *opModeFromName(in["mode"].get<std::string>());
+               o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Thicken", "Engrosado"));
+               m->operations.push_back(o);
+               json out = partJson(applyModel(ctx, b, m));
+               out["ref"] = o.ref();
+               out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
                return out;
            }});
 

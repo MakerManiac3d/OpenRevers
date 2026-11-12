@@ -8,7 +8,7 @@ sobre piezas reales.
 | 1 · Base y mallas | Programa, visor, proyecto, deshacer; importar y exportar; analizar, reparar, rellenar, suavizar, diezmar, remallar; MCP | Abre 10 M de triángulos sin bloquearse y repara las piezas de referencia | Hecha (v0.2), salvo medir el dibujo con tarjeta gráfica |
 | 2 · Alineación y primitivas | Alineación a ejes, 3-2-1 y mejor ajuste; segmentación automática; plano, cilindro, cono, esfera y toro con σ | Halla los planos y cilindros de una pieza de referencia al nivel de ruido del escáner | Casi hecha (v0.3.1: probada en una leva escaneada; taladros de Ø2,75 a ±0,04 mm del calibre). Falta repetirla con la 0.3.1 |
 | 3 · Sólido paramétrico | Bocetos desde secciones con restricciones automáticas; extruir, revolución, redondeos, taladros; exportar STEP (Open CASCADE); **edición a mano** de todo lo que hace la IA | Una pieza mecánica en STEP con el 90 % de la malla dentro de ±0,2 mm | **Casi hecha** (v0.5): la leva en STEP, 81 % dentro de ±0,2 mm por el alabeo de la pieza escaneada (contorno a ≤0,13 mm); edición a mano en la v0.5. Falta una pieza sin alabeo y las restricciones |
-| 4 · Superficies libres | Curvas spline en bocetos; superficies por secciones (loft) y barridos; ajuste de una superficie B-spline a una zona del escaneo; cortar, coser y engrosar; patrón circular; autosuperficie por parches para formas orgánicas; T-Spline ajustado a la malla (la exportación `.tsm` desde quads ya existe) | Una piel libre con desviación mediana por debajo de 0,05 mm; un álabe de turbina por secciones | **Empieza** (v0.6) |
+| 4 · Superficies libres | Curvas spline en bocetos; superficies por secciones (loft) y barridos; ajuste de una superficie B-spline a una zona del escaneo; cortar, coser y engrosar; patrón circular; autosuperficie por parches para formas orgánicas; T-Spline ajustado a la malla (la exportación `.tsm` desde quads ya existe) | Una piel libre con desviación mediana por debajo de 0,05 mm; un álabe de turbina por secciones | **En curso** (v0.6: pasos 1 a 4; falta la autosuperficie y probarla en un escaneo real) |
 | 5 · Inspección y fabricación | Mapa de desviación, secciones comparadas, GD&T, informe PDF; análisis para impresión 3D y CNC | Informe PDF de una pieza real, con pasa o no pasa en cada cota | Pendiente |
 
 En todas las fases: herramientas MCP, documentación, tests e instalador.
@@ -58,7 +58,9 @@ la cara de una extrusión).
    sólido.
 
 Primer hito: un álabe por secciones repetido en patrón circular, y una cara
-libre ajustada a un escaneo.
+libre ajustada a un escaneo. Hecho en la v0.6 con piezas de prueba (una
+turbina de seis álabes, una tapa abombada con 0,2 % de error en volumen);
+falta un escaneo real.
 
 ## Al final (al hacer público el repositorio)
 

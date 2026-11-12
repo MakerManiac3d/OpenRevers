@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/solid/Profile.h"
 
+#include "core/solid/BSpline.h"
+
 #include <cmath>
 
 namespace orv {
@@ -44,6 +46,17 @@ Segment Segment::arc(Vec2d from, Vec2d to, Vec2d centre, bool ccw) {
     return s;
 }
 
+Segment Segment::spline(std::vector<Vec2d> p) {
+    Segment s;
+    s.kind = Kind::Spline;
+    if (!p.empty()) {
+        s.a = p.front();
+        s.b = p.back();
+    }
+    s.poles = std::move(p);
+    return s;
+}
+
 Segment Segment::circle(Vec2d centre, double radius) {
     Segment s;
     s.kind = Kind::Circle;
@@ -58,6 +71,12 @@ double Segment::length() const {
         case Kind::Line: return (b - a).norm();
         case Kind::Arc: return radius * sweep(*this);
         case Kind::Circle: return 2 * kPi * radius;
+        case Kind::Spline: {
+            const auto pts = sampleCurve(poles, 64 * static_cast<int>(std::max<std::size_t>(1, poles.size())));
+            double l = 0;
+            for (std::size_t i = 1; i < pts.size(); ++i) l += (pts[i] - pts[i - 1]).norm();
+            return l;
+        }
     }
     return 0;
 }
@@ -67,6 +86,15 @@ std::vector<Vec2d> Segment::sample(double step) const {
     const int n = std::max(1, static_cast<int>(std::ceil(length() / std::max(step, 1e-9))));
     if (kind == Kind::Line) {
         for (int i = 0; i <= n; ++i) out.push_back(a + (b - a) * (static_cast<double>(i) / n));
+        return out;
+    }
+    if (kind == Kind::Spline) {
+        // Uniform in the parameter, enough for its bends as well as its length.
+        out = sampleCurve(poles, std::max(n, 8 * static_cast<int>(poles.size())) + 1);
+        if (!out.empty()) {
+            out.front() = a;
+            out.back() = b;
+        }
         return out;
     }
     const int m = std::max(n, kind == Kind::Circle ? 24 : 4);
@@ -127,6 +155,11 @@ std::string Profile::problem(double tol) const {
             const std::string seg = where + ", segment " + std::to_string(i + 1);
             if (s.kind == Segment::Kind::Circle) return seg + ": a circle must be a loop by itself";
             if ((s.b - s.a).norm() <= tol && s.kind == Segment::Kind::Line) return seg + " has no length";
+            if (s.kind == Segment::Kind::Spline) {
+                if (s.poles.size() < 2) return seg + ": a spline needs at least two poles";
+                if ((s.poles.front() - s.a).norm() > 1e-9 || (s.poles.back() - s.b).norm() > 1e-9) return seg + ": a spline must start at its first pole and end at its last";
+                if (s.length() <= tol) return seg + " has no length";
+            }
             if (s.kind == Segment::Kind::Arc) {
                 const double ra = (s.a - s.centre).norm(), rb = (s.b - s.centre).norm();
                 if (std::abs(ra - rb) > std::max(1e-4, 1e-4 * ra)) return seg + ": its ends are not at the same distance from the centre";
@@ -143,6 +176,7 @@ const char* segmentKindName(Segment::Kind k) {
         case Segment::Kind::Line: return "line";
         case Segment::Kind::Arc: return "arc";
         case Segment::Kind::Circle: return "circle";
+        case Segment::Kind::Spline: return "spline";
     }
     return "?";
 }

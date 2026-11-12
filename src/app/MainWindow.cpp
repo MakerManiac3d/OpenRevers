@@ -219,8 +219,9 @@ void MainWindow::buildActions() {
         auto* a = add(pointsMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
-    for (const char* name : {"part.new", "part.sketch_from_section", "part.sketch", "part.extrude", "part.revolve", "part.fillet", "part.parameter", "part.edit", "part.move",
-                             "part.delete", "part.list", "part.compare", "mesh.section"}) {
+    for (const char* name : {"part.new", "part.sketch_from_section", "part.sketch", "part.extrude", "part.revolve", "part.loft", "part.pattern", "part.fillet",
+                             "part.surface_from_scan", "part.cut_by_surface", "part.thicken", "part.parameter", "part.edit", "part.move", "part.delete", "part.list",
+                             "part.compare", "mesh.section"}) {
         auto* a = add(partMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
         if (std::string(name) == "part.sketch") {
@@ -234,6 +235,7 @@ void MainWindow::buildActions() {
             add(partMenu, tr("Round the picked edges…"), &MainWindow::filletPickedEdges);
             partMenu->addSeparator();
         }
+        if (std::string(name) == "part.thicken") partMenu->addSeparator();
         if (std::string(name) == "part.list") partMenu->addSeparator();
     }
     for (const char* name : {"body.set_opacity", "body.clear_deviation"}) add(bodyMenu, cmdText(name), [this, name]() { runFromUi(name); });
@@ -311,7 +313,7 @@ void MainWindow::buildDocks() {
     });
     connect(tree_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int) {
         const QString it = item ? item->data(0, Qt::UserRole + 1).toString() : QString();
-        if (it.startsWith('s')) editSketch(selected_, it.mid(1).toULongLong());
+        if (it.startsWith('s') && !it.startsWith("sf")) editSketch(selected_, it.mid(1).toULongLong());
         else if (it.isEmpty()) runFromUi("body.rename");
         else if (props_->rowCount() > 0) {  // a parameter or an operation: its values are in the properties, ready to edit
             props_->setFocus();
@@ -407,6 +409,7 @@ void MainWindow::refreshTree() {
             for (const auto& [name, value] : b.model->parameters)
                 child(QString::fromStdString(name), QLocale().toString(value, 'g', 6), tr("Parameter").toStdString(), "p:" + QString::fromStdString(name));
             for (const auto& sk : b.model->sketches) child(QString::fromStdString(sk.name), tr("sketch"), sk.ref() + " · " + tr("double-click to edit").toStdString(), QString::fromStdString(sk.ref()));
+            for (const auto& sf : b.model->surfaces) child(QString::fromStdString(sf.name), tr("surface"), sf.ref(), QString::fromStdString(sf.ref()));
             for (const auto& op : b.model->operations) {
                 auto* c = child(QString::fromStdString(op.name), QString::fromUtf8(opModeName(op.mode)), op.ref() + " · " + opKindName(op.kind), QString::fromStdString(op.ref()));
                 if (op.suppressed) c->setForeground(0, palette().brush(QPalette::Disabled, QPalette::Text));
@@ -646,10 +649,14 @@ void MainWindow::refreshPartHighlight() {
         h.faces = pickedFaces_;
         h.edges = pickedEdges_;
         // The sketch picked, or the one the picked operation is made from.
-        if (partItem_.startsWith('s')) h.sketches.push_back(partItem_.mid(1).toULongLong());
+        if (partItem_.startsWith("sf")) h.sketches.push_back(partItem_.mid(2).toULongLong());
+        else if (partItem_.startsWith('s')) h.sketches.push_back(partItem_.mid(1).toULongLong());
         if (partItem_.startsWith('o'))
-            if (const Operation* o = b->model->operation(partItem_.toStdString()); o && (o->kind == OpKind::Extrude || o->kind == OpKind::Revolve))
-                h.sketches.push_back(o->sketch);
+            if (const Operation* o = b->model->operation(partItem_.toStdString())) {
+                if (o->kind == OpKind::Extrude || o->kind == OpKind::Revolve) h.sketches.push_back(o->sketch);
+                if (o->kind == OpKind::Loft) h.sketches.insert(h.sketches.end(), o->sections.begin(), o->sections.end());
+                if (o->kind == OpKind::SurfaceCut || o->kind == OpKind::Thicken) h.sketches.push_back(o->surface);
+            }
     }
     viewport_->setPartHighlight(h);
 }
@@ -744,8 +751,55 @@ void MainWindow::showPartProperties(const Body& b) {
                 row(tr("Radius (mm)"), valueText(o->radius), "radius");
                 break;
             case OpKind::Import: break;
+            case OpKind::Loft: {
+                QStringList names;
+                for (auto id : o->sections)
+                    if (const Sketch* s2 = b.model->sketch("s" + std::to_string(id))) names << QString::fromStdString(s2->name);
+                row(tr("Sections"), names.join(" → "));
+                const int r = row(tr("Ruled"), QString());
+                auto* ruled = new QCheckBox(tr("flat between sections"));
+                ruled->setChecked(o->ruled);
+                connect(ruled, &QCheckBox::toggled, this, [this, ref = b.ref(), op = o->ref()](bool on) { run("part.edit", {{"body", ref}, {"operation", op}, {"ruled", on}}); });
+                props_->setCellWidget(r, 1, ruled);
+                break;
+            }
+            case OpKind::Pattern: {
+                if (const Operation* src = b.model->operation("o" + std::to_string(o->source))) row(tr("Repeats"), QString::fromStdString(src->name));
+                row(tr("Copies"), valueText(o->count), "count");
+                row(tr("Angle (°)"), valueText(o->angle), "angle");
+                auto v3 = [&](const Vec3d& v) { return loc.toString(v.x(), 'f', 3) + "; " + loc.toString(v.y(), 'f', 3) + "; " + loc.toString(v.z(), 'f', 3); };
+                row(tr("Axis point"), v3(o->axisOrigin));
+                row(tr("Axis direction"), v3(o->axisDirection));
+                break;
+            }
+            case OpKind::SurfaceCut:
+            case OpKind::Thicken: {
+                if (const FreeSurface* f = b.model->surface("sf" + std::to_string(o->surface))) row(tr("Surface"), QString::fromStdString(f->name));
+                if (o->kind == OpKind::Thicken) {
+                    row(tr("Thickness (mm)"), valueText(o->thickness), "thickness");
+                } else {
+                    const int r = row(tr("Keeps"), QString());
+                    auto* keep = new QComboBox();
+                    keep->addItem(tr("below the surface"), "below");
+                    keep->addItem(tr("above the surface"), "above");
+                    keep->setCurrentIndex(o->keepBelow ? 0 : 1);
+                    connect(keep, &QComboBox::currentIndexChanged, this, [this, keep, ref = b.ref(), op = o->ref()]() {
+                        run("part.edit", {{"body", ref}, {"operation", op}, {"keep", keep->currentData().toString().toStdString()}});
+                    });
+                    props_->setCellWidget(r, 1, keep);
+                }
+                break;
+            }
         }
         if (!b.buildError.empty() && b.buildError.find(o->ref()) != std::string::npos) row(tr("Error"), QString::fromStdString(b.buildError));
+    } else if (const FreeSurface* f = b.model->surface(it)) {
+        row(tr("Surface"), QString::fromStdString(f->name));
+        row(tr("Reference"), QString::fromStdString(f->ref()));
+        row(tr("Poles"), QString("%1 × %2").arg(f->surface.nu).arg(f->surface.nv));
+        row(tr("Size (mm)"), loc.toString(f->surface.width, 'f', 2) + " × " + loc.toString(f->surface.height, 'f', 2));
+        row(tr("Fit to the scan"), tr("rms %1 mm, worst %2 mm").arg(loc.toString(f->rms, 'f', 4), loc.toString(f->maxDeviation, 'f', 4)));
+        const Vec3d& n = f->surface.normal;
+        row(tr("Normal"), loc.toString(n.x(), 'f', 3) + "; " + loc.toString(n.y(), 'f', 3) + "; " + loc.toString(n.z(), 'f', 3));
     }
     props_->resizeColumnsToContents();
     props_->horizontalHeader()->setStretchLastSection(true);
@@ -830,6 +884,16 @@ void MainWindow::showTreeMenu(const QPoint& pos) {
             const double v = QInputDialog::getDouble(this, tr("Parameter"), name, now, -1e6, 1e6, 4, &ok);
             if (ok) run("part.parameter", {{"body", ref}, {"name", name.toStdString()}, {"value", v}});
         });
+    } else if (it.startsWith("sf")) {
+        menu.addAction(tr("Cut the part by it, keeping what is below"), this, [this, ref, it]() { run("part.cut_by_surface", {{"body", ref}, {"surface", it.toStdString()}, {"keep", "below"}}); });
+        menu.addAction(tr("Cut the part by it, keeping what is above"), this, [this, ref, it]() { run("part.cut_by_surface", {{"body", ref}, {"surface", it.toStdString()}, {"keep", "above"}}); });
+        menu.addAction(tr("Thicken…"), this, [this, ref, it]() {
+            bool ok = false;
+            const double t = QInputDialog::getDouble(this, tr("Thicken a surface"), tr("Thickness (mm; negative: the other side):"), 1.0, -1000, 1000, 3, &ok);
+            if (ok) run("part.thicken", {{"body", ref}, {"surface", it.toStdString()}, {"thickness", t}});
+        });
+        menu.addSeparator();
+        menu.addAction(tr("Delete"), this, [this, ref, it]() { run("part.delete", {{"body", ref}, {"item", it.toStdString()}}); });
     } else if (it.startsWith('s')) {
         menu.addAction(tr("Edit sketch…"), this, [this, id = it.mid(1).toULongLong()]() { editSketch(selected_, id); });
         menu.addAction(tr("Extrude…"), this, [this]() { runFromUi("part.extrude"); });

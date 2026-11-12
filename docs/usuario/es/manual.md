@@ -1,4 +1,4 @@
-# Manual de OpenRevers (versión 0.5)
+# Manual de OpenRevers (versión 0.6)
 
 OpenRevers prepara mallas escaneadas para la ingeniería inversa. Esta versión
 cubre la **fase 1**: abrir el escaneo, ver qué le pasa, repararlo y dejarlo
@@ -202,6 +202,36 @@ puedes retocar cualquier parte sin salir del programa.
 
 Los triángulos de una pieza solo la muestran: las herramientas de malla no
 la cambian.
+
+### Formas libres (fase 4)
+
+- **Contornos orgánicos:** en *Boceto desde una sección*, marca *splines*: los
+  tramos suaves del contorno (que sin ella salen como muchos arcos cortos)
+  pasan a ser splines dentro de la tolerancia. Las esquinas vivas, las rectas
+  largas y los arcos claros se mantienen.
+- **Loft por secciones** (*Pieza → Loft por secciones*): un sólido que pasa
+  por varios bocetos en orden. Para un álabe, dibuja o saca del escaneo su
+  sección a varios radios (cada una, un lazo cerrado que empieza en el borde
+  de ataque, y los planos mirando hacia el mismo lado). *Reglado* lo hace
+  plano entre secciones.
+- **Patrón circular** (*Pieza → Patrón circular*): copias de lo que hizo otra
+  operación (un álabe, un taladro) alrededor de un eje. El número de copias y
+  el ángulo pueden ser parámetros.
+- **Superficie desde el escaneo** (*Pieza → Superficie desde el escaneo*):
+  una superficie libre y suave ajustada a una zona del escaneo, una forma
+  segmentada o los puntos alrededor de un punto. Da su rms y su desviación
+  máxima. En la vista se ve como una rejilla violeta; en el panel *Modelo*,
+  con sus datos. Su menú contextual permite:
+  - **Cortar la pieza por ella** (dejando lo de debajo o lo de encima):
+    extruye un bloque que sobrepase la cara curva, y el corte le da la forma
+    del escaneo;
+  - **Engrosar** hasta un sólido: una carcasa o un panel.
+- **En el editor de bocetos,** *A spline* convierte una recta o un arco en
+  una spline, que se dobla arrastrando sus polos (los círculos unidos por una
+  línea discontinua).
+
+Una superficie se ve desde un plano: si vista desde él vuelve sobre sí misma,
+hay que hacerla por secciones y loft.
 
 ### Retocar la pieza a mano
 

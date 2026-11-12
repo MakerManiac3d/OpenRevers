@@ -14,6 +14,10 @@ struct SketchFitOptions {
     double tolerance{0.05};   // largest distance from a point to its segment
     double minSegment{0.3};   // shorter pieces are merged into their neighbours
     double maxRadius{500.0};  // flatter arcs become lines
+    /// Free-form runs (three or more pieces joined without a corner, two of
+    /// them arcs at least, as the fit breaks an organic outline) become one
+    /// spline each.
+    bool splines{false};
 };
 
 struct LoopFit {

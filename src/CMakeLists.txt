@@ -28,6 +28,7 @@ add_library(orv_core STATIC
   core/fit/Primitive.cpp
   core/fit/Segmentation.cpp
   core/fit/Align.cpp
+  core/solid/BSpline.cpp
   core/solid/Profile.cpp
   core/solid/Solid.cpp
   core/solid/SketchFit.cpp

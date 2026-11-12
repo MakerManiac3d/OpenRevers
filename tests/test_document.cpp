@@ -4,6 +4,7 @@
 #include "core/fit/Align.h"
 #include "core/mesh/MeshIO.h"
 #include "core/mesh/MeshRepair.h"
+#include "core/solid/BSpline.h"
 #include "doc/Project.h"
 #include "mcp/LocalBackend.h"
 #include "mcp/McpServer.h"
@@ -508,4 +509,119 @@ TEST(Commands, CompareShowsWhereAndColoursTheScan) {
     EXPECT_EQ(f.doc.undoList().size(), undoSteps);
     f.run("body.clear_deviation", {{"body", "b1"}});
     EXPECT_FALSE(f.doc.body("b1").deviation);
+}
+
+TEST(Commands, LoftPatternAndFreeSurfaces) {
+    const auto dir = tempDir("surfaces");
+    Fixture f;
+    const double pi = 3.14159265358979323846;
+    // A loft from a Ø20 circle at z = 0 to a Ø10 circle at z = 10: a cone frustum.
+    f.run("part.new", {{"name", "Turbine"}});
+    auto circle = [](double r) { return json::array({json::array({{{"type", "circle"}, {"centre", {0.0, 0.0}}, {"radius", r}}})}); };
+    f.run("part.sketch", {{"body", "b1"}, {"loops", circle(10)}});
+    f.run("part.sketch", {{"body", "b1"}, {"loops", circle(5)}, {"plane", {{"origin", {0.0, 0.0, 10.0}}, {"normal", {0.0, 0.0, 1.0}}}}});
+    const json loft = f.run("part.loft", {{"body", "b1"}, {"sections", {"s1", "s2"}}, {"mode", "new"}});
+    const double frustum = pi * 10 / 3 * (100 + 50 + 25);
+    EXPECT_NEAR(loft["solid"]["volume"].get<double>(), frustum, 0.005 * frustum);
+    // A Ø2 hole through it at x = 7, repeated six times round z.
+    f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({json::array({{{"type", "circle"}, {"centre", {7.0, 0.0}}, {"radius", 1.0}}})})}});
+    f.run("part.extrude", {{"body", "b1"}, {"sketch", "s4"}, {"start", -1.0}, {"end", 3.0}, {"mode", "cut"}});
+    const double lofted = loft["solid"]["volume"].get<double>();
+    const double oneHole = lofted - f.run("part.list", {{"body", "b1"}})["solid"]["volume"].get<double>();
+    EXPECT_NEAR(oneHole, pi * 3, 0.01 * pi * 3);  // Ø2 through 3 mm
+    f.run("part.parameter", {{"body", "b1"}, {"name", "holes"}, {"value", 6}});
+    const json pat = f.run("part.pattern", {{"body", "b1"}, {"operation", "o5"}, {"axisOrigin", {0.0, 0.0, 0.0}}, {"axisDirection", {0.0, 0.0, 1.0}}, {"count", "holes"}});
+    EXPECT_EQ(pat["operations"][2]["kind"], "pattern");
+    EXPECT_EQ(pat["operations"][2]["mode"], "cut");  // as the operation it repeats
+    EXPECT_NEAR(lofted - pat["solid"]["volume"].get<double>(), 6 * oneHole, 0.01 * 6 * oneHole);
+    // The parameter drives the count.
+    const json four = f.run("part.parameter", {{"body", "b1"}, {"name", "holes"}, {"value", 4}});
+    EXPECT_NEAR(lofted - four["solid"]["volume"].get<double>(), 4 * oneHole, 0.01 * 4 * oneHole);
+
+    // A scan with a curved top: a 40 × 30 block whose top is z = 5 + (x² + y²)/400, sampled densely.
+    TriMesh scan;
+    const int nx = 81, ny = 61;
+    for (int j = 0; j < ny; ++j)
+        for (int i = 0; i < nx; ++i) {
+            const double x = -20 + 0.5 * i, y = -15 + 0.5 * j;
+            scan.vertices.emplace_back(static_cast<float>(x), static_cast<float>(y), static_cast<float>(5 + (x * x + y * y) / 400));
+        }
+    for (int j = 0; j + 1 < ny; ++j)
+        for (int i = 0; i + 1 < nx; ++i) {
+            const auto a = static_cast<std::uint32_t>(i + nx * j), b = a + 1, c = a + static_cast<std::uint32_t>(nx), d = c + 1;
+            scan.faces.push_back({a, b, d});
+            scan.faces.push_back({a, d, c});
+        }
+    writeMesh(scan, dir / "top.stl");
+    f.run("mesh.import", {{"path", (dir / "top.stl").string()}});
+    f.run("part.new", {{"name", "Lid"}});
+    json rect = json::array();
+    rect.push_back(json::array({{{"type", "line"}, {"from", {-20, -15}}, {"to", {20, -15}}}, {{"type", "line"}, {"from", {20, -15}}, {"to", {20, 15}}},
+                                {{"type", "line"}, {"from", {20, 15}}, {"to", {-20, 15}}}, {{"type", "line"}, {"from", {-20, 15}}, {"to", {-20, -15}}}}));
+    f.run("part.sketch", {{"body", "b3"}, {"loops", rect}});
+    f.run("part.extrude", {{"body", "b3"}, {"sketch", "s1"}, {"end", 12.0}, {"mode", "new"}});
+    const json sf = f.run("part.surface_from_scan", {{"body", "b3"}, {"scan", "b2"}, {"margin", 3.0}});
+    EXPECT_EQ(sf["ref"], "sf3");
+    EXPECT_LT(sf["rms"].get<double>(), 0.005);
+    EXPECT_NEAR(std::abs(sf["normal"][2].get<double>()), 1.0, 1e-6);
+    const json cut = f.run("part.cut_by_surface", {{"body", "b3"}, {"surface", "sf3"}, {"keep", "below"}});
+    // Volume under z = 5 + (x² + y²)/400 over the rectangle: 40·30·5 + (∫x² ∫dy + ∫dx ∫y²)/400.
+    const double under = 40 * 30 * 5 + (30 * (2 * 8000.0 / 3) + 40 * (2 * 3375.0 / 3)) / 400;
+    EXPECT_NEAR(cut["solid"]["volume"].get<double>(), under, 0.002 * under);
+    // The scan now lies on the part's top: the comparison says so.
+    const json cmp = f.run("part.compare", {{"body", "b3"}, {"scan", "b2"}, {"tolerance", 0.02}});
+    EXPECT_GT(cmp["withinPercent"].get<double>(), 99.0);
+    // Keep the other side instead.
+    const json above = f.run("part.edit", {{"body", "b3"}, {"operation", "o4"}, {"keep", "above"}});
+    EXPECT_NEAR(above["solid"]["volume"].get<double>(), 40 * 30 * 12 - under, 0.002 * under);
+
+    // A surface thickened into a 1 mm shell.
+    f.run("part.new", {{"name", "Shell"}});
+    f.run("part.surface_from_scan", {{"body", "b4"}, {"scan", "b2"}, {"margin", 0.0}});
+    const json th = f.run("part.thicken", {{"body", "b4"}, {"surface", "sf1"}, {"thickness", 1.0}, {"mode", "new"}});
+    EXPECT_NEAR(th["solid"]["volume"].get<double>(), 40 * 30 * 1.0, 0.02 * 1200);
+    EXPECT_THROW(f.run("part.delete", {{"body", "b4"}, {"item", "sf1"}}), CommandError);  // the thickening uses it
+
+    // All of it is saved and read back.
+    f.run("project.save", {{"path", (dir / "s.orvp").string()}});
+    Fixture g;
+    g.run("project.open", {{"path", (dir / "s.orvp").string()}});
+    EXPECT_NEAR(g.run("part.list", {{"body", "Turbine"}})["solid"]["volume"].get<double>(), four["solid"]["volume"].get<double>(), 1e-3);
+    const json lid = g.run("part.list", {{"body", "Lid"}});
+    EXPECT_EQ(lid["surfaces"].size(), 1u);
+    // Rebuilt from the saved model, the lid is the same.
+    const json again = g.run("part.edit", {{"body", "Lid"}, {"operation", "o4"}, {"keep", "below"}});
+    EXPECT_NEAR(again["solid"]["volume"].get<double>(), cut["solid"]["volume"].get<double>(), 1e-3);
+}
+
+TEST(Commands, SketchFromSectionWithSplines) {
+    // A scan of an extruded airfoil-like lens: its section comes back as splines.
+    const auto dir = tempDir("splinesection");
+    Fixture f;
+    f.run("part.new", {{"name", "Lens"}});
+    // An ellipse 30 × 8 drawn as two splines, extruded as the "scan".
+    std::vector<Vec2d> top, bottom;
+    for (int i = 0; i <= 60; ++i) {
+        const double t = 3.14159265358979323846 * i / 60;
+        top.emplace_back(15 * std::cos(t), 4 * std::sin(t));
+        bottom.emplace_back(-15 * std::cos(t), -4 * std::sin(t));
+    }
+    const CurveFit a = fitCurve(std::vector<Vec2d>(top.begin() + 1, top.end() - 1), top.front(), top.back(), 0.001);
+    const CurveFit b = fitCurve(std::vector<Vec2d>(bottom.begin() + 1, bottom.end() - 1), bottom.front(), bottom.back(), 0.001);
+    json pa = json::array(), pb = json::array();
+    for (const auto& q : a.poles) pa.push_back({q.x(), q.y()});
+    for (const auto& q : b.poles) pb.push_back({q.x(), q.y()});
+    f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({json::array({{{"type", "spline"}, {"poles", pa}}, {{"type", "spline"}, {"poles", pb}}})})}});
+    const json e = f.run("part.extrude", {{"body", "b1"}, {"sketch", "s1"}, {"end", 5.0}, {"mode", "new"}});
+    EXPECT_NEAR(e["solid"]["volume"].get<double>(), 5 * 3.14159265358979323846 * 15 * 4, 0.003 * 5 * 3.14159265358979323846 * 60);
+    f.run("mesh.export", {{"body", "b1"}, {"path", (dir / "lens.stl").string()}, {"overwrite", true}});
+    f.run("mesh.import", {{"path", (dir / "lens.stl").string()}});
+    f.run("part.new");
+    const json s = f.run("part.sketch_from_section", {{"body", "b3"}, {"scan", "b2"}, {"origin", {0.0, 0.0, 2.5}}, {"normal", {0.0, 0.0, 1.0}}, {"xDir", {1.0, 0.0, 0.0}},
+                                                      {"splines", true}, {"tolerance", 0.02}});
+    ASSERT_EQ(s["loops"].size(), 1u);
+    int splines = 0;
+    for (const auto& sg : s["loops"][0]["segments"]) splines += sg["type"] == "spline";
+    EXPECT_GE(splines, 1);
+    EXPECT_LT(s["loops"][0]["maxDeviation"].get<double>(), 0.05);
 }

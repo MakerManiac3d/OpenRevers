@@ -3,6 +3,8 @@
 // 7.6 (Ubuntu 24.04) and 7.9 (the Windows build).
 #include "core/solid/Solid.h"
 
+#include "core/solid/BSpline.h"
+
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
@@ -23,11 +25,21 @@
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
+#include <BRepLib.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GC_MakeArcOfCircle.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <BRepOffsetAPI_ThruSections.hxx>
+#include <BRepOffsetAPI_MakeThickSolid.hxx>
+#include <TColgp_Array2OfPnt.hxx>
+#include <Precision.hxx>
+#include <TColStd_Array1OfInteger.hxx>
+#include <TColStd_Array1OfReal.hxx>
+#include <TColgp_Array1OfPnt.hxx>
 #include <GC_MakeSegment.hxx>
 #include <GProp_GProps.hxx>
 #include <IFSelect_ReturnStatus.hxx>
@@ -44,7 +56,9 @@
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
+#include <TopoDS_Compound.hxx>
 #include <TopoDS_Face.hxx>
+#include <TopoDS_Solid.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
 #include <gp_Ax1.hxx>
@@ -115,6 +129,28 @@ Vec2d arcMiddle(const Vec2d& a, const Vec2d& b, const Segment& s) {
     return s.centre + r * Vec2d(std::cos(a0 + 0.5 * sweep), std::sin(a0 + 0.5 * sweep));
 }
 
+/// The same clamped B-spline as BSpline.h, with 3-D poles in the plane; its
+/// ends are exactly the neighbours' joints.
+Handle(Geom_BSplineCurve) splineCurve(const Segment& s, const SketchPlane& pl, const Vec2d& a, const Vec2d& b) {
+    const int n = static_cast<int>(s.poles.size());
+    const int p = curveDegree(s.poles.size());
+    TColgp_Array1OfPnt poles(1, n);
+    for (int i = 0; i < n; ++i) {
+        const Vec2d q = i == 0 ? a : i == n - 1 ? b : s.poles[static_cast<std::size_t>(i)];
+        poles.SetValue(i + 1, pnt(pl.toWorld(q)));
+    }
+    std::vector<double> k;
+    std::vector<int> m;
+    knotsAndMultiplicities(clampedKnots(n, p), k, m);
+    TColStd_Array1OfReal knots(1, static_cast<int>(k.size()));
+    TColStd_Array1OfInteger mults(1, static_cast<int>(m.size()));
+    for (std::size_t i = 0; i < k.size(); ++i) {
+        knots.SetValue(static_cast<int>(i) + 1, k[i]);
+        mults.SetValue(static_cast<int>(i) + 1, m[i]);
+    }
+    return new Geom_BSplineCurve(poles, knots, mults, p);
+}
+
 TopoDS_Wire wireOf(const Loop& loop, const SketchPlane& pl) {
     BRepBuilderAPI_MakeWire mw;
     const auto& sg = loop.segments;
@@ -133,6 +169,8 @@ TopoDS_Wire wireOf(const Loop& loop, const SketchPlane& pl) {
         const gp_Pnt pa = pnt(pl.toWorld(a)), pb = pnt(pl.toWorld(b));
         if (s.kind == Segment::Kind::Line) {
             mw.Add(BRepBuilderAPI_MakeEdge(GC_MakeSegment(pa, pb).Value()).Edge());
+        } else if (s.kind == Segment::Kind::Spline) {
+            mw.Add(BRepBuilderAPI_MakeEdge(splineCurve(s, pl, a, b)).Edge());
         } else {
             // Through its two ends and its middle: the ends are exactly the
             // neighbours' (an arc made on its circle would project them, and a
@@ -236,6 +274,98 @@ Solid Solid::revolve(const Profile& profile, const Vec2d& axisPoint, const Vec2d
             if (!rev.IsDone()) throw SolidError("the revolution failed (does the profile cross the axis?)");
             return rev.Shape();
         }));
+    });
+}
+
+namespace {
+/// The same surface as HeightSurface, as an Open CASCADE face.
+TopoDS_Face surfaceFace(const HeightSurface& hs) {
+    const int pu = std::min(3, hs.nu - 1), pv = std::min(3, hs.nv - 1);
+    const auto P = hs.poles3();
+    TColgp_Array2OfPnt poles(1, hs.nu, 1, hs.nv);
+    for (int j = 0; j < hs.nv; ++j)
+        for (int i = 0; i < hs.nu; ++i) poles.SetValue(i + 1, j + 1, pnt(P[static_cast<std::size_t>(i + hs.nu * j)]));
+    struct Knots {
+        TColStd_Array1OfReal k;
+        TColStd_Array1OfInteger m;
+    };
+    auto knotsOf = [](int n, int p) {
+        std::vector<double> kk;
+        std::vector<int> mm;
+        knotsAndMultiplicities(clampedKnots(n, p), kk, mm);
+        Knots out{TColStd_Array1OfReal(1, static_cast<int>(kk.size())), TColStd_Array1OfInteger(1, static_cast<int>(mm.size()))};
+        for (std::size_t i = 0; i < kk.size(); ++i) {
+            out.k.SetValue(static_cast<int>(i) + 1, kk[i]);
+            out.m.SetValue(static_cast<int>(i) + 1, mm[i]);
+        }
+        return out;
+    };
+    const Knots u = knotsOf(hs.nu, pu), v = knotsOf(hs.nv, pv);
+    Handle(Geom_BSplineSurface) g = new Geom_BSplineSurface(poles, u.k, v.k, u.m, v.m, pu, pv);
+    BRepBuilderAPI_MakeFace mf(g, Precision::Confusion());
+    if (!mf.IsDone()) throw SolidError("the surface could not be made into a face");
+    return mf.Face();
+}
+}  // namespace
+
+Solid Solid::loft(const std::vector<Profile>& sections, bool ruled) {
+    if (sections.size() < 2) throw SolidError("a loft needs two sections at least");
+    for (const auto& p : sections) {
+        if (const auto why = p.problem(); !why.empty()) throw SolidError(why);
+        if (p.loops.size() != 1) throw SolidError("each section of a loft must be one closed loop");
+    }
+    return guarded("loft", [&] {
+        BRepOffsetAPI_ThruSections ts(Standard_True, ruled ? Standard_True : Standard_False);
+        for (const auto& p : sections) {
+            SketchPlane pl = p.plane;
+            pl.normalize();
+            ts.AddWire(wireOf(p.loops.front(), pl));
+        }
+        ts.Build();
+        if (!ts.IsDone()) throw SolidError("the loft failed (do the sections face the same way, with their starts lined up?)");
+        return make(ts.Shape());
+    });
+}
+
+Solid Solid::thicken(const HeightSurface& hs, double thickness) {
+    if (std::abs(thickness) < 1e-6) throw SolidError("a thickness cannot be zero");
+    return guarded("thicken", [&] {
+        BRepOffsetAPI_MakeThickSolid mk;
+        mk.MakeThickSolidBySimple(surfaceFace(hs), thickness);
+        if (!mk.IsDone()) throw SolidError("the surface could not be thickened (too thick for its bends?)");
+        // Its faces may come out facing in: turn every solid outward.
+        TopoDS_Shape out = mk.Shape();
+        if (out.ShapeType() == TopAbs_SOLID) {
+            TopoDS_Solid so = TopoDS::Solid(out);
+            BRepLib::OrientClosedSolid(so);
+            out = so;
+        } else {
+            BRep_Builder bb;
+            TopoDS_Compound c;
+            bb.MakeCompound(c);
+            for (TopExp_Explorer ex(out, TopAbs_SOLID); ex.More(); ex.Next()) {
+                TopoDS_Solid so = TopoDS::Solid(ex.Current());
+                BRepLib::OrientClosedSolid(so);
+                bb.Add(c, so);
+            }
+            out = c;
+        }
+        return make(out);
+    });
+}
+
+Solid Solid::cutBySurface(const HeightSurface& hs, bool keepBelow) const {
+    if (empty()) throw SolidError("there is nothing to cut yet");
+    return guarded("cut by surface", [&] {
+        // The surface swept far to the side to remove: a solid to cut away.
+        const auto b = bounds();
+        const double far = 4 * (b.max() - b.min()).norm() + 4 * std::abs(hs.width) + 4 * std::abs(hs.height) + 10;
+        const gp_Vec v = gp_Vec(dir(hs.normal)) * (keepBelow ? far : -far);
+        BRepPrimAPI_MakePrism prism(surfaceFace(hs), v);
+        if (!prism.IsDone()) throw SolidError("the surface could not be swept");
+        BRepAlgoAPI_Cut op(shapeOf(*this), prism.Shape());
+        if (!op.IsDone()) throw SolidError("cutting by the surface failed (does it reach past the part?)");
+        return make(unify(op.Shape()));
     });
 }
 
@@ -490,8 +620,32 @@ ShapeInfo Solid::edgeInfo(int index) const {
     });
 }
 
+namespace {
+/// Whether a shape has free-form edges or faces. Open CASCADE's integration
+/// (BRepGProp, a fixed number of Gauss points) is off by up to 1% on faces
+/// bounded by B-splines with many knots; their volume and area come from a
+/// fine triangulation instead (exact to the deflection).
+bool freeForm(const TopoDS_Shape& s) {
+    for (TopExp_Explorer ex(s, TopAbs_EDGE); ex.More(); ex.Next()) {
+        const TopoDS_Edge& e = TopoDS::Edge(ex.Current());
+        if (BRep_Tool::Degenerated(e)) continue;
+        const auto t = BRepAdaptor_Curve(e).GetType();
+        if (t == GeomAbs_BSplineCurve || t == GeomAbs_BezierCurve || t == GeomAbs_OtherCurve || t == GeomAbs_OffsetCurve) return true;
+    }
+    for (TopExp_Explorer ex(s, TopAbs_FACE); ex.More(); ex.Next()) {
+        const auto t = BRepAdaptor_Surface(TopoDS::Face(ex.Current())).GetType();
+        if (t == GeomAbs_BSplineSurface || t == GeomAbs_BezierSurface || t == GeomAbs_OtherSurface || t == GeomAbs_OffsetSurface) return true;
+    }
+    return false;
+}
+}  // namespace
+
 double Solid::volume() const {
     if (empty()) return 0;
+    if (freeForm(shapeOf(*this))) {
+        const auto b = bounds();
+        return tessellate(std::max(1e-5, 1e-4 * (b.max() - b.min()).norm()), 5.0).mesh.signedVolume();
+    }
     GProp_GProps g;
     BRepGProp::VolumeProperties(shapeOf(*this), g);
     return g.Mass();
@@ -499,6 +653,10 @@ double Solid::volume() const {
 
 double Solid::area() const {
     if (empty()) return 0;
+    if (freeForm(shapeOf(*this))) {
+        const auto b = bounds();
+        return tessellate(std::max(1e-5, 1e-4 * (b.max() - b.min()).norm()), 5.0).mesh.area();
+    }
     GProp_GProps g;
     BRepGProp::SurfaceProperties(shapeOf(*this), g);
     return g.Mass();

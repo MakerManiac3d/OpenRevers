@@ -1,5 +1,31 @@
 # Cambios · Changelog
 
+## 0.6.0 — 12 de noviembre de 2026 (fase 4: superficies libres, primer bloque)
+
+- **Splines en los bocetos:** B-splines cúbicas cerradas en sus extremos
+  (`{type: spline, poles}`), evaluadas por el programa y construidas igual en
+  Open CASCADE. En el editor, *A spline* convierte una recta o un arco, y sus
+  polos se arrastran o se escriben.
+- **Boceto desde una sección con `splines`:** los tramos libres de un
+  contorno orgánico (tres o más piezas unidas sin esquina, dos arcos al
+  menos) salen como una spline cada uno, dentro de la tolerancia. Un perfil
+  alar de 40 mm pasa de decenas de arcos a cuatro segmentos.
+- **Loft por secciones** (`part.loft`), suave o reglado.
+- **Patrón circular** (`part.pattern`): copias de lo que hizo otra
+  operación alrededor de un eje; el número y el ángulo pueden ser parámetros.
+- **Superficies libres** (`part.surface_from_scan`): B-spline bicúbica
+  ajustada a una forma segmentada o a una esfera de puntos del escaneo, vista
+  desde su plano de mejor ajuste; se guarda en la pieza y se dibuja como una
+  rejilla. `part.cut_by_surface` quita lo que queda por encima o por debajo
+  de ella (un bloque toma la cara curva del escaneo: 0,2 % de error en el
+  volumen de prueba) y `part.thicken` la engruesa hasta un sólido.
+- **Volumen y área exactos con formas libres:** la integración de Open
+  CASCADE se equivoca hasta un 1 % en caras limitadas por B-splines con
+  muchos nudos; en esos sólidos se calculan sobre una teselación fina.
+- Una turbina de prueba hecha por comandos: cubo por revolución, álabe por
+  loft de tres secciones alares retorcidas y patrón de seis.
+- Documentación de los algoritmos en `docs/algoritmos/superficies.md`.
+
 ## 0.5.0 — 12 de noviembre de 2026 (edición a mano)
 
 La IA hace la pieza; la persona retoca lo que no llegó o quiere cambiar, sin
