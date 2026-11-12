@@ -65,7 +65,10 @@ void main() {
     float diff = max(dot(n, l1), 0.0) * 0.75 + max(dot(n, l2), 0.0) * 0.25;
     vec3 h = normalize(l1 + v);
     float spec = pow(max(dot(n, h), 0.0), 48.0) * 0.25;
-    vec3 base = back ? vec3(0.78, 0.45, 0.40) : (uVertexColor ? vColor : uColor);  // inside of the surface in a warm tone
+    // The inside of a surface in a warm tone; coloured by vertex (deviation,
+    // shapes), both sides keep the colour, the back a little darker: a scan
+    // of one side seen from behind must still show its deviation.
+    vec3 base = uVertexColor ? vColor * (back ? 0.85 : 1.0) : (back ? vec3(0.78, 0.45, 0.40) : uColor);
     vec3 c = base * (0.22 + 0.78 * diff) + vec3(spec);
     c = mix(c, vec3(1.0, 0.72, 0.25), uHighlight * 0.18);
     fragColor = vec4(c, uAlpha);

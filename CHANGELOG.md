@@ -1,5 +1,12 @@
 # Cambios · Changelog
 
+## 0.6.1 — 12 de noviembre de 2026
+
+- El mapa de desviación y los colores de las formas se ven también desde el
+  otro lado de la superficie (un escaneo de una sola cara visto por detrás
+  salía en un tono rojizo fijo).
+- Compila en Windows: `far` y `near` son macros allí.
+
 ## 0.6.0 — 12 de noviembre de 2026 (fase 4: superficies libres, primer bloque)
 
 - **Splines en los bocetos:** B-splines cúbicas cerradas en sus extremos
