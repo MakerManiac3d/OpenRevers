@@ -172,9 +172,9 @@ Vec2d SketchCanvas::toPlane(const QPointF& p) const {
 }
 
 SketchPick SketchCanvas::hitTest(const QPointF& at) const {
-    const double near = 7.0;  // pixels
+    const double reachPx = 7.0;  // pixels
     SketchPick best;
-    double bestD = near;
+    double bestD = reachPx;
     auto consider = [&](const Vec2d& p, SketchPick::What w, int l, int s, double bonus = 0, int index = -1) {
         const QPointF q = toScreen(p);
         const double d = std::hypot(q.x() - at.x(), q.y() - at.y()) - bonus;
@@ -201,7 +201,7 @@ SketchPick SketchCanvas::hitTest(const QPointF& at) const {
     }
     if (best.what != SketchPick::What::None) return best;
     const Vec2d p = toPlane(at);
-    double bestMm = near / scale_;
+    double bestMm = reachPx / scale_;
     for (int l = 0; l < static_cast<int>(prof_.loops.size()); ++l) {
         const auto& sg = prof_.loops[static_cast<std::size_t>(l)].segments;
         for (int s = 0; s < static_cast<int>(sg.size()); ++s) {
@@ -218,9 +218,9 @@ SketchPick SketchCanvas::hitTest(const QPointF& at) const {
 Vec2d SketchCanvas::snapped(const QPointF& at) const {
     const Vec2d p = toPlane(at);
     if (!snap_) return p;
-    const double near = 8.0 / scale_;
+    const double reachMm = 8.0 / scale_;
     // Vertices and centres of the sketch first, then the section's points.
-    double best = near;
+    double best = reachMm;
     std::optional<Vec2d> to;
     for (int l = 0; l < static_cast<int>(prof_.loops.size()); ++l)
         for (int s = 0; s < static_cast<int>(prof_.loops[static_cast<std::size_t>(l)].segments.size()); ++s) {

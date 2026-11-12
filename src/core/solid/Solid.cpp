@@ -359,8 +359,8 @@ Solid Solid::cutBySurface(const HeightSurface& hs, bool keepBelow) const {
     return guarded("cut by surface", [&] {
         // The surface swept far to the side to remove: a solid to cut away.
         const auto b = bounds();
-        const double far = 4 * (b.max() - b.min()).norm() + 4 * std::abs(hs.width) + 4 * std::abs(hs.height) + 10;
-        const gp_Vec v = gp_Vec(dir(hs.normal)) * (keepBelow ? far : -far);
+        const double reach = 4 * (b.max() - b.min()).norm() + 4 * std::abs(hs.width) + 4 * std::abs(hs.height) + 10;
+        const gp_Vec v = gp_Vec(dir(hs.normal)) * (keepBelow ? reach : -reach);
         BRepPrimAPI_MakePrism prism(surfaceFace(hs), v);
         if (!prism.IsDone()) throw SolidError("the surface could not be swept");
         BRepAlgoAPI_Cut op(shapeOf(*this), prism.Shape());
