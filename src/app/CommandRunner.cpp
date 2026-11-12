@@ -76,6 +76,7 @@ void CommandRunner::complete(const Job& job, bool ok, const json& result, const 
     const QString title = c ? QString::fromStdString(c->title.in(job.lang.toStdString())) : job.name;
     QString summary = ok ? (result.is_object() && result.contains("summary") ? QString::fromStdString(result["summary"].get<std::string>()) : QString()) : message;
     emit finished(title, job.caller, ok, summary);
+    emit completed(job.name, title, job.caller, ok, job.params, result, message);
     if (job.done) job.done(ok, result, code, message);
     next();
 }

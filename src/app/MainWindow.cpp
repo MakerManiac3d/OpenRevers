@@ -4,7 +4,7 @@
 #include "scan/ScanBackend.h"
 
 #include "app/AppCommands.h"
-#include "app/CommandDialog.h"
+#include "app/CommandPanel.h"
 #include "app/SettingsDialog.h"
 #include "app/PairAlignDialog.h"
 #include "app/SketchEditor.h"
@@ -41,6 +41,10 @@
 #include <QTableWidget>
 #include <QTextBrowser>
 #include <QToolBar>
+#include <QScrollArea>
+#include <QTime>
+#include <QDialog>
+#include <QLineEdit>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QUrl>
@@ -132,6 +136,10 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
     statusBar()->addPermanentWidget(agentStatus_);
 
     connect(runner_, &CommandRunner::busyChanged, busy_, &QWidget::setVisible);
+    connect(runner_, &CommandRunner::completed, this,
+            [this](const QString&, const QString& title, const QString& caller, bool ok, const json& params, const json& result, const QString& message) {
+                addResult(title, caller, ok, params, result, message);
+            });
     connect(runner_, &CommandRunner::started, this, [this](const QString& title, const QString& caller) {
         status_->setText(caller == "agent" ? tr("Agent: %1…").arg(title) : tr("%1…").arg(title));
     });
@@ -332,6 +340,7 @@ void MainWindow::buildActions() {
     agentMenu->addSeparator();
     add(agentMenu, tr("&Settings…"), &MainWindow::showSettings);
 
+    add(helpMenu, tr("Find a command…"), &MainWindow::showPalette, QKeySequence(Qt::CTRL | Qt::Key_K));
     add(helpMenu, tr("&Guide"), &MainWindow::showGuide, QKeySequence::HelpContents);
     add(helpMenu, tr("Source code (GitHub)"), []() { QDesktopServices::openUrl(QUrl(kHomepage)); });
     add(helpMenu, tr("&About OpenRevers"), &MainWindow::showAbout);
@@ -429,7 +438,158 @@ void MainWindow::buildDocks() {
     log_ = new QPlainTextEdit();
     log_->setReadOnly(true);
     log_->setMaximumBlockCount(5000);
-    dock(tr("Log"), "LogDock", log_, Qt::BottomDockWidgetArea);
+    auto* logDock = dock(tr("Log"), "LogDock", log_, Qt::BottomDockWidgetArea);
+
+    // Every command run, by the person or the agent, with its whole answer.
+    results_ = new QTreeWidget();
+    results_->setHeaderLabels({tr("Command"), tr("Result")});
+    results_->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    resultsDock_ = dock(tr("Results"), "ResultsDock", results_, Qt::BottomDockWidgetArea);
+    tabifyDockWidget(logDock, resultsDock_);
+    logDock->raise();
+
+    // The command panel: beside the view, open while you click in it.
+    panel_ = new CommandPanel();
+    auto* scroll = new QScrollArea();
+    scroll->setWidget(panel_);
+    scroll->setWidgetResizable(true);
+    scroll->setMinimumWidth(340);
+    panelDock_ = dock(tr("Command"), "CommandDock", scroll, Qt::RightDockWidgetArea);
+    panelDock_->hide();
+    panel_->setSelectionSource([this]() { return std::make_pair(viewport_->selectionBody(), viewport_->selection()); });
+    connect(panel_, &CommandPanel::closeRequested, panelDock_, &QDockWidget::hide);
+    connect(panel_, &CommandPanel::applyRequested, this, [this](const QString& name, const json& params) {
+        run(name, params, [this, name](const json& r) { showResult(name, r); });
+    });
+    connect(panel_, &CommandPanel::sketchEditorRequested, this, [this](const QString& command, const json& v) {
+        const QString body = v.contains("body") ? QString::fromStdString(v["body"].get<std::string>()) : selectedRef();
+        if (command == "part.edit_sketch" && v.contains("sketch")) {
+            auto b = doc_.findBody(body.toStdString());
+            const Sketch* sk = b && b->isPart() ? b->model->sketch(v["sketch"].get<std::string>()) : nullptr;
+            if (sk) editSketch(b->id, sk->id);
+            return;
+        }
+        newSketch(body, v.contains("plane") ? v["plane"] : json(nullptr), v.contains("name") ? QString::fromStdString(v["name"].get<std::string>()) : QString());
+    });
+}
+
+void MainWindow::openPanel(const QString& name, const json& initial) {
+    const Command* c = registry_.find(name.toStdString());
+    if (!c) return;
+    CommandPanel::Context ctx;
+    ctx.bodies = doc_.bodies();
+    ctx.selectedBody = selectedRef();
+    ctx.lang = lang_;
+    ctx.pickedShapes = pickedShapes_;
+    if (lastPick_.hit() && lastPick_.body == selected_) ctx.lastPick = lastPick_;
+    panel_->open(*c, ctx, initial);
+    const bool wasHidden = !panelDock_->isVisible();
+    panelDock_->show();
+    panelDock_->raise();
+    if (wasHidden) resizeDocks({panelDock_}, {height() * 3 / 5}, Qt::Vertical);
+}
+
+void MainWindow::newSketch(const QString& body, const json& plane, const QString& name) {
+    auto b = doc_.findBody(body.toStdString());
+    if (!b || !b->isPart()) {
+        QMessageBox::information(this, tr("OpenRevers"), tr("Choose a part first (Part → New part)."));
+        return;
+    }
+    Profile p;
+    if (plane.is_object()) {
+        auto v = [&](const char* k, const Vec3d& def) {
+            if (!plane.contains(k) || !plane[k].is_array() || plane[k].size() != 3) return def;
+            return Vec3d(plane[k][0].get<double>(), plane[k][1].get<double>(), plane[k][2].get<double>());
+        };
+        p.plane.origin = v("origin", Vec3d::Zero());
+        p.plane.normal = v("normal", Vec3d::UnitZ());
+        p.plane.xDir = v("xDir", Vec3d::UnitX());
+    }
+    p.plane.normalize();
+    SketchEditor ed(p, name.isEmpty() ? tr("New sketch") : name, doc_.bodies(), lang_, this);
+    if (ed.exec() != QDialog::Accepted) return;
+    const Profile out = ed.profile();
+    if (out.loops.empty()) return;
+    json j = profileToJson(out);
+    json in = {{"body", b->ref()}, {"plane", j["plane"]}, {"loops", j["loops"]}};
+    if (!name.isEmpty()) in["name"] = name.toStdString();
+    run("part.sketch", in, [this](const json& r) {
+        partItem_ = QString::fromStdString(r.value("ref", ""));
+        refreshTree();
+        refreshProperties();
+    });
+}
+
+void MainWindow::addResult(const QString& title, const QString& caller, bool ok, const json& params, const json& result, const QString& message) {
+    // A JSON value as a tree: objects and lists open, the rest in one line.
+    std::function<void(QTreeWidgetItem*, const json&)> fill = [&fill](QTreeWidgetItem* parent, const json& v) {
+        if (v.is_object()) {
+            for (auto it = v.begin(); it != v.end(); ++it) {
+                auto* c = new QTreeWidgetItem(parent, {QString::fromStdString(it.key())});
+                if (it.value().is_structured()) fill(c, it.value());
+                else c->setText(1, QString::fromStdString(it.value().is_string() ? it.value().get<std::string>() : it.value().dump()));
+            }
+        } else if (v.is_array()) {
+            const bool small = v.size() <= 4 && std::all_of(v.begin(), v.end(), [](const json& x) { return x.is_primitive(); });
+            if (small) {
+                parent->setText(1, QString::fromStdString(v.dump()));
+                return;
+            }
+            for (std::size_t i = 0; i < v.size() && i < 500; ++i) {
+                auto* c = new QTreeWidgetItem(parent, {QString::number(i + 1)});
+                if (v[i].is_structured()) fill(c, v[i]);
+                else c->setText(1, QString::fromStdString(v[i].is_string() ? v[i].get<std::string>() : v[i].dump()));
+            }
+        }
+    };
+    const QString who = caller == "agent" ? tr("Agent") : tr("You");
+    const QString summary = ok ? QString::fromStdString(result.is_object() ? result.value("summary", "") : "") : message;
+    auto* top = new QTreeWidgetItem({QTime::currentTime().toString("HH:mm:ss") + "  " + who + ": " + title, summary});
+    if (!ok) top->setForeground(1, QBrush(QColor(200, 40, 30)));
+    auto* in = new QTreeWidgetItem(top, {tr("Input")});
+    fill(in, params);
+    auto* out = new QTreeWidgetItem(top, {ok ? tr("Answer") : tr("Error")});
+    if (ok) fill(out, result);
+    else out->setText(1, message);
+    results_->insertTopLevelItem(0, top);
+    while (results_->topLevelItemCount() > 300) delete results_->takeTopLevelItem(results_->topLevelItemCount() - 1);
+}
+
+void MainWindow::showPalette() {
+    // Every command by its words, in either language: Enter opens it in the panel.
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Find a command"));
+    dlg.resize(560, 420);
+    auto* lay = new QVBoxLayout(&dlg);
+    auto* search = new QLineEdit();
+    search->setPlaceholderText(tr("Type what you want to do: section, fill holes, align…"));
+    auto* list = new QListWidget();
+    lay->addWidget(search);
+    lay->addWidget(list);
+    for (const Command* c : registry_.all()) {
+        auto* it = new QListWidgetItem(QString::fromStdString(c->title.in(lang_.toStdString())) + "   ·   " + QString::fromStdString(c->name), list);
+        it->setData(Qt::UserRole, QString::fromStdString(c->name));
+        it->setData(Qt::UserRole + 1, QString::fromStdString(c->title.en + " " + c->title.es + " " + c->name + " " + c->description.en + " " + c->description.es).toLower());
+        it->setToolTip(QString::fromStdString(c->description.in(lang_.toStdString())));
+    }
+    auto filter = [list](const QString& text) {
+        const QStringList words = text.toLower().split(' ', Qt::SkipEmptyParts);
+        int first = -1;
+        for (int i = 0; i < list->count(); ++i) {
+            const QString hay = list->item(i)->data(Qt::UserRole + 1).toString();
+            bool show = true;
+            for (const auto& w : words) show = show && hay.contains(w);
+            list->item(i)->setHidden(!show);
+            if (show && first < 0) first = i;
+        }
+        if (first >= 0) list->setCurrentRow(first);
+    };
+    connect(search, &QLineEdit::textChanged, &dlg, filter);
+    connect(search, &QLineEdit::returnPressed, &dlg, &QDialog::accept);
+    connect(list, &QListWidget::itemActivated, &dlg, &QDialog::accept);
+    filter(QString());
+    if (dlg.exec() != QDialog::Accepted || !list->currentItem() || list->currentItem()->isHidden()) return;
+    runFromUi(list->currentItem()->data(Qt::UserRole).toString());
 }
 
 QString MainWindow::selectedRef() const { return selected_ ? "b" + QString::number(selected_) : QString(); }
@@ -442,6 +602,14 @@ void MainWindow::refresh() {
     viewport_->setBodies(bodies);
     viewport_->setSelected(selected_);
     if (pairDialog_) pairDialog_->setBodies(bodies);
+    if (panel_ && panelDock_->isVisible() && panel_->command()) {
+        CommandPanel::Context ctx;
+        ctx.bodies = bodies;
+        ctx.selectedBody = selectedRef();
+        ctx.lang = lang_;
+        ctx.pickedShapes = pickedShapes_;
+        panel_->refresh(ctx);
+    }
     refreshTree();
     refreshProperties();
     refreshShapes();
@@ -589,6 +757,10 @@ void MainWindow::deleteSelection() {
 }
 
 void MainWindow::onPicked(const Pick& p, bool add) {
+    if (panel_ && panelDock_->isVisible() && panel_->wantsPick()) {
+        panel_->takePick(p);
+        return;
+    }
     if (pairDialog_ && pairDialog_->isVisible()) {
         pairDialog_->addPick(p);
         return;
@@ -1210,13 +1382,14 @@ void MainWindow::runFromUi(const QString& name) {
     if (props.size() == 1 && needsBody && !selectedRef().isEmpty()) {
         params = {{"body", selectedRef().toStdString()}};
     } else {
-        std::optional<std::array<double, 3>> point;
-        if (lastPick_.hit() && lastPick_.body == selected_) point = std::array<double, 3>{lastPick_.point.x(), lastPick_.point.y(), lastPick_.point.z()};
-        CommandDialog dlg(*c, bodies, selectedRef(), lang_, this, pickedShapes_, point);
-        if (dlg.exec() != QDialog::Accepted) return;
-        params = dlg.values();
+        openPanel(name);
+        return;
     }
-    run(name, params, [this, name](const json& r) {
+    run(name, params, [this, name](const json& r) { showResult(name, r); });
+}
+
+void MainWindow::showResult(const QString& name, const json& r) {
+    {
         if (name == "features.measure") {
             QLocale loc;
             QStringList lines;
@@ -1236,7 +1409,7 @@ void MainWindow::runFromUi(const QString& name) {
             box.setDetailedText(QString::fromStdString(r.dump(2)));
             box.exec();
         }
-    });
+    }
 }
 
 void MainWindow::importMesh() {

@@ -439,7 +439,7 @@ void registerCoreCommands(CommandRegistry& R) {
            {"Delete faces of a mesh by index (or points of a cloud): what was selected with the lasso in the view. The vertices left unused go too.",
             "Borra caras de una malla por su índice (o puntos de una nube): lo seleccionado con el lazo en la vista. También se van los vértices que queden sin usar."},
            object({{"body", body(kBody)},
-                   {"faces", json{{"type", "array"}, {"items", {{"type", "integer"}, {"minimum", 0}}}, {"description", "Face (or point) indices"}}}},
+                   {"faces", json{{"x-kind", "mesh-faces"}, {"type", "array"}, {"items", {{"type", "integer"}, {"minimum", 0}}}, {"description", "Face (or point) indices"}}}},
                   {"body", "faces"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
@@ -458,7 +458,7 @@ void registerCoreCommands(CommandRegistry& R) {
     R.add({"mesh.merge", "mesh", {"Join scans", "Unir escaneos"},
            {"Join two or more aligned scans into one new body (meshes with meshes, clouds with clouds). The originals are hidden, not deleted. For a single watertight mesh from overlapping meshes, join them as clouds (points.to_mesh) or repair after.",
             "Une dos o más escaneos alineados en un cuerpo nuevo (mallas con mallas, nubes con nubes). Los originales se ocultan, no se borran. Para una sola malla cerrada a partir de mallas que se solapan, únelas como nubes (points.to_mesh) o repara después."},
-           object({{"bodies", json{{"type", "array"}, {"items", {{"type", "string"}}}, {"minItems", 2}, {"description", "The bodies to join (refs or names)"}}},
+           object({{"bodies", json{{"x-kind", "body-list"}, {"type", "array"}, {"items", {{"type", "string"}}}, {"minItems", 2}, {"description", "The bodies to join (refs or names)"}}},
                    {"name", string({"Name of the new body", "Nombre del cuerpo nuevo"})},
                    {"asPoints", boolean({"Join only their points (a cloud, with normals): for points.to_mesh", "Unir solo sus puntos (una nube, con normales): para points.to_mesh"}, false)}},
                   {"bodies"}),

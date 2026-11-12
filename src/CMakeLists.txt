@@ -46,6 +46,7 @@ add_library(orv_core STATIC
   commands/FeatureCommands.cpp
   commands/PartCommands.cpp
   commands/ScanCommands.cpp
+  commands/FieldKind.cpp
   scan/ScanBackend.cpp
   scan/ObScanBackend.cpp
   commands/Guide.cpp

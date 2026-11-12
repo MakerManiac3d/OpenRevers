@@ -1,4 +1,4 @@
-# Manual de OpenRevers (versión 0.8)
+# Manual de OpenRevers (versión 0.9)
 
 OpenRevers prepara mallas escaneadas para la ingeniería inversa. Esta versión
 cubre la **fase 1**: abrir el escaneo, ver qué le pasa, repararlo y dejarlo
@@ -30,6 +30,36 @@ Los paneles se mueven, se cierran y se recuperan en el menú **Ver**.
 | Deshacer / rehacer | Ctrl+Z / Ctrl+Y |
 
 El eje Z es el vertical, como en la mayoría de programas de CAD.
+
+## Trabajar a mano: panel de comandos, paleta y resultados
+
+Todo lo que hace el agente de IA lo puedes hacer tú con los mismos comandos y
+los mismos datos, sin escribir JSON:
+
+- **Panel de comandos** (a la derecha). Se abre desde cualquier menú o desde
+  la paleta y no bloquea la ventana: puedes girar la vista y hacer clic en la
+  pieza mientras está abierto. *Aplicar* ejecuta el comando y deja el panel
+  abierto para repetir con otros valores.
+- **Tomar datos de la vista:** cada campo que nombra un sitio tiene su botón:
+  - **⌖** junto a un punto toma el punto pulsado;
+  - junto a una dirección, la normal de la cara pulsada;
+  - junto a un cuerpo, el cuerpo pulsado;
+  - **Desde una cara de la vista** da un plano;
+  - **Añadir clics** va sumando puntos en orden (redondear aristas, pares de
+    puntos);
+  - **Tomar la selección del lazo** pasa las caras seleccionadas.
+- **Listas en lugar de referencias:**
+  - los bocetos, operaciones, superficies, formas y parámetros salen en
+    desplegables de la pieza elegida;
+  - los bocetos de un loft se marcan y se arrastran para ordenarlos;
+  - los cuerpos de *Unir escaneos* se marcan;
+  - los lazos de un boceto se dibujan con **Dibujar en el editor de
+    bocetos…**.
+- **Buscar un comando** (Ctrl+K): escribe lo que quieres hacer, en español o
+  en inglés («sección», «rellenar», «alinear»), y Intro abre el panel.
+- **Resultados** (pestaña junto al registro): cada comando, tuyo o del
+  agente, con su entrada y su respuesta completas (desviaciones, solapes,
+  residuos…), para consultarlos después.
 
 ## Flujo de trabajo recomendado
 

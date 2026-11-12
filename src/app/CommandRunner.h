@@ -29,6 +29,8 @@ signals:
     void started(const QString& title, const QString& caller);
     void finished(const QString& title, const QString& caller, bool ok, const QString& summary);
     void busyChanged(bool busy);
+    /// Every command run, by anyone, with its input and its whole answer (or error).
+    void completed(const QString& name, const QString& title, const QString& caller, bool ok, const json& params, const json& result, const QString& message);
 
 private:
     struct Job {

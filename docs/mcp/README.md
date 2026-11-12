@@ -180,3 +180,9 @@ language of the descriptions, and `--headless` forces the headless mode.
 - Every agent step is an undo step.
 - What the agent reads goes to its model provider. That is the only
   information that leaves the computer.
+
+## Paridad con el usuario
+
+Cada campo de los esquemas lleva su tipo de control (`x-kind`) para que el
+usuario pueda dar lo mismo desde el panel de comandos de la aplicación. Ver
+[paridad.md](../desarrollo/paridad.md).

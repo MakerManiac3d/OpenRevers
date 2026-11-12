@@ -1,4 +1,4 @@
-# OpenRevers manual (version 0.8)
+# OpenRevers manual (version 0.9)
 
 OpenRevers prepares scanned meshes for reverse engineering. This version
 covers **phase 1**: open the scan, see what is wrong with it, repair it and
@@ -30,6 +30,35 @@ Panels can be moved, closed and brought back from the **View** menu.
 | Undo / redo | Ctrl+Z / Ctrl+Y |
 
 Z is up, as in most CAD programs.
+
+## Working by hand: command panel, palette and results
+
+Everything the AI agent does, you can do with the same commands and the same
+data, without typing JSON:
+
+- **Command panel** (on the right). It opens from any menu or from the
+  palette and does not block the window: you can turn the view and click the
+  part while it is open. *Apply* runs the command and leaves the panel open
+  to repeat with other values.
+- **Taking data from the view:** each field that names a place has its
+  button:
+  - **⌖** beside a point takes the point clicked;
+  - beside a direction, the normal of the face clicked;
+  - beside a body, the body clicked;
+  - **From a face in the view** gives a plane;
+  - **Add clicks** adds points in order (rounding edges, pairs of points);
+  - **Take the lasso selection** passes the selected faces.
+- **Lists instead of references:**
+  - sketches, operations, surfaces, shapes and parameters come in drop-downs
+    of the chosen part;
+  - a loft's sketches are ticked and dragged into order;
+  - the bodies to join are ticked;
+  - a sketch's loops are drawn with **Draw in the sketch editor…**.
+- **Find a command** (Ctrl+K): type what you want to do («section», «fill»,
+  «align»), and Enter opens the panel.
+- **Results** (tab beside the log): every command, yours or the agent's, with
+  its whole input and answer (deviations, overlaps, residuals…), to look at
+  later.
 
 ## Recommended workflow
 

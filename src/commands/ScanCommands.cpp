@@ -69,7 +69,7 @@ void registerScanCommands(CommandRegistry& R) {
            {"Switch between the simulated scanner (on: true) and the library of CrealityScan (on: false; library_dir chooses its folder, by default CrealityScan's Plugins\\x86_64). Disconnects the scanner in use.",
             "Cambia entre el escáner simulado (on: true) y la biblioteca de CrealityScan (on: false; library_dir elige su carpeta, por defecto Plugins\\x86_64 de CrealityScan). Desconecta el escáner en uso."},
            object({{"on", boolean({"Use the simulator", "Usar el simulador"}, true)},
-                   {"library_dir", string({"Folder of lib_orbbec_scan.dll", "Carpeta de lib_orbbec_scan.dll"})}}),
+                   {"library_dir", kind(string({"Folder of lib_orbbec_scan.dll", "Carpeta de lib_orbbec_scan.dll"}), "folder")}}),
            false, false,
            [](CommandContext& ctx, const json& in) {
                auto& mgr = ScanManager::instance();

@@ -17,6 +17,7 @@ class QTimer;
 class QListWidget;
 class QPlainTextEdit;
 class QTreeWidget;
+class QDockWidget;
 class QTableWidget;
 class QProgressBar;
 class QTreeWidgetItem;
@@ -97,6 +98,17 @@ private:
     void showPartProperties(const Body& b);
     void onPropertyEdited(int row);
     void editSketch(std::uint64_t body, std::uint64_t sketch);
+    /// A new sketch drawn in the editor on `plane` (null: XY at the origin).
+    void newSketch(const QString& body, const json& plane, const QString& name);
+    // The command panel (docked, not modal), the palette and the results.
+    class CommandPanel* panel_{nullptr};
+    QDockWidget* panelDock_{nullptr};
+    QTreeWidget* results_{nullptr};
+    QDockWidget* resultsDock_{nullptr};
+    void showPalette();
+    void showResult(const QString& name, const json& r);
+    void addResult(const QString& title, const QString& caller, bool ok, const json& params, const json& result, const QString& message);
+    void openPanel(const QString& name, const json& initial = json::object());
     void newSketchOnFace();
     void filletPickedEdges();
     void compareWithScan();

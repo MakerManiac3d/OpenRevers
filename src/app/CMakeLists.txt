@@ -4,7 +4,7 @@ qt_add_executable(OpenRevers WIN32 MACOSX_BUNDLE
   MainWindow.cpp MainWindow.h
   Viewport.cpp Viewport.h
   CommandRunner.cpp CommandRunner.h
-  CommandDialog.cpp CommandDialog.h
+  CommandPanel.cpp CommandPanel.h
   AgentServer.cpp AgentServer.h
   AppCommands.cpp AppCommands.h
   SettingsDialog.cpp SettingsDialog.h

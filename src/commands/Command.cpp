@@ -176,6 +176,12 @@ json integer(const Text& d, long long def, long long min, long long max) {
     return described({{"type", "integer"}, {"default", def}, {"minimum", min}, {"maximum", max}}, d);
 }
 
+json kind(json s, const char* k, const char* of) {
+    s["x-kind"] = k;
+    if (of) s["x-of"] = of;
+    return s;
+}
+
 json point(const Text& d, const char* unit) {
     json j = {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"x-kind", "point"}};
     if (unit) j["x-unit"] = unit;

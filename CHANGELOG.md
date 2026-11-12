@@ -1,5 +1,28 @@
 # Cambios · Changelog
 
+## 0.9.0 — 12 de noviembre de 2026 (control manual al nivel del agente, primer bloque)
+
+- **Panel de comandos acoplado y no modal**, en lugar del formulario. Se gira
+  la vista y se hace clic en la pieza con el panel abierto; *Aplicar* deja el
+  panel abierto para repetir.
+- **Un control para cada tipo de dato** (`x-kind` en el esquema):
+  - desplegables de bocetos, operaciones, superficies, formas y parámetros de
+    la pieza;
+  - lista ordenable de bocetos para el loft;
+  - casillas de cuerpos;
+  - puntos, direcciones, cuerpos y planos tomados con un clic en la vista
+    (⌖, *Desde una cara de la vista*);
+  - listas de puntos por clics;
+  - la selección del lazo;
+  - el editor de bocetos para los lazos.
+  Ya no hay ningún campo que pida JSON.
+- **Prueba de paridad** en el CI: falla si un campo de cualquier comando no
+  tiene control, o si una referencia se pide como texto libre.
+- **Buscar un comando** (Ctrl+K), en español o en inglés.
+- **Panel de resultados:** cada comando, del usuario o del agente, con su
+  entrada y su respuesta completas.
+- Nuevo boceto en el editor sobre cualquier plano dado desde el panel.
+
 ## 0.8.0 — 12 de noviembre de 2026 (limpiar y alinear escaneos)
 
 - **Quitar la mesa** (`mesh.remove_plane`): el plano con más puntos (RANSAC

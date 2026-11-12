@@ -90,6 +90,9 @@ json boolean(const Text& description, bool def);
 json choice(const Text& description, std::vector<std::string> values, const std::string& def);
 /// A point or vector: three numbers [x, y, z].
 json point(const Text& description, const char* unit = "mm");
+/// The same schema marked with the control the interface gives it (FieldKind);
+/// `of` names the field holding the body it belongs to (default "body").
+json kind(json s, const char* k, const char* of = nullptr);
 }  // namespace schema
 
 /// The commands that need no interface: files, mesh tools, bodies, history, help.
