@@ -1,6 +1,6 @@
 # Hoja de ruta
 
-Cinco fases. Cada una termina con un instalador usable y un criterio medible
+Seis fases. Cada una termina con un instalador usable y un criterio medible
 sobre piezas reales.
 
 | Fase | Contenido | Criterio para cerrarla | Estado |
@@ -10,6 +10,7 @@ sobre piezas reales.
 | 3 · Sólido paramétrico | Bocetos desde secciones con restricciones automáticas; extruir, revolución, redondeos, taladros; exportar STEP (Open CASCADE); **edición a mano** de todo lo que hace la IA | Una pieza mecánica en STEP con el 90 % de la malla dentro de ±0,2 mm | **Casi hecha** (v0.5): la leva en STEP, 81 % dentro de ±0,2 mm por el alabeo de la pieza escaneada (contorno a ≤0,13 mm); edición a mano en la v0.5. Falta una pieza sin alabeo y las restricciones |
 | 4 · Superficies libres | Curvas spline en bocetos; superficies por secciones (loft) y barridos; ajuste de una superficie B-spline a una zona del escaneo; cortar, coser y engrosar; patrón circular; autosuperficie por parches para formas orgánicas; T-Spline ajustado a la malla (la exportación `.tsm` desde quads ya existe) | Una piel libre con desviación mediana por debajo de 0,05 mm; un álabe de turbina por secciones | **En curso** (v0.6: pasos 1 a 4; falta la autosuperficie y probarla en un escaneo real) |
 | 5 · Inspección y fabricación | Mapa de desviación, secciones comparadas, GD&T, informe PDF; análisis para impresión 3D y CNC | Informe PDF de una pieza real, con pasa o no pasa en cada cota | Pendiente |
+| 6 · Escaneo directo | Escanear desde OpenRevers con los escáneres de CrealityScan (Creality Raptor y familia Orbbec): lista de dispositivos, conectar, escanear con vista previa de la nube, detener y pasar el resultado a un cuerpo con deshacer; la biblioteca del escáner instalada por CrealityScan se carga en tiempo de ejecución si está, y el programa funciona sin ella | Un escaneo del Raptor entra en OpenRevers sin pasar por CrealityScan ni por un archivo intermedio, y sin conexiones a internet | Pendiente (análisis de la API en curso) |
 
 En todas las fases: herramientas MCP, documentación, tests e instalador.
 
@@ -61,6 +62,43 @@ Primer hito: un álabe por secciones repetido en patrón circular, y una cara
 libre ajustada a un escaneo. Hecho en la v0.6 con piezas de prueba (una
 turbina de seis álabes, una tapa abombada con 0,2 % de error en volumen);
 falta un escaneo real.
+
+## Fase 6, por pasos (escaneo directo)
+
+Objetivo: escanear desde OpenRevers con cualquier escáner que maneje
+CrealityScan (el del usuario es un Creality Raptor). Es interoperabilidad: se
+llama a la biblioteca que ya instala CrealityScan; no se copia ni se
+redistribuye código de Creality ni de Orbbec.
+
+1. **Firmas de la API.** Sacar parámetros, tipos y estructuras de las
+   funciones C `obscan_*` de `lib_orbbec_scan.dll` (224 de sus 447
+   exportaciones) desde las declaraciones P/Invoke de `OBScan.SDK.dll`
+   (metadatos IL2CPP de CrealityScan, versión 29), todo en local con REA, y
+   contrastarlas con el código nativo de la DLL. Escribir cabeceras propias.
+2. **Privacidad.** Comprobar si `lib_orbbec_scan.dll` se conecta a internet
+   (registro del dispositivo, wifi, funciones de IA). OpenRevers promete que
+   nada sale del equipo: si la biblioteca conecta, hay que impedirlo o
+   avisar y pedir permiso.
+3. **Licencia.** Añadir a la GPL-3.0-or-later una excepción de la sección 7
+   que permita cargar en tiempo de ejecución las bibliotecas del escáner
+   instaladas por CrealityScan. Comprobar antes que ningún otro autor de
+   código deba consentir.
+4. **Módulo `src/scan/`.** Carga dinámica (`LoadLibrary`/`GetProcAddress`)
+   desde la carpeta de CrealityScan (`CrealityScan_Data\Plugins\x86_64`);
+   sin ella, el programa compila y funciona igual. No se distribuye ninguna
+   DLL.
+5. **Comandos** (para la interfaz, los scripts y el agente): `scan.devices`,
+   `scan.connect`, `scan.start`, `scan.stop`, `scan.export_to_body`. Ciclo de
+   la API: contexto → gestión de dispositivos → configuración de modo →
+   sesión de escaneo → fotogramas (nube, pose, seguimiento) → registro y
+   mallado → exportación.
+6. **Vista previa** de la nube en el visor mientras se escanea, con el
+   estado del seguimiento.
+7. **Prueba con el Raptor:** un escaneo completo hasta cuerpo, comparado con
+   el mismo escaneo exportado desde CrealityScan.
+
+Modelos que nombra la biblioteca: Otter, Otter Lite, Ferret, Raptor, Raptor
+Pro, Raptor Pro Max, Raptor X, Raptor Mini, Raptor E y Sermoon P1.
 
 ## Al final (al hacer público el repositorio)
 
