@@ -1589,7 +1589,7 @@
     <message>
         <location filename="../src/app/SketchEditor.cpp" line="856"/>
         <source>&lt;span style=&apos;color:#28a046&apos;&gt;■&lt;/span&gt; within the tolerance &amp;nbsp; &lt;span style=&apos;color:#e68c14&apos;&gt;■&lt;/span&gt; up to 4× &amp;nbsp; &lt;span style=&apos;color:#dc2828&apos;&gt;■&lt;/span&gt; more</source>
-        <translation>&lt;span style=&apos;color:#28a046&apos;&gt;■&lt;/span&gt; dentro de la tolerancia &amp;nbsp; &lt;span style=&apos;color:#e68c14&apos;&gt;■&lt;/span&gt; hasta 4× &amp;nbsp; &lt;span style=&apos;color:#dc2828&apos;&gt;■&lt;/span&gt; más</translation>
+        <translation>&lt;span style='color:#28a046'&gt;■&lt;/span&gt; dentro de la tolerancia &amp;nbsp; &lt;span style='color:#e68c14'&gt;■&lt;/span&gt; hasta 4× &amp;nbsp; &lt;span style='color:#dc2828'&gt;■&lt;/span&gt; más</translation>
     </message>
     <message>
         <location filename="../src/app/SketchEditor.cpp" line="861"/>
