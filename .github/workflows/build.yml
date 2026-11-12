@@ -63,7 +63,7 @@ jobs:
           cache: true
       - name: Open CASCADE from the cache
         id: occt
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/occt
           key: occt-7.9.3-minimal-v1-${{ runner.os }}
@@ -82,7 +82,7 @@ jobs:
           cmake --install occt-build --config Release
       - name: Keep the Open CASCADE build (saved now, even if a later step fails)
         if: steps.occt.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/occt
           key: occt-7.9.3-minimal-v1-${{ runner.os }}
