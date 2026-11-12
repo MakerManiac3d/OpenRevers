@@ -10,6 +10,7 @@
 
 #include <array>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -17,6 +18,31 @@
 #include <vector>
 
 namespace orv {
+
+/// What the view needs of a part beyond its triangles: the solid face each
+/// triangle comes from, and the solid's edges as polylines.
+struct PartView {
+    std::vector<std::uint32_t> faceOf;
+    std::vector<std::vector<Vec3f>> edges;
+    std::vector<Vec3d> edgeMiddle;
+};
+
+/// A part's triangles for drawing and measuring, and its view.
+struct PartTriangles {
+    std::shared_ptr<const TriMesh> mesh;
+    std::shared_ptr<const PartView> view;
+};
+PartTriangles partTriangles(const Solid& solid);
+
+/// How far each vertex of a scan is from a part (signed: positive outside
+/// it), from part.compare, to colour the scan by it.
+struct DeviationMap {
+    std::string part;           // the part's ref it was measured against
+    const TriMesh* mesh{nullptr};  // the scan's triangles it was measured on
+    std::vector<float> distance;  // per vertex
+    float tolerance{0.2f};      // green within ±tolerance
+    float range{1.0f};          // full red or blue at ±range
+};
 
 /// A body of the project. Its mesh is shared and never changed in place: a
 /// change replaces the pointer, so an undo step costs no copy of the triangles.
@@ -30,8 +56,13 @@ struct Body {
     // for drawing and measuring.
     std::shared_ptr<const Model> model;
     Solid solid;
+    std::shared_ptr<const PartView> view;
     std::string buildError;
+    // A scan coloured by its distance to a part (null: its own colour). Not
+    // part of the history nor of the project: filled in when the body is read.
+    std::shared_ptr<const DeviationMap> deviation;
     bool visible{true};
+    float opacity{1.0f};  // below 1: seen through (a scan over its part, or the reverse)
     std::array<float, 3> color{0.62f, 0.70f, 0.78f};
     std::string source;  // file it came from, if any
 
@@ -65,8 +96,12 @@ public:
     void setMesh(std::uint64_t id, std::shared_ptr<const TriMesh> mesh, std::shared_ptr<const Features> features = nullptr);
     void setFeatures(std::uint64_t id, std::shared_ptr<const Features> features);
     /// A new parametric part, or a part's new state after an edit.
-    Body addPart(std::string name, std::shared_ptr<const Model> model, Solid solid, std::shared_ptr<const TriMesh> mesh, std::string buildError = {});
-    void setPart(std::uint64_t id, std::shared_ptr<const Model> model, Solid solid, std::shared_ptr<const TriMesh> mesh, std::string buildError = {});
+    Body addPart(std::string name, std::shared_ptr<const Model> model, Solid solid, PartTriangles triangles, std::string buildError = {});
+    void setPart(std::uint64_t id, std::shared_ptr<const Model> model, Solid solid, PartTriangles triangles, std::string buildError = {});
+    void setOpacity(std::uint64_t id, float opacity);
+    /// Colour a body by its distance to a part (null: its own colour again).
+    /// Shown at once; not a step of the history.
+    void setDeviation(std::uint64_t id, std::shared_ptr<const DeviationMap> map);
     void renameBody(std::uint64_t id, const std::string& name);
     void setVisible(std::uint64_t id, bool visible);
     void setColor(std::uint64_t id, std::array<float, 3> color);
@@ -102,6 +137,7 @@ private:
     };
     void notify();
     Body* find(std::uint64_t id);
+    void withDisplay(Body& b) const;
 
     mutable std::recursive_mutex m_;
     State state_;
@@ -112,6 +148,7 @@ private:
     std::uint64_t savedVersion_{0};
     std::uint64_t versionCounter_{0};
     std::function<void()> onChanged_;
+    std::map<std::uint64_t, std::shared_ptr<const DeviationMap>> deviation_;
 };
 
 }  // namespace orv

@@ -10,8 +10,11 @@
 #include "core/solid/SketchFit.h"
 #include "doc/Document.h"
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
+#include <map>
 
 namespace orv {
 namespace {
@@ -40,12 +43,6 @@ Body partBody(CommandContext& ctx, const json& ref) {
         throw CommandError("invalid_input", ctx.say(b.name + " is a mesh, not a parametric part; start one with part.new.",
                                                     b.name + " es una malla, no una pieza paramétrica; empieza una con part.new."));
     return b;
-}
-
-double deflectionFor(const Solid& s) {
-    if (s.empty()) return 0.01;
-    const auto b = s.bounds();
-    return std::clamp(0.0005 * (b.max() - b.min()).norm(), 0.002, 0.05);
 }
 
 json partJson(const Body& b) {
@@ -85,8 +82,7 @@ Body applyModel(CommandContext& ctx, const Body& b, std::shared_ptr<Model> m) {
     if (!r.error.empty())
         throw CommandError("failed", ctx.say("The part cannot be rebuilt: " + r.error + ". Nothing was changed.",
                                              "La pieza no se puede reconstruir: " + r.error + ". No se ha cambiado nada."));
-    auto mesh = std::make_shared<TriMesh>(r.solid.tessellate(deflectionFor(r.solid)).mesh);
-    ctx.doc.setPart(b.id, m, r.solid, mesh);
+    ctx.doc.setPart(b.id, m, r.solid, partTriangles(r.solid));
     return ctx.doc.body(b.ref());
 }
 
@@ -145,7 +141,7 @@ void registerPartCommands(CommandRegistry& R) {
            object({{"name", string({"Name", "Nombre"})}}), true, false,
            [](CommandContext& ctx, const json& in) {
                const Body b = ctx.doc.addPart(in.contains("name") ? in["name"].get<std::string>() : ctx.say("Part", "Pieza"), std::make_shared<Model>(), Solid{},
-                                              std::make_shared<TriMesh>());
+                                              partTriangles(Solid{}));
                json out = partJson(b);
                out["summary"] = ctx.say("New part " + b.name + " (" + b.ref() + ").", "Nueva pieza " + b.name + " (" + b.ref() + ").");
                return out;
@@ -164,7 +160,7 @@ void registerPartCommands(CommandRegistry& R) {
                s.profile = readProfile(ctx, in);
                s.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Sketch", "Boceto"));
                m->sketches.push_back(s);
-               ctx.doc.setPart(b.id, m, b.solid, b.mesh, b.buildError);
+               ctx.doc.setPart(b.id, m, b.solid, PartTriangles{b.mesh, b.view}, b.buildError);
                double area = 0;
                for (const auto& l : s.profile.loops) area += l.area();
                return json{{"body", b.ref()}, {"ref", s.ref()}, {"name", s.name}, {"loops", s.profile.loops.size()},
@@ -232,7 +228,7 @@ void registerPartCommands(CommandRegistry& R) {
                sk.profile = prof;
                sk.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Sketch", "Boceto"));
                m->sketches.push_back(sk);
-               ctx.doc.setPart(b.id, m, b.solid, b.mesh, b.buildError);
+               ctx.doc.setPart(b.id, m, b.solid, PartTriangles{b.mesh, b.view}, b.buildError);
                return json{{"body", b.ref()}, {"ref", sk.ref()}, {"name", sk.name}, {"plane", {{"origin", j3(prof.plane.origin)}, {"normal", j3(prof.plane.normal)}, {"xDir", j3(prof.plane.xDir)}}},
                            {"loops", loops}, {"openOutlinesSkipped", open},
                            {"summary", ctx.say("Added " + sk.name + " (" + sk.ref() + ") with " + std::to_string(prof.loops.size()) + " loops from the section.",
@@ -240,23 +236,36 @@ void registerPartCommands(CommandRegistry& R) {
            }});
 
     R.add({"part.edit_sketch", "part", {"Edit a sketch", "Editar boceto"},
-           {"Replace a sketch's loops (and its plane, if given). The operations that use it are rebuilt; if the part then fails, nothing changes.",
-            "Reemplaza los lazos de un boceto (y su plano, si se da). Se reconstruyen las operaciones que lo usan; si la pieza falla, no cambia nada."},
-           object({{"body", body(kPart)}, {"sketch", string({"The sketch: s1 or its name", "El boceto: s1 o su nombre"})}, {"plane", objectSchema(kPlane)}, {"loops", listSchema(kLoops)}},
-                  {"body", "sketch", "loops"}),
+           {"Replace a sketch's loops, move its plane or rename it (each optional). The operations that use it are rebuilt; if the part then fails, nothing changes.",
+            "Reemplaza los lazos de un boceto, mueve su plano o le cambia el nombre (cada cosa, opcional). Se reconstruyen las operaciones que lo usan; si la pieza falla, no cambia nada."},
+           object({{"body", body(kPart)}, {"sketch", string({"The sketch: s1 or its name", "El boceto: s1 o su nombre"})}, {"plane", objectSchema(kPlane)}, {"loops", listSchema(kLoops)},
+                   {"name", string({"New name", "Nombre nuevo"})}},
+                  {"body", "sketch"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
                const Body b = partBody(ctx, in["body"]);
                auto m = std::make_shared<Model>(*b.model);
                const auto id = findSketch(ctx, *m, in["sketch"]).id;
-               Profile p = readProfile(ctx, in);
-               for (auto& s : m->sketches)
-                   if (s.id == id) {
+               for (auto& s : m->sketches) {
+                   if (s.id != id) continue;
+                   if (in.contains("loops")) {
+                       Profile p = readProfile(ctx, in);
                        if (!in.contains("plane")) p.plane = s.profile.plane;
                        s.profile = p;
+                   } else if (in.contains("plane")) {
+                       Profile p = readProfile(ctx, json{{"loops", profileToJson(s.profile)["loops"]}, {"plane", in["plane"]}});
+                       s.profile = p;
                    }
-               json out = partJson(applyModel(ctx, b, m));
-               out["summary"] = ctx.say("Sketch changed and the part rebuilt.", "Boceto cambiado y pieza reconstruida.");
+                   if (in.contains("name")) {
+                       const std::string n = in["name"];
+                       if (n.empty()) throw CommandError("invalid_input", ctx.say("A sketch needs a name.", "Un boceto necesita nombre."));
+                       s.name = n;
+                   }
+               }
+               bool used = false;
+               for (const auto& o : m->operations) used |= (o.kind == OpKind::Extrude || o.kind == OpKind::Revolve) && o.sketch == id;
+               json out = partJson(used ? applyModel(ctx, b, m) : (ctx.doc.setPart(b.id, m, b.solid, PartTriangles{b.mesh, b.view}, b.buildError), ctx.doc.body(b.ref())));
+               out["summary"] = ctx.say(used ? "Sketch changed and the part rebuilt." : "Sketch changed.", used ? "Boceto cambiado y pieza reconstruida." : "Boceto cambiado.");
                return out;
            }});
 
@@ -359,7 +368,7 @@ void registerPartCommands(CommandRegistry& R) {
                if (name.empty() || std::isdigit(static_cast<unsigned char>(name[0])))
                    throw CommandError("invalid_input", ctx.say("A parameter's name must start with a letter.", "El nombre de un parámetro debe empezar por una letra."));
                m->parameters[name] = in["value"].get<double>();
-               json out = partJson(m->operations.empty() ? (ctx.doc.setPart(b.id, m, b.solid, b.mesh, b.buildError), ctx.doc.body(b.ref())) : applyModel(ctx, b, m));
+               json out = partJson(m->operations.empty() ? (ctx.doc.setPart(b.id, m, b.solid, PartTriangles{b.mesh, b.view}, b.buildError), ctx.doc.body(b.ref())) : applyModel(ctx, b, m));
                out["summary"] = ctx.say(name + " = " + std::to_string(in["value"].get<double>()) + ".", name + " = " + std::to_string(in["value"].get<double>()) + ".");
                return out;
            }});
@@ -413,13 +422,34 @@ void registerPartCommands(CommandRegistry& R) {
                }
                Body nb = b;
                if (m->operations.empty()) {
-                   ctx.doc.setPart(b.id, m, Solid{}, std::make_shared<TriMesh>());
+                   ctx.doc.setPart(b.id, m, Solid{}, partTriangles(Solid{}));
                    nb = ctx.doc.body(b.ref());
                } else {
                    nb = applyModel(ctx, b, m);
                }
                json out = partJson(nb);
                out["summary"] = ctx.say("Deleted " + item + ".", "Borrado " + item + ".");
+               return out;
+           }});
+
+    R.add({"part.move", "part", {"Move in the history", "Mover en el historial"},
+           {"Move an operation to another place in the part's history (position 1 is the first). The part is rebuilt; if it then fails, nothing changes. The first operation must make a solid (mode new).",
+            "Mueve una operación a otro lugar del historial de la pieza (la posición 1 es la primera). La pieza se reconstruye; si falla, no cambia nada. La primera operación debe crear un sólido (modo new)."},
+           object({{"body", body(kPart)}, {"operation", string({"The operation: o1 or its name", "La operación: o1 o su nombre"})},
+                   {"position", integer({"New position (1: first)", "Posición nueva (1: la primera)"}, 1, 1, 100000)}},
+                  {"body", "operation", "position"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               auto m = std::make_shared<Model>(*b.model);
+               const auto id = findOperation(ctx, *m, in["operation"]).id;
+               auto it = std::find_if(m->operations.begin(), m->operations.end(), [&](const Operation& o) { return o.id == id; });
+               Operation o = *it;
+               m->operations.erase(it);
+               const auto pos = std::min<std::size_t>(static_cast<std::size_t>(in["position"].get<long long>()) - 1, m->operations.size());
+               m->operations.insert(m->operations.begin() + static_cast<std::ptrdiff_t>(pos), o);
+               json out = partJson(applyModel(ctx, b, m));
+               out["summary"] = ctx.say("Moved " + o.name + " to position " + std::to_string(pos + 1) + ".", "Movida " + o.name + " a la posición " + std::to_string(pos + 1) + ".");
                return out;
            }});
 
@@ -468,35 +498,88 @@ void registerPartCommands(CommandRegistry& R) {
                }
                m->operations.push_back(o);
                const BuildResult r = rebuild(*m);
-               const Body b = ctx.doc.addPart(in.contains("name") ? in["name"].get<std::string>() : p.stem().string(), m, r.solid,
-                                              std::make_shared<TriMesh>(r.solid.tessellate(deflectionFor(r.solid)).mesh), r.error);
+               const Body b = ctx.doc.addPart(in.contains("name") ? in["name"].get<std::string>() : p.stem().string(), m, r.solid, partTriangles(r.solid), r.error);
                json out = partJson(b);
                out["summary"] = ctx.say("Imported " + p.filename().string() + ".", "Importado " + p.filename().string() + ".");
                return out;
            }});
 
     R.add({"part.compare", "part", {"Compare with the scan", "Comparar con el escaneo"},
-           {"How far a scan (a mesh body) lies from a part's solid: signed distances of the scan's points (positive: material outside the solid), their median, 90th and 95th percentiles, and the share within ±tolerance. Both must be in the same place (align the scan first).",
-            "Cuánto se aleja un escaneo (un cuerpo de malla) del sólido de una pieza: distancias con signo de sus puntos (positivas: material fuera del sólido), mediana, percentiles 90 y 95, y la parte dentro de ±tolerancia. Los dos deben estar en el mismo sitio (alinea antes el escaneo)."},
+           {"How far a scan (a mesh body) lies from a part's solid: signed distances of the scan's points (positive: material outside the solid), their median, 90th and 95th percentiles, the share within ±tolerance, "
+            "and where the points outside it gather (zones: centre, size, share, mean distance), largest first. With colorMap, the scan is coloured by its distance in the view. Both must be in the same place (align the scan first).",
+            "Cuánto se aleja un escaneo (un cuerpo de malla) del sólido de una pieza: distancias con signo de sus puntos (positivas: material fuera del sólido), mediana, percentiles 90 y 95, la parte dentro de ±tolerancia "
+            "y dónde se agrupan los puntos fuera de ella (zonas: centro, tamaño, parte del escaneo, distancia media), de mayor a menor. Con colorMap, el escaneo se colorea por su distancia en la vista. Los dos deben estar en el mismo sitio (alinea antes el escaneo)."},
            object({{"body", body(kPart)}, {"scan", body({"The scan (a mesh body)", "El escaneo (un cuerpo de malla)"})},
-                   {"tolerance", number({"Tolerance", "Tolerancia"}, 0.2, 0.0001, 100.0, "mm")}},
+                   {"tolerance", number({"Tolerance", "Tolerancia"}, 0.2, 0.0001, 100.0, "mm")},
+                   {"colorMap", boolean({"Colour the scan by its distance in the view", "Colorear el escaneo por su distancia en la vista"}, true)}},
                   {"body", "scan"}),
            false, false,
            [](CommandContext& ctx, const json& in) {
                const Body b = partBody(ctx, in["body"]);
                const Body s = ctx.doc.body(in["scan"]);
                if (b.solid.empty()) throw CommandError("failed", ctx.say(b.name + " has no solid yet.", b.name + " aún no tiene sólido."));
+               if (s.isPart()) throw CommandError("invalid_input", ctx.say(s.name + " is a part; compare a scan (a mesh body).", s.name + " es una pieza; compara un escaneo (un cuerpo de malla)."));
                const double tol = in["tolerance"].get<double>();
                const auto fine = b.solid.tessellate(std::min(0.01, tol / 10));
-               const DeviationStats d = deviation(s.mesh->vertices, fine.mesh, tol);
+               std::vector<double> dist;
+               const auto& V = s.mesh->vertices;
+               const DeviationStats d = deviation(V, fine.mesh, tol, V.size(), &dist);
                const double pct = 100.0 * d.withinFraction;
-               return json{{"body", b.ref()}, {"scan", s.ref()}, {"points", d.points}, {"mean", r4(d.mean)}, {"rms", r4(d.rms)}, {"median", r4(d.median)},
-                           {"p90", r4(d.p90)}, {"p95", r4(d.p95)}, {"maxAbs", r4(d.maxAbs)}, {"minSigned", r4(d.minSigned)}, {"maxSigned", r4(d.maxSigned)},
-                           {"tolerance", tol}, {"withinPercent", r4(pct)},
-                           {"summary", ctx.say(std::to_string(static_cast<int>(std::round(pct))) + "% of the scan within ±" + std::to_string(tol).substr(0, 5) + " mm; median " +
-                                                   std::to_string(r4(d.median)).substr(0, 6) + " mm, 95% under " + std::to_string(r4(d.p95)).substr(0, 6) + " mm.",
-                                               std::to_string(static_cast<int>(std::round(pct))) + " % del escaneo dentro de ±" + std::to_string(tol).substr(0, 5) + " mm; mediana " +
-                                                   std::to_string(r4(d.median)).substr(0, 6) + " mm, el 95 % por debajo de " + std::to_string(r4(d.p95)).substr(0, 6) + " mm.")}};
+               json out{{"body", b.ref()}, {"scan", s.ref()}, {"points", d.points}, {"mean", r4(d.mean)}, {"rms", r4(d.rms)}, {"median", r4(d.median)},
+                        {"p90", r4(d.p90)}, {"p95", r4(d.p95)}, {"maxAbs", r4(d.maxAbs)}, {"minSigned", r4(d.minSigned)}, {"maxSigned", r4(d.maxSigned)},
+                        {"tolerance", tol}, {"withinPercent", r4(pct)}};
+               // Where the points outside the tolerance gather: pieces of the scan's
+               // surface outside it on one side, joined along its triangles.
+               if (dist.size() == V.size()) {
+                   std::vector<std::uint32_t> parent(V.size());
+                   for (std::uint32_t i = 0; i < parent.size(); ++i) parent[i] = i;
+                   auto root = [&](std::uint32_t x) {
+                       while (parent[x] != x) x = parent[x] = parent[parent[x]];
+                       return x;
+                   };
+                   auto side = [&](std::uint32_t v) { return dist[v] > tol ? 1 : dist[v] < -tol ? -1 : 0; };
+                   for (const auto& f : s.mesh->faces)
+                       for (int k = 0; k < 3; ++k) {
+                           const auto a = f[static_cast<std::size_t>(k)], c = f[static_cast<std::size_t>((k + 1) % 3)];
+                           if (side(a) != 0 && side(a) == side(c)) parent[root(a)] = root(c);
+                       }
+                   std::map<std::uint32_t, std::size_t> zoneOf;
+                   std::vector<std::vector<std::size_t>> zones;
+                   for (std::uint32_t v = 0; v < V.size(); ++v) {
+                       if (side(v) == 0) continue;
+                       auto [it, fresh] = zoneOf.emplace(root(v), zones.size());
+                       if (fresh) zones.emplace_back();
+                       zones[it->second].push_back(v);
+                   }
+                   std::sort(zones.begin(), zones.end(), [](const auto& a, const auto& c) { return a.size() > c.size(); });
+                   json jz = json::array();
+                   for (std::size_t k = 0; k < zones.size() && k < 8; ++k) {
+                       Box3 zb;
+                       double mean = 0;
+                       for (auto i : zones[k]) { zb.add(V[i]); mean += dist[i]; }
+                       mean /= static_cast<double>(zones[k].size());
+                       const double share = 100.0 * static_cast<double>(zones[k].size()) / static_cast<double>(V.size());
+                       if (share < 0.2) break;
+                       jz.push_back({{"centre", j3(zb.center().cast<double>())}, {"size", j3(zb.size().cast<double>())}, {"percent", r4(share)}, {"meanDistance", r4(mean)},
+                                     {"side", mean > 0 ? ctx.say("scan outside the part (material missing in the model)", "escaneo fuera de la pieza (falta material en el modelo)")
+                                                       : ctx.say("scan inside the part (too much material in the model)", "escaneo dentro de la pieza (sobra material en el modelo)")}});
+                   }
+                   out["zones"] = jz;
+               }
+               if (in["colorMap"].get<bool>() && dist.size() == V.size()) {
+                   auto map = std::make_shared<DeviationMap>();
+                   map->part = b.ref();
+                   map->mesh = s.mesh.get();
+                   map->tolerance = static_cast<float>(tol);
+                   map->range = static_cast<float>(std::max(3 * tol, d.p95));
+                   map->distance.assign(dist.begin(), dist.end());
+                   ctx.doc.setDeviation(s.id, map);
+               }
+               out["summary"] = ctx.say(std::to_string(static_cast<int>(std::round(pct))) + "% of the scan within ±" + std::to_string(tol).substr(0, 5) + " mm; median " +
+                                            std::to_string(r4(d.median)).substr(0, 6) + " mm, 95% under " + std::to_string(r4(d.p95)).substr(0, 6) + " mm.",
+                                        std::to_string(static_cast<int>(std::round(pct))) + " % del escaneo dentro de ±" + std::to_string(tol).substr(0, 5) + " mm; mediana " +
+                                            std::to_string(r4(d.median)).substr(0, 6) + " mm, el 95 % por debajo de " + std::to_string(r4(d.p95)).substr(0, 6) + " mm.");
+               return out;
            }});
 
     R.add({"mesh.section", "mesh", {"Section with a plane", "Sección con un plano"},

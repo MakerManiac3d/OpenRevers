@@ -13,8 +13,8 @@ void registerAppCommands(CommandRegistry& R, Viewport& vp, SelectionAccess sel) 
     Viewport* v = &vp;
 
     R.add({"view.selection", "view", {"What is picked", "Qué está seleccionado"},
-           {"The point the person last clicked on a surface, its body, and the shapes they picked (in order). Use it to act on \"this hole\" or \"these faces\" as they point at them.",
-            "El último punto en que la persona hizo clic sobre una superficie, su cuerpo y las formas que ha elegido (en orden). Sirve para actuar sobre \"este taladro\" o \"estas caras\" cuando las señala."},
+           {"The point the person last clicked on a surface, its body, and the shapes they picked (in order). On a part: the parameter, sketch or operation picked in the Model panel (partItem), and the faces and edges of its solid they picked (type, size, axis; an edge's middle is the point for part.fillet). Use it to act on \"this hole\" or \"these edges\" as they point at them.",
+            "El último punto en que la persona hizo clic sobre una superficie, su cuerpo y las formas que ha elegido (en orden). En una pieza: el parámetro, boceto u operación elegido en el panel Modelo (partItem) y las caras y aristas de su sólido que ha elegido (tipo, medida, eje; el middle de una arista es el punto para part.fillet). Sirve para actuar sobre \"este taladro\" o \"estas aristas\" cuando las señala."},
            object({}), false, true,
            [sel](CommandContext&, const json&) { return sel.selection(); }});
 

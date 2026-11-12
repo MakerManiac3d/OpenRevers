@@ -1,5 +1,47 @@
 # Cambios · Changelog
 
+## 0.5.0 — 12 de noviembre de 2026 (edición a mano)
+
+La IA hace la pieza; la persona retoca lo que no llegó o quiere cambiar, sin
+salir del programa. Lo que se hace a mano pasa por los mismos comandos que usa
+el agente, con su paso de deshacer, y el agente lo ve.
+
+- **Vista 3D de las piezas:**
+  - las aristas del sólido y sus bocetos (en azul; el elegido, en naranja;
+    *Ver → Bocetos de las piezas*);
+  - un clic elige una **cara** o una **arista** del sólido (Ctrl+clic añade o
+    quita), resaltadas en ámbar, con su tipo y medida en la barra de estado;
+  - **transparencia** por cuerpo (*Ver a través*; `body.set_opacity`);
+  - los bordes de la teselación de una pieza ya no se marcan como abiertos.
+- **Comparar con el escaneo:**
+  - colorea el escaneo por su distancia a la pieza, con leyenda (verde
+    dentro de la tolerancia; amarillo a rojo, falta material; cian a azul,
+    sobra). No es un paso de deshacer ni se guarda; `body.clear_deviation`
+    lo quita;
+  - devuelve las **zonas** fuera de tolerancia: trozos continuos del
+    escaneo con su centro, tamaño, porcentaje, distancia media y lado. En la
+    leva habría señalado la cara alabeada al momento.
+- **Panel *Modelo* y *Propiedades*:** cada parámetro, boceto y operación se
+  elige; sus valores se editan en *Propiedades* (número o nombre de
+  parámetro; modo con desplegable; casilla *Suprimida*), y el plano y el
+  nombre de un boceto también. Menú contextual: editar boceto, suprimir,
+  subir y bajar en el historial, borrar. La operación que falla, en rojo.
+- **Editor de bocetos** (doble clic en un boceto): el boceto sobre la sección
+  del escaneo en su plano, cada segmento coloreado por su desviación en los
+  dos sentidos; arrastrar vértices, curvatura de arcos, centro y radio de
+  círculos; recta ↔ arco, partir, borrar vértice o lazo; dibujar
+  rectángulos, círculos y polígonos; valores exactos de lo elegido; ajuste a
+  vértices y sección; deshacer propio. Aceptar es un solo paso de deshacer.
+- **Boceto nuevo en una cara plana** y **redondear las aristas elegidas**,
+  desde el clic derecho en la pieza.
+- **Comandos nuevos o ampliados:** `part.move` (reordenar operaciones),
+  `part.edit_sketch` (lazos, plano o nombre por separado), `body.set_opacity`,
+  `body.clear_deviation`; `view.selection` da, en una pieza, el elemento del
+  árbol y las caras y aristas elegidas con su tipo, medida y eje (y el punto
+  medio de cada arista, para `part.fillet`).
+- El núcleo da las aristas del sólido como polilíneas y la información de
+  cada cara y arista (`Solid::faceInfo`, `Solid::edgeInfo`).
+
 ## 0.4.1 — 12 de noviembre de 2026
 
 Correcciones tras pasar la leva escaneada a STEP con la 0.4.0:

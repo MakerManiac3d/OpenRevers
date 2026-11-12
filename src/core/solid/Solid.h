@@ -27,6 +27,22 @@ public:
 struct SolidTessellation {
     TriMesh mesh;
     std::vector<std::uint32_t> faceOf;
+    /// Each edge of the solid as a polyline within the deflection (0-based,
+    /// in the order Solid::edgeCount counts them), and the point halfway
+    /// along it (to pick it again, as part.fillet does).
+    std::vector<std::vector<Vec3f>> edges;
+    std::vector<Vec3d> edgeMiddle;
+};
+
+/// What a face or an edge of a solid is, for showing it and acting on it.
+struct ShapeInfo {
+    std::string type;                // face: plane, cylinder, cone, sphere, torus, bspline, other; edge: line, circle, ellipse, bspline, other
+    Vec3d origin{Vec3d::Zero()};     // a point: on the plane, of the axis, the centre
+    Vec3d axis{Vec3d::Zero()};       // the plane's normal (outward), the axis' direction
+    double radius{0.0};              // cylinder, cone (at origin), sphere, torus (major), circle
+    double radius2{0.0};             // torus (minor)
+    double angleDeg{0.0};            // cone half angle
+    double size{0.0};                // face: area (mm²); edge: length (mm)
 };
 
 class Solid {
@@ -73,6 +89,9 @@ public:
     int faceCount() const;
     int edgeCount() const;
     int solidCount() const;
+    /// The face or edge with this index (0-based, as tessellate numbers them).
+    ShapeInfo faceInfo(int index) const;
+    ShapeInfo edgeInfo(int index) const;
     /// Empty when the shape passes Open CASCADE's checks, else why not.
     std::string checkProblem() const;
 

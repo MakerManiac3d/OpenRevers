@@ -4,6 +4,9 @@
 #include "core/solid/Solid.h"
 
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepAdaptor_Surface.hxx>
+#include <GCPnts_AbscissaPoint.hxx>
+#include <GCPnts_QuasiUniformDeflection.hxx>
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
@@ -367,9 +370,124 @@ SolidTessellation Solid::tessellate(double deflection, double angleDeg) const {
                 t.faceOf.push_back(faceIndex);
             }
         }
+        // The edges, from their curves (the same order as edgeCount).
+        TopTools_IndexedMapOfShape edges;
+        TopExp::MapShapes(s, TopAbs_EDGE, edges);
+        for (int i = 1; i <= edges.Extent(); ++i) {
+            const TopoDS_Edge& e = TopoDS::Edge(edges(i));
+            std::vector<Vec3f> line;
+            Vec3d middle = Vec3d::Zero();
+            if (!BRep_Tool::Degenerated(e)) {
+                BRepAdaptor_Curve c(e);
+                GCPnts_QuasiUniformDeflection d(c, deflection);
+                if (d.IsDone())
+                    for (int k = 1; k <= d.NbPoints(); ++k) {
+                        const gp_Pnt p = d.Value(k);
+                        line.emplace_back(static_cast<float>(p.X()), static_cast<float>(p.Y()), static_cast<float>(p.Z()));
+                    }
+                const gp_Pnt m = c.Value(0.5 * (c.FirstParameter() + c.LastParameter()));
+                middle = {m.X(), m.Y(), m.Z()};
+            }
+            t.edges.push_back(std::move(line));
+            t.edgeMiddle.push_back(middle);
+        }
         return 0;
     });
     return t;
+}
+
+ShapeInfo Solid::faceInfo(int index) const {
+    ShapeInfo info;
+    if (empty()) return info;
+    return guarded("face", [&] {
+        int k = 0;
+        for (TopExp_Explorer ex(shapeOf(*this), TopAbs_FACE); ex.More(); ex.Next(), ++k) {
+            if (k != index) continue;
+            const TopoDS_Face& f = TopoDS::Face(ex.Current());
+            BRepAdaptor_Surface a(f);
+            auto v3 = [](const gp_XYZ& p) { return Vec3d(p.X(), p.Y(), p.Z()); };
+            switch (a.GetType()) {
+                case GeomAbs_Plane: {
+                    info.type = "plane";
+                    const gp_Pln pl = a.Plane();
+                    info.origin = v3(pl.Location().XYZ());
+                    gp_Dir n = pl.Axis().Direction();
+                    if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+                    info.axis = v3(n.XYZ());
+                    // A point inside the face is a better origin than the plane's own.
+                    const double u = 0.5 * (a.FirstUParameter() + a.LastUParameter()), w = 0.5 * (a.FirstVParameter() + a.LastVParameter());
+                    info.origin = v3(a.Value(u, w).XYZ());
+                    break;
+                }
+                case GeomAbs_Cylinder:
+                    info.type = "cylinder";
+                    info.origin = v3(a.Cylinder().Location().XYZ());
+                    info.axis = v3(a.Cylinder().Axis().Direction().XYZ());
+                    info.radius = a.Cylinder().Radius();
+                    break;
+                case GeomAbs_Cone:
+                    info.type = "cone";
+                    info.origin = v3(a.Cone().Location().XYZ());
+                    info.axis = v3(a.Cone().Axis().Direction().XYZ());
+                    info.radius = a.Cone().RefRadius();
+                    info.angleDeg = a.Cone().SemiAngle() * 180 / kPi;
+                    break;
+                case GeomAbs_Sphere:
+                    info.type = "sphere";
+                    info.origin = v3(a.Sphere().Location().XYZ());
+                    info.radius = a.Sphere().Radius();
+                    break;
+                case GeomAbs_Torus:
+                    info.type = "torus";
+                    info.origin = v3(a.Torus().Location().XYZ());
+                    info.axis = v3(a.Torus().Axis().Direction().XYZ());
+                    info.radius = a.Torus().MajorRadius();
+                    info.radius2 = a.Torus().MinorRadius();
+                    break;
+                case GeomAbs_BSplineSurface:
+                case GeomAbs_BezierSurface: info.type = "bspline"; break;
+                default: info.type = "other"; break;
+            }
+            GProp_GProps g;
+            BRepGProp::SurfaceProperties(f, g);
+            info.size = g.Mass();
+            return info;
+        }
+        return info;
+    });
+}
+
+ShapeInfo Solid::edgeInfo(int index) const {
+    ShapeInfo info;
+    if (empty()) return info;
+    return guarded("edge", [&] {
+        TopTools_IndexedMapOfShape edges;
+        TopExp::MapShapes(shapeOf(*this), TopAbs_EDGE, edges);
+        if (index < 0 || index >= edges.Extent()) return info;
+        const TopoDS_Edge& e = TopoDS::Edge(edges(index + 1));
+        if (BRep_Tool::Degenerated(e)) return info;
+        BRepAdaptor_Curve c(e);
+        auto v3 = [](const gp_XYZ& p) { return Vec3d(p.X(), p.Y(), p.Z()); };
+        switch (c.GetType()) {
+            case GeomAbs_Line:
+                info.type = "line";
+                info.origin = v3(c.Value(c.FirstParameter()).XYZ());
+                info.axis = v3(c.Line().Direction().XYZ());
+                break;
+            case GeomAbs_Circle:
+                info.type = "circle";
+                info.origin = v3(c.Circle().Location().XYZ());
+                info.axis = v3(c.Circle().Axis().Direction().XYZ());
+                info.radius = c.Circle().Radius();
+                break;
+            case GeomAbs_Ellipse: info.type = "ellipse"; break;
+            case GeomAbs_BSplineCurve:
+            case GeomAbs_BezierCurve: info.type = "bspline"; break;
+            default: info.type = "other"; break;
+        }
+        info.size = GCPnts_AbscissaPoint::Length(c);
+        return info;
+    });
 }
 
 double Solid::volume() const {

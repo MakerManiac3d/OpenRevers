@@ -214,6 +214,12 @@ void loadProject(Document& doc, const fs::path& path) {
             try {
                 b.model = std::make_shared<Model>(modelFromJson(jb.at("model")));
                 b.solid = Solid::fromBrep(jb.value("solid", ""));
+                // Triangles again from the solid: the view needs to know which face each comes from.
+                if (!b.solid.empty()) {
+                    PartTriangles t = partTriangles(b.solid);
+                    b.mesh = std::move(t.mesh);
+                    b.view = std::move(t.view);
+                }
             } catch (const std::exception& e) {
                 throw IoError(path.filename().string() + ": part \"" + b.name + "\" could not be read (" + e.what() + ")");
             }

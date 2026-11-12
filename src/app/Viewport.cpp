@@ -6,6 +6,7 @@
 #include <unordered_set>
 
 #include <QColor>
+#include <QLocale>
 #include <QFutureWatcher>
 #include <QMouseEvent>
 #include <QtConcurrent/QtConcurrentRun>
@@ -16,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace orv {
 
@@ -47,10 +49,11 @@ uniform bool uVertexColor;  // shapes view: each face coloured by its region
 uniform bool uFlat;
 uniform bool uPoints;
 uniform float uHighlight;
+uniform float uAlpha;
 out vec4 fragColor;
 void main() {
     if (uPoints && dot(vNormal, vNormal) < 0.25) {  // points without normals: unlit
-        fragColor = vec4(mix(uColor * 0.9, vec3(1.0, 0.72, 0.25), uHighlight * 0.18), 1.0);
+        fragColor = vec4(mix(uColor * 0.9, vec3(1.0, 0.72, 0.25), uHighlight * 0.18), uAlpha);
         return;
     }
     vec3 n = uFlat && !uPoints ? normalize(cross(dFdx(vViewPos), dFdy(vViewPos))) : normalize(vNormal);
@@ -65,7 +68,7 @@ void main() {
     vec3 base = back ? vec3(0.78, 0.45, 0.40) : (uVertexColor ? vColor : uColor);  // inside of the surface in a warm tone
     vec3 c = base * (0.22 + 0.78 * diff) + vec3(spec);
     c = mix(c, vec3(1.0, 0.72, 0.25), uHighlight * 0.18);
-    fragColor = vec4(c, 1.0);
+    fragColor = vec4(c, uAlpha);
 })";
 
 const char* kLineVs = R"(#version 330 core
@@ -293,6 +296,11 @@ void Viewport::setBodies(const std::vector<Body>& bodies) {
             uploadRegions(*g, *b.mesh, b.features.get());
             g->regionSource = b.features;
         }
+        if (b.isPart()) uploadPart(*g, b);
+        if (g->devSource != b.deviation) {
+            if (b.deviation && b.deviation->distance.size() == b.mesh->vertices.size()) uploadDeviation(*g, *b.mesh, *b.deviation);
+            g->devSource = b.deviation;
+        }
         next[b.id] = std::move(g);
     }
     gpu_ = std::move(next);  // meshes of removed bodies are freed here
@@ -411,6 +419,159 @@ void Viewport::uploadRegions(GpuMesh& g, const TriMesh& m, const Features* f) {
     g.regionVao.release();
     g.regionVertexCount = static_cast<int>(m.faces.size() * 3);
 }
+
+namespace {
+
+/// Colour of a distance to a part: green within the tolerance, then yellow
+/// to red where the scan lies outside the part, cyan to blue inside it.
+QVector3D deviationColor(float d, float tol, float range) {
+    const float a = std::abs(d);
+    if (a <= tol) return {0.30f, 0.75f, 0.35f};
+    const float t = std::clamp((a - tol) / std::max(1e-6f, range - tol), 0.f, 1.f);
+    if (d > 0) return t < 0.5f ? QVector3D(0.30f + 1.30f * t, 0.75f + 0.20f * t, 0.35f - 0.5f * t) : QVector3D(0.95f, 0.85f - 1.4f * (t - 0.5f), 0.10f);
+    return t < 0.5f ? QVector3D(0.30f - 0.4f * t, 0.75f + 0.10f * t, 0.35f + 1.2f * t) : QVector3D(0.10f, 0.80f - 1.2f * (t - 0.5f), 0.95f);
+}
+
+}  // namespace
+
+void Viewport::uploadDeviation(GpuMesh& g, const TriMesh& m, const DeviationMap& d) {
+    const auto normals = m.vertexNormals();
+    std::vector<float> buf;
+    buf.reserve(m.vertices.size() * 9);
+    for (std::size_t i = 0; i < m.vertices.size(); ++i) {
+        const QVector3D c = deviationColor(d.distance[i], d.tolerance, d.range);
+        buf.insert(buf.end(), {m.vertices[i].x(), m.vertices[i].y(), m.vertices[i].z(), normals[i].x(), normals[i].y(), normals[i].z(), c.x(), c.y(), c.z()});
+    }
+    if (!g.devVao.isCreated()) g.devVao.create();
+    g.devVao.bind();
+    if (!g.devVbo.isCreated()) g.devVbo.create();
+    g.devVbo.bind();
+    g.devVbo.allocate(buf.data(), static_cast<int>(buf.size() * sizeof(float)));
+    g.ibo.bind();
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 36, nullptr);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 36, reinterpret_cast<void*>(12));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 36, reinterpret_cast<void*>(24));
+    g.devVao.release();
+}
+
+void Viewport::uploadPart(GpuMesh& g, const Body& b) {
+    auto lines = [this](QOpenGLVertexArrayObject& vao, QOpenGLBuffer& vbo, const std::vector<float>& buf) {
+        if (!vao.isCreated()) vao.create();
+        vao.bind();
+        if (!vbo.isCreated()) vbo.create();
+        vbo.bind();
+        vbo.allocate(buf.data(), static_cast<int>(buf.size() * sizeof(float)));
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, nullptr);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, reinterpret_cast<void*>(12));
+        vao.release();
+        return static_cast<int>(buf.size() / 6);
+    };
+    auto addPolyline = [](std::vector<float>& buf, const std::vector<Vec3f>& pts, QVector3D c) {
+        for (std::size_t k = 0; k + 1 < pts.size(); ++k)
+            for (const auto& p : {pts[k], pts[k + 1]}) buf.insert(buf.end(), {p.x(), p.y(), p.z(), c.x(), c.y(), c.z()});
+    };
+    // The solid's edges, when the solid changes.
+    if (g.partEdgeSource != b.view) {
+        std::vector<float> buf;
+        if (b.view)
+            for (const auto& e : b.view->edges) addPolyline(buf, e, {0.10f, 0.12f, 0.15f});
+        g.partEdgeVertexCount = lines(g.partEdgeVao, g.partEdgeVbo, buf);
+        g.partEdgeSource = b.view;
+    }
+    // The sketches and what is lit up, when the model or the highlight change.
+    const bool mine = partHighlight_.body == b.id;
+    std::string key = std::to_string(reinterpret_cast<std::uintptr_t>(b.model.get())) + "/" + std::to_string(reinterpret_cast<std::uintptr_t>(b.view.get()));
+    if (mine) {
+        for (int f : partHighlight_.faces) key += "f" + std::to_string(f);
+        for (int e : partHighlight_.edges) key += "e" + std::to_string(e);
+        for (auto sk : partHighlight_.sketches) key += "s" + std::to_string(sk);
+    }
+    if (g.partKey == key) return;
+    g.partKey = key;
+    std::vector<float> sk;
+    const float step = std::max(0.02f, sceneRadius_ * 0.004f);
+    for (const auto& sketch : b.model->sketches) {
+        const bool lit = mine && std::find(partHighlight_.sketches.begin(), partHighlight_.sketches.end(), sketch.id) != partHighlight_.sketches.end();
+        const QVector3D c = lit ? QVector3D(1.0f, 0.55f, 0.10f) : QVector3D(0.20f, 0.45f, 0.95f);
+        SketchPlane pl = sketch.profile.plane;
+        pl.normalize();
+        for (const auto& loop : sketch.profile.loops) {
+            auto poly = loop.polygon(step);
+            if (poly.empty()) continue;
+            poly.push_back(poly.front());
+            std::vector<Vec3f> pts;
+            for (const auto& q : poly) pts.push_back(pl.toWorld(q).cast<float>());
+            addPolyline(sk, pts, c);
+        }
+    }
+    g.sketchVertexCount = lines(g.sketchVao, g.sketchVbo, sk);
+    std::vector<float> le;
+    std::vector<std::uint32_t> lit;
+    if (mine && b.view) {
+        for (int e : partHighlight_.edges)
+            if (e >= 0 && static_cast<std::size_t>(e) < b.view->edges.size()) addPolyline(le, b.view->edges[static_cast<std::size_t>(e)], {1.0f, 0.62f, 0.10f});
+        for (std::size_t t = 0; t < b.view->faceOf.size() && t < b.mesh->faces.size(); ++t)
+            if (std::find(partHighlight_.faces.begin(), partHighlight_.faces.end(), static_cast<int>(b.view->faceOf[t])) != partHighlight_.faces.end())
+                lit.insert(lit.end(), b.mesh->faces[t].begin(), b.mesh->faces[t].end());
+    }
+    g.litEdgeVertexCount = lines(g.litEdgeVao, g.litEdgeVbo, le);
+    if (!g.litVao.isCreated()) g.litVao.create();
+    g.litVao.bind();
+    g.vbo.bind();
+    if (!g.litIbo.isCreated()) g.litIbo.create();
+    g.litIbo.bind();
+    g.litIbo.allocate(lit.data(), static_cast<int>(lit.size() * sizeof(std::uint32_t)));
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, nullptr);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, reinterpret_cast<void*>(12));
+    g.litVao.release();
+    g.litIndexCount = static_cast<int>(lit.size());
+}
+
+void Viewport::setPartHighlight(PartHighlight h) {
+    partHighlight_ = std::move(h);
+    const std::vector<Body> same = bodies_;
+    setBodies(same);  // rebuilds only what changed
+}
+
+void Viewport::setShowSketches(bool on) { sketches_ = on; update(); }
+
+void Viewport::drawLegend() {
+    const DeviationMap* d = nullptr;
+    for (const auto& b : bodies_)
+        if (b.visible && b.deviation) d = b.deviation.get();
+    if (!d) return;
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    const int w = 18, h = 220, x = width() - w - 70, y = 20;
+    for (int k = 0; k < h; ++k) {
+        const float v = d->range * (1.f - 2.f * static_cast<float>(k) / static_cast<float>(h - 1));
+        const QVector3D c = deviationColor(v, d->tolerance, d->range);
+        p.setPen(QColor::fromRgbF(c.x(), c.y(), c.z()));
+        p.drawLine(x, y + k, x + w, y + k);
+    }
+    p.setPen(palette().color(QPalette::WindowText));
+    QFont f = p.font();
+    f.setPointSizeF(f.pointSizeF() * 0.9);
+    p.setFont(f);
+    int lastY = -100;  // labels closer than a line apart are left out
+    auto label = [&](float v) {
+        const int yy = y + static_cast<int>((1.f - (v / d->range + 1.f) * 0.5f) * static_cast<float>(h - 1));
+        if (yy - lastY < 13) return;
+        lastY = yy;
+        p.drawLine(x + w, yy, x + w + 4, yy);
+        p.drawText(x + w + 7, yy + 4, (v > 0 ? "+" : "") + QLocale().toString(v, 'f', 2));
+    };
+    for (float v : {d->range, d->tolerance, -d->tolerance, -d->range}) label(v);
+    p.drawText(x - 30, y + h + 16, tr("mm, scan − part"));
+}
+
 void Viewport::setOpenEdges(bool on) { openEdges_ = on; update(); }
 void Viewport::setFlatShading(bool on) { flat_ = on; update(); }
 
@@ -489,21 +650,30 @@ void Viewport::paintGL() {
     meshProg_.setUniformValue("uFlat", flat_);
     meshProg_.setUniformValue("uPoints", false);
     meshProg_.setUniformValue("uVertexColor", false);
+    meshProg_.setUniformValue("uAlpha", 1.f);
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.f, 1.f);
-    for (const auto& b : bodies_) {
-        if (!b.visible) continue;
+    auto drawBody = [&](const Body& b) {
         auto& g = *gpu_.at(b.id);
         meshProg_.setUniformValue("uColor", QVector3D(b.color[0], b.color[1], b.color[2]));
+        meshProg_.setUniformValue("uAlpha", b.opacity);
         // Tint the selected body only when there is another to tell it from.
-        meshProg_.setUniformValue("uHighlight", b.id == selected_ && bodies_.size() > 1 ? 1.f : 0.f);
+        meshProg_.setUniformValue("uHighlight", b.id == selected_ && bodies_.size() > 1 && !b.deviation ? 1.f : 0.f);
+        if (b.deviation && g.devSource == b.deviation && g.devVao.isCreated()) {
+            meshProg_.setUniformValue("uVertexColor", true);
+            g.devVao.bind();
+            glDrawElements(GL_TRIANGLES, g.indexCount, GL_UNSIGNED_INT, nullptr);
+            g.devVao.release();
+            meshProg_.setUniformValue("uVertexColor", false);
+            return;
+        }
         if (shapes_ && g.regionVertexCount > 0) {
             meshProg_.setUniformValue("uVertexColor", true);
             g.regionVao.bind();
             glDrawArrays(GL_TRIANGLES, 0, g.regionVertexCount);
             g.regionVao.release();
             meshProg_.setUniformValue("uVertexColor", false);
-            continue;
+            return;
         }
         g.vao.bind();
         if (g.pointCount > 0) {
@@ -515,8 +685,24 @@ void Viewport::paintGL() {
             glDrawElements(GL_TRIANGLES, g.indexCount, GL_UNSIGNED_INT, nullptr);
         }
         g.vao.release();
-    }
+    };
+    for (const auto& b : bodies_)
+        if (b.visible && b.opacity >= 1.f) drawBody(b);
     glDisable(GL_POLYGON_OFFSET_FILL);
+    // Faces of a part picked: drawn again over themselves, in amber.
+    meshProg_.setUniformValue("uAlpha", 1.f);
+    meshProg_.setUniformValue("uHighlight", 0.f);
+    for (const auto& b : bodies_) {
+        if (!b.visible || !b.isPart()) continue;
+        auto& g = *gpu_.at(b.id);
+        if (g.litIndexCount <= 0) continue;
+        meshProg_.setUniformValue("uColor", QVector3D(1.0f, 0.70f, 0.25f));
+        glDepthFunc(GL_LEQUAL);
+        g.litVao.bind();
+        glDrawElements(GL_TRIANGLES, g.litIndexCount, GL_UNSIGNED_INT, nullptr);
+        g.litVao.release();
+        glDepthFunc(GL_LESS);
+    }
 
     lineProg_.bind();
     lineProg_.setUniformValue("uMvp", mvp);
@@ -540,7 +726,7 @@ void Viewport::paintGL() {
             }
             glDisable(GL_BLEND);
         }
-        if (openEdges_) {
+        if (openEdges_ && !b.isPart()) {  // a part's faces are triangulated one by one: their seams are not holes
             if (g.edgeLines) uploadOpenEdges(g);
             else if (g.edgeVertexCount < 0) requestOpenEdges(g);
             if (g.edgeVertexCount > 0) {
@@ -552,6 +738,51 @@ void Viewport::paintGL() {
                 glLineWidth(1.f);
             }
         }
+    }
+    // Parts: their solid's edges, the edges picked, and their sketches (over everything).
+    lineProg_.bind();
+    lineProg_.setUniformValue("uMvp", mvp);
+    lineProg_.setUniformValue("uTint", QVector4D(0, 0, 0, 0));
+    for (const auto& b : bodies_) {
+        if (!b.visible || !b.isPart()) continue;
+        auto& g = *gpu_.at(b.id);
+        if (g.partEdgeVertexCount > 0) {
+            glLineWidth(1.5f);
+            g.partEdgeVao.bind();
+            glDrawArrays(GL_LINES, 0, g.partEdgeVertexCount);
+            g.partEdgeVao.release();
+        }
+        if (g.litEdgeVertexCount > 0) {
+            glDisable(GL_DEPTH_TEST);
+            glLineWidth(4.f);
+            g.litEdgeVao.bind();
+            glDrawArrays(GL_LINES, 0, g.litEdgeVertexCount);
+            g.litEdgeVao.release();
+            glEnable(GL_DEPTH_TEST);
+        }
+        if (sketches_ && g.sketchVertexCount > 0) {
+            glDisable(GL_DEPTH_TEST);
+            glLineWidth(2.f);
+            g.sketchVao.bind();
+            glDrawArrays(GL_LINES, 0, g.sketchVertexCount);
+            g.sketchVao.release();
+            glEnable(GL_DEPTH_TEST);
+        }
+        glLineWidth(1.f);
+    }
+    // Bodies seen through, last: blended over what is behind them.
+    bool anySeeThrough = false;
+    for (const auto& b : bodies_) anySeeThrough |= b.visible && b.opacity < 1.f;
+    if (anySeeThrough) {
+        meshProg_.bind();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+        for (const auto& b : bodies_)
+            if (b.visible && b.opacity < 1.f) drawBody(b);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+        meshProg_.setUniformValue("uAlpha", 1.f);
     }
     if (marker_.hit()) {
         // A small 3-D cross at the picked point, drawn over everything.
@@ -580,6 +811,7 @@ void Viewport::paintGL() {
         markerVao_.release();
     }
     drawTriad();
+    drawLegend();
 }
 
 void Viewport::setHighlightedRegions(std::uint64_t body, std::vector<std::int32_t> regions) {
@@ -644,6 +876,48 @@ Pick Viewport::pickAt(const QPoint& pos) const {
             best.face = static_cast<std::uint32_t>(f);
             best.point = o + d * tt;
             best.normal = e1.cross(e2).normalized();
+        }
+    }
+    if (best.hit())
+        for (const auto& body : bodies_)
+            if (body.id == best.body && body.view && best.face < body.view->faceOf.size()) best.solidFace = static_cast<int>(body.view->faceOf[best.face]);
+    // An edge of a part within a few pixels of the click, not hidden behind a surface.
+    const QMatrix4x4 mvp = projMatrix() * viewMatrix();
+    const qreal sx = static_cast<qreal>(width()), sy = static_cast<qreal>(height());
+    auto toScreen = [&](const Vec3f& p, double& depth) {
+        const QVector4D c = mvp * QVector4D(p.x(), p.y(), p.z(), 1.f);
+        depth = c.w();
+        return QPointF((c.x() / c.w() * 0.5 + 0.5) * sx, (0.5 - c.y() / c.w() * 0.5) * sy);
+    };
+    const QPointF click(pos);
+    double bestPx = 6.0;
+    for (const auto& body : bodies_) {
+        if (!body.visible || !body.view) continue;
+        for (std::size_t e = 0; e < body.view->edges.size(); ++e) {
+            const auto& pts = body.view->edges[e];
+            for (std::size_t k = 0; k + 1 < pts.size(); ++k) {
+                double w0, w1;
+                const QPointF sa = toScreen(pts[k], w0), sb = toScreen(pts[k + 1], w1);
+                if (w0 <= 0 || w1 <= 0) continue;
+                const QPointF ab = sb - sa;
+                const double len2 = QPointF::dotProduct(ab, ab);
+                const double t = len2 > 0 ? std::clamp(QPointF::dotProduct(click - sa, ab) / len2, 0.0, 1.0) : 0.0;
+                const QPointF q = sa + t * ab;
+                const double px = std::hypot(click.x() - q.x(), click.y() - q.y());
+                if (px >= bestPx) continue;
+                const Vec3d w = (pts[k].cast<double>() * (1 - t) + pts[k + 1].cast<double>() * t);
+                const double along = (w - o).dot(d);
+                if (best.hit() && best.body != body.id && along > bestT + 1e-3 * sceneRadius_) continue;  // behind another body
+                if (best.hit() && along > bestT + 0.02 * sceneRadius_) continue;  // behind a face of this one
+                bestPx = px;
+                best.solidEdge = static_cast<int>(e);
+                if (!best.hit() || best.body != body.id) {
+                    best.body = body.id;
+                    best.solidFace = -1;
+                    best.normal = -d;
+                }
+                best.point = w;
+            }
         }
     }
     return best;

@@ -607,6 +607,26 @@ void registerCoreCommands(CommandRegistry& R) {
                return json{{"body", b.ref()}, {"visible", in["visible"]}};
            }});
 
+    R.add({"body.set_opacity", "body", {"Body opacity", "Opacidad del cuerpo"},
+           {"See a body through (opacity below 1): a scan over the part built from it, or the part inside its scan.",
+            "Ver a través de un cuerpo (opacidad menor que 1): el escaneo sobre la pieza hecha a partir de él, o la pieza dentro de su escaneo."},
+           object({{"body", body(kBody)}, {"opacity", number({"Opacity (1: solid, 0.05: almost invisible)", "Opacidad (1: opaco, 0,05: casi invisible)"}, 0.4, 0.05, 1.0)}}, {"body"}), true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = ctx.doc.body(in["body"]);
+               ctx.doc.setOpacity(b.id, static_cast<float>(in["opacity"].get<double>()));
+               return json{{"body", b.ref()}, {"opacity", in["opacity"]}};
+           }});
+
+    R.add({"body.clear_deviation", "body", {"Remove deviation colours", "Quitar colores de desviación"},
+           {"Show a scan in its own colour again after part.compare coloured it by its distance to a part.",
+            "Vuelve a mostrar un escaneo con su color después de que part.compare lo coloreara por su distancia a una pieza."},
+           object({{"body", body(kBody)}}, {"body"}), false, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = ctx.doc.body(in["body"]);
+               ctx.doc.setDeviation(b.id, nullptr);
+               return json{{"body", b.ref()}};
+           }});
+
     // ---------------------------------------------------------- history --
     R.add({"history.undo", "history", {"Undo", "Deshacer"}, {"Undo the last change.", "Deshace el último cambio."}, object({}), false, false,
            [](CommandContext& ctx, const json&) {

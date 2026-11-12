@@ -1,4 +1,4 @@
-# OpenRevers manual (version 0.3)
+# OpenRevers manual (version 0.5)
 
 OpenRevers prepares scanned meshes for reverse engineering. This version
 covers **phase 1**: open the scan, see what is wrong with it, repair it and
@@ -161,11 +161,12 @@ For mechanical parts (flat faces, holes, shafts, cones):
 - The AI agent can read what you picked, so you can ask it things like
   "measure the distance between these two faces".
 
-## Parametric part (phase 3, in progress)
+## Parametric part (phase 3)
 
 A **part** is an exact solid with its history, exported as STEP for Fusion,
 FreeCAD or SolidWorks. The *Model* panel shows its parameters, sketches and
-operations under it; double-click an operation to change it.
+operations under it. The AI can make it all, and you can touch up any part of
+it without leaving the program.
 
 1. **Part → New part.**
 2. **Part → Section with a plane**, on the aligned scan: the part's outline
@@ -173,21 +174,60 @@ operations under it; double-click an operation to change it.
 3. **Part → Sketch from a section:** cuts the scan and turns each closed
    outline into lines and arcs (0.05 mm tolerance by default); holes come out
    as circles, corners sharp where lines cross, arcs tangent to the lines they
-   touch. It gives every segment's size, to check against the calipers. Or
-   **Part → Add a sketch:** closed loops of lines, arcs and circles (as JSON;
-   a sketch editor comes later). A loop inside another is a hole. The easiest
-   way today is to ask the AI agent, which reads the section and proposes
-   the sketch.
+   touch. It gives every segment's size, to check against the calipers. A
+   loop inside another is a hole.
 4. **Part → Extrude** (join, cut, intersect), **Revolve** and **Fillet
    edges**. Values may be numbers or **parameter** names (*Part → Set a
    parameter*): change a parameter and the part is rebuilt. A change that
    breaks it is not applied, and the reason is given.
 5. **Part → Compare with the scan:** the scan's distances to the solid, the
-   median, 95th percentile and the share within a tolerance (±0.2 mm by
-   default).
+   median, 95th percentile, the share within a tolerance (±0.2 mm by default)
+   and **the zones outside it** (where, how much of the scan, and to which
+   side). The scan is **coloured** by its distance to the part, with a legend
+   on the right: green within the tolerance, yellow to red where the model
+   lacks material, cyan to blue where it has too much. *Body → Remove
+   deviation colours* gives it its own colour back.
 6. **File → Export STEP.**
 
 A part's triangles only show it: the mesh tools do not change it.
+
+### Touching up the part by hand
+
+- **In the 3D view** a part shows its edges and its sketches (blue; the one
+  picked, orange; *View → Sketches of parts* hides them). A click on the part
+  picks the **face** under it, or the **edge** if the click is within a few
+  pixels of one; Ctrl+click adds or takes away. The status bar gives its kind
+  and size (plane and area, cylinder and diameter, line and length…).
+- **Right-click on the part:** *New sketch on this face* (on a flat face),
+  *Round the picked edges*, *Compare with a scan* and *See through* (the part
+  half transparent, to see the scan inside; also on the scan).
+- **In the *Model* panel,** pick a parameter, a sketch or an operation: its
+  values appear in *Properties*, and double-click changes them (a number or a
+  parameter's name); the mode with its drop-down, *Suppressed* with its box.
+  Right-click an operation to edit its sketch, suppress it, **move it up or
+  down** the history or delete it. An operation that fails shows in red.
+- **Sketch editor** (double-click a sketch, or *Part → Edit the picked
+  sketch*): the sketch over the **section of the scan** in its plane (grey
+  dotted line). Each segment is coloured by how far it lies from the section:
+  green within the tolerance, orange up to four times, red more.
+  - *Select:* drag vertices, the diamond in the middle of an arc (changes its
+    bulge), a circle's centre or the diamond of its radius. Double-click a
+    line to make it an arc, an arc to make it a line.
+  - *Rectangle* (two corners), *Circle* (centre and a point) and *Polygon*
+    (click each corner; double-click or Enter closes it) draw new loops.
+  - *Line ↔ arc*, *Split*, *Delete vertex* (Del), *Delete loop*, *Undo*,
+    *Redo* and *Fit* (F).
+  - On the right, the **values** of what is picked (vertex X/Y, a line's
+    length, an arc's radius, a circle's centre and diameter), to type the
+    exact size from the calipers.
+  - It snaps to vertices and to the section while you drag (*Snap…* box).
+    Wheel to zoom; middle or right button to pan.
+  - *OK* changes the sketch and rebuilds the part in one undo step. A sketch
+    that does not close cannot be accepted.
+
+Everything you do by hand is visible to the AI agent (`view_selection` tells
+it which parameter, sketch or operation, which faces and which edges you
+picked), so you can point at something and ask it to carry on from there.
 
 ## Settings
 

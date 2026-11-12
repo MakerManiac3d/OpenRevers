@@ -1,4 +1,4 @@
-# Manual de OpenRevers (versión 0.3)
+# Manual de OpenRevers (versión 0.5)
 
 OpenRevers prepara mallas escaneadas para la ingeniería inversa. Esta versión
 cubre la **fase 1**: abrir el escaneo, ver qué le pasa, repararlo y dejarlo
@@ -169,12 +169,12 @@ Para piezas mecánicas (caras planas, taladros, ejes, conos):
 - El agente de IA puede leer lo que has señalado, así que puedes pedirle
   cosas como «mide la distancia entre estas dos caras».
 
-## Pieza paramétrica (fase 3, en desarrollo)
+## Pieza paramétrica (fase 3)
 
 Una **pieza** es un sólido exacto con su historial, que se exporta a STEP para
 Fusion, FreeCAD o SolidWorks. En el panel *Modelo* aparece con sus
-parámetros, bocetos y operaciones debajo; doble clic en una operación para
-cambiarla.
+parámetros, bocetos y operaciones debajo. La IA puede hacerla entera, y tú
+puedes retocar cualquier parte sin salir del programa.
 
 1. **Pieza → Nueva pieza.**
 2. **Pieza → Sección con un plano**, sobre el escaneo ya alineado: da el
@@ -184,22 +184,65 @@ cambiarla.
    contorno cerrado en rectas y arcos (tolerancia 0,05 mm por defecto); los
    taladros salen como círculos, las esquinas vivas donde se cruzan rectas y
    los arcos tangentes a las rectas que tocan. Da la medida de cada segmento
-   para compararla con el calibre. O bien **Pieza → Añadir boceto:** lazos cerrados de rectas, arcos y círculos
-   (en JSON; un editor de bocetos llegará más adelante). Un lazo dentro de
-   otro es un agujero. Lo más cómodo hoy es pedírselo al agente de IA, que
-   lee la sección y propone el boceto.
+   para compararla con el calibre. Un lazo dentro de otro es un agujero.
 4. **Pieza → Extruir** (unir, cortar, intersecar), **Revolución** y
    **Redondear aristas**. Los valores pueden ser números o nombres de
    **parámetros** (*Pieza → Fijar un parámetro*): al cambiar un parámetro, la
    pieza se reconstruye. Si un cambio la rompe, no se aplica y se dice por
    qué.
 5. **Pieza → Comparar con el escaneo:** distancias del escaneo al sólido,
-   mediana, percentil 95 y qué parte queda dentro de una tolerancia (±0,2 mm
-   por defecto).
+   mediana, percentil 95, qué parte queda dentro de una tolerancia (±0,2 mm
+   por defecto) y **las zonas fuera de ella** (dónde están, cuánto escaneo
+   ocupan y hacia qué lado se desvían). El escaneo se **colorea** por su
+   distancia a la pieza, con la leyenda a la derecha: verde dentro de la
+   tolerancia, de amarillo a rojo donde al modelo le falta material y de
+   cian a azul donde le sobra. *Cuerpo → Quitar colores de desviación* lo
+   devuelve a su color.
 6. **Archivo → Exportar STEP.**
 
 Los triángulos de una pieza solo la muestran: las herramientas de malla no
 la cambian.
+
+### Retocar la pieza a mano
+
+- **En la vista 3D**, la pieza muestra sus aristas y sus bocetos (en azul; el
+  elegido, en naranja; *Ver → Bocetos de las piezas* los oculta). Un clic
+  sobre la pieza elige la **cara** que hay debajo, o la **arista** si el clic
+  cae a pocos píxeles de una; Ctrl+clic añade o quita. La barra de estado da
+  su tipo y medida (plano y área, cilindro y diámetro, recta y longitud…).
+- **Clic derecho sobre la pieza:** *Boceto nuevo en esta cara* (en una cara
+  plana), *Redondear las aristas elegidas*, *Comparar con un escaneo* y *Ver a
+  través* (la pieza semitransparente, para ver el escaneo dentro; también en
+  el escaneo).
+- **En el panel *Modelo*,** elige un parámetro, un boceto o una operación:
+  sus valores aparecen en *Propiedades* y se cambian con doble clic (un
+  número o el nombre de un parámetro); el modo, con su desplegable, y
+  *Suprimida*, con su casilla. El clic derecho sobre una operación permite
+  editar su boceto, suprimirla, **subirla o bajarla** en el historial y
+  borrarla. Una operación que falla sale en rojo.
+- **Editor de bocetos** (doble clic en un boceto, o *Pieza → Editar el
+  boceto elegido*): el boceto sobre la **sección del escaneo** en su plano
+  (línea de puntos gris). Cada segmento se colorea según cuánto se separa de
+  la sección: verde dentro de la tolerancia, naranja hasta cuatro veces y
+  rojo más.
+  - *Seleccionar:* arrastra vértices, el rombo del medio de un arco (cambia
+    su curvatura), el centro de un círculo o el rombo de su radio. Doble clic
+    en una recta la convierte en arco, y en un arco, en recta.
+  - *Rectángulo* (dos esquinas), *Círculo* (centro y un punto) y *Polígono*
+    (clic en cada esquina; doble clic o Intro lo cierra) dibujan lazos nuevos.
+  - *Recta ↔ arco*, *Partir*, *Borrar vértice* (Supr), *Borrar lazo*,
+    *Deshacer*, *Rehacer* y *Encajar* (F).
+  - A la derecha, los **valores** de lo elegido (vértice X/Y, longitud de una
+    recta, radio de un arco, centro y diámetro de un círculo) para escribir
+    la medida exacta del calibre.
+  - Se ajusta a los vértices y a la sección mientras arrastras (casilla
+    *Ajustar…*). Rueda para acercar; botón central o derecho para desplazar.
+  - *Aceptar* cambia el boceto y reconstruye la pieza en un solo paso de
+    deshacer. No se puede aceptar un boceto que no cierra.
+
+Todo lo que haces a mano lo ve el agente de IA (`view_selection` le dice qué
+parámetro, boceto u operación, qué caras y qué aristas has elegido), así que
+puedes señalar algo y pedirle que siga desde ahí.
 
 ## Ajustes
 

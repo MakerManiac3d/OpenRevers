@@ -415,3 +415,97 @@ TEST(Commands, ParametricPartFromSketchToStep) {
     f.run("history.undo");  // the fillet
     EXPECT_NEAR(f.run("part.list", {{"body", "b1"}})["solid"]["volume"].get<double>(), 3.0 * area, 1e-3);
 }
+
+TEST(Commands, EditingAPartByHand) {
+    // What the person does with the part's history in the window, as commands.
+    Fixture f;
+    f.run("part.new", {{"name", "Plate"}});
+    json loops = json::array();
+    loops.push_back(json::array({{{"type", "line"}, {"from", {0, 0}}, {"to", {30, 0}}}, {{"type", "line"}, {"from", {30, 0}}, {"to", {30, 12}}},
+                                 {{"type", "line"}, {"from", {30, 12}}, {"to", {0, 12}}}, {{"type", "line"}, {"from", {0, 12}}, {"to", {0, 0}}}}));
+    f.run("part.sketch", {{"body", "b1"}, {"loops", loops}});
+    f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({json::array({{{"type", "circle"}, {"centre", {10.0, 6.0}}, {"radius", 2.0}}})})}});
+    f.run("part.extrude", {{"body", "b1"}, {"sketch", "s1"}, {"end", 3.0}, {"mode", "new"}});
+    const json cut = f.run("part.extrude", {{"body", "b1"}, {"sketch", "s2"}, {"end", 3.0}, {"mode", "cut"}});
+    const double withHole = cut["solid"]["volume"].get<double>();
+    EXPECT_NEAR(withHole, 3 * (360 - 3.14159265358979 * 4), 1e-3);
+
+    // Renaming a sketch alone, and moving its plane alone, keep its loops.
+    f.run("part.edit_sketch", {{"body", "b1"}, {"sketch", "s2"}, {"name", "Pivot"}});
+    EXPECT_EQ(f.run("part.list", {{"body", "b1"}})["sketches"][1]["name"], "Pivot");
+    const json moved = f.run("part.edit_sketch", {{"body", "b1"}, {"sketch", "Pivot"}, {"plane", {{"origin", {5.0, 0.0, 0.0}}, {"normal", {0.0, 0.0, 1.0}}, {"xDir", {1.0, 0.0, 0.0}}}}});
+    EXPECT_NEAR(moved["solid"]["volume"].get<double>(), withHole, 1e-3);  // the hole moved, still inside
+    EXPECT_EQ(moved["sketches"][1]["segments"], 1);
+
+    // Moving the cut first is refused (nothing to cut from) and changes nothing.
+    EXPECT_THROW(f.run("part.move", {{"body", "b1"}, {"operation", "o4"}, {"position", 1}}), CommandError);
+    EXPECT_EQ(f.run("part.list", {{"body", "b1"}})["operations"][0]["ref"], "o3");
+    // A fillet moved before the cut: the part is rebuilt in the new order.
+    f.run("part.fillet", {{"body", "b1"}, {"points", {{15.0, 0.0, 3.0}}}, {"radius", 0.5}});
+    const json m = f.run("part.move", {{"body", "b1"}, {"operation", "o5"}, {"position", 2}});
+    EXPECT_EQ(m["operations"][1]["ref"], "o5");
+    EXPECT_EQ(m["operations"][2]["ref"], "o4");
+
+    // Opacity is a step of the history; it comes back on undo.
+    f.run("body.set_opacity", {{"body", "b1"}, {"opacity", 0.4}});
+    EXPECT_NEAR(f.doc.body("b1").opacity, 0.4, 1e-6);
+    f.run("history.undo");
+    EXPECT_NEAR(f.doc.body("b1").opacity, 1.0, 1e-6);
+
+    // The part's view: a face for each triangle, every edge as a polyline.
+    const Body b = f.doc.body("b1");
+    ASSERT_TRUE(b.view);
+    EXPECT_EQ(b.view->faceOf.size(), b.mesh->faces.size());
+    EXPECT_EQ(static_cast<int>(b.view->edges.size()), b.solid.edgeCount());
+    int planes = 0, cylinders = 0;
+    for (int i = 0; i < b.solid.faceCount(); ++i) {
+        const ShapeInfo s = b.solid.faceInfo(i);
+        planes += s.type == "plane";
+        if (s.type == "cylinder") {
+            ++cylinders;
+            if (s.radius > 1) EXPECT_NEAR(std::abs(s.axis.z()), 1.0, 1e-9);  // the hole, Ø4 along z
+            else EXPECT_NEAR(std::abs(s.axis.x()), 1.0, 1e-9);              // the fillet, R0.5 along x
+        }
+    }
+    EXPECT_EQ(cylinders, 2);
+    EXPECT_GE(planes, 6);
+    // The edge the fillet rounded is gone; a straight top edge reports its length.
+    bool found = false;
+    for (int i = 0; i < b.solid.edgeCount(); ++i) {
+        const ShapeInfo e = b.solid.edgeInfo(i);
+        if (e.type == "line" && std::abs(e.size - 12.0) < 1e-6) found = true;
+    }
+    EXPECT_TRUE(found);
+}
+
+TEST(Commands, CompareShowsWhereAndColoursTheScan) {
+    const auto dir = tempDir("compare");
+    Fixture f;
+    // A scan of a 30 × 12 × 3 block, and a part 0.5 mm too short in x.
+    TriMesh scan = test::box(30, 12, 3);
+    remeshUniform(scan, 0.5f, 4);
+    writeMesh(scan, dir / "scan.stl");
+    f.run("mesh.import", {{"path", (dir / "scan.stl").string()}});
+    f.run("part.new");
+    json loops = json::array();
+    loops.push_back(json::array({{{"type", "line"}, {"from", {0, 0}}, {"to", {29.5, 0}}}, {{"type", "line"}, {"from", {29.5, 0}}, {"to", {29.5, 12}}},
+                                 {{"type", "line"}, {"from", {29.5, 12}}, {"to", {0, 12}}}, {{"type", "line"}, {"from", {0, 12}}, {"to", {0, 0}}}}));
+    f.run("part.sketch", {{"body", "b2"}, {"loops", loops}});
+    f.run("part.extrude", {{"body", "b2"}, {"sketch", "s1"}, {"end", 3.0}, {"mode", "new"}});
+    const bool couldUndo = f.doc.canUndo();
+    const auto undoSteps = f.doc.undoList().size();
+    const json c = f.run("part.compare", {{"body", "b2"}, {"scan", "b1"}, {"tolerance", 0.1}});
+    // One zone: the end face at x = 30, outside the part by 0.5 mm.
+    ASSERT_GE(c["zones"].size(), 1u);
+    const json& z = c["zones"][0];
+    EXPECT_NEAR(z["centre"][0].get<double>(), 30.0, 0.3);
+    EXPECT_NEAR(z["meanDistance"].get<double>(), 0.5, 0.05);
+    // The scan is coloured, and that is not a step of the history.
+    const Body s = f.doc.body("b1");
+    ASSERT_TRUE(s.deviation);
+    EXPECT_EQ(s.deviation->distance.size(), s.mesh->vertices.size());
+    EXPECT_EQ(f.doc.canUndo(), couldUndo);
+    EXPECT_EQ(f.doc.undoList().size(), undoSteps);
+    f.run("body.clear_deviation", {{"body", "b1"}});
+    EXPECT_FALSE(f.doc.body("b1").deviation);
+}

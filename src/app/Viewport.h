@@ -26,7 +26,17 @@ struct Pick {
     Vec3d point{Vec3d::Zero()};  // mm
     Vec3d normal{Vec3d::Zero()};
     std::uint32_t face{0};
+    int solidFace{-1};  // on a part: the face of its solid (-1: none)
+    int solidEdge{-1};  // on a part: the edge of its solid near the click (-1: none)
     bool hit() const { return body != 0; }
+};
+
+/// What of a part is lit up: faces and edges picked, and sketches (the one
+/// picked in the tree, or the one an operation uses).
+struct PartHighlight {
+    std::uint64_t body{0};
+    std::vector<int> faces, edges;
+    std::vector<std::uint64_t> sketches;
 };
 
 class Viewport : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core {
@@ -46,6 +56,10 @@ public:
     void setShowShapes(bool on);
     /// Light up these regions of a body (the shapes selected in the panel).
     void setHighlightedRegions(std::uint64_t body, std::vector<std::int32_t> regions);
+    /// Light up faces, edges and sketches of a part.
+    void setPartHighlight(PartHighlight h);
+    void setShowSketches(bool on);
+    bool showSketches() const { return sketches_; }
     /// The point shown as picked (none: hit() false).
     void setPickMarker(const Pick& p);
     /// The surface under a widget position (logical pixels).
@@ -93,6 +107,25 @@ private:
         QOpenGLBuffer regionVbo{QOpenGLBuffer::VertexBuffer};
         int regionVertexCount{0};
         std::shared_ptr<const Features> regionSource;
+        // A part: its solid's edges, its sketches, and the triangles of the faces lit up.
+        QOpenGLVertexArrayObject partEdgeVao;
+        QOpenGLBuffer partEdgeVbo{QOpenGLBuffer::VertexBuffer};
+        int partEdgeVertexCount{0};
+        std::shared_ptr<const PartView> partEdgeSource;
+        QOpenGLVertexArrayObject sketchVao;
+        QOpenGLBuffer sketchVbo{QOpenGLBuffer::VertexBuffer};
+        int sketchVertexCount{0};
+        QOpenGLVertexArrayObject litVao;
+        QOpenGLBuffer litIbo{QOpenGLBuffer::IndexBuffer};
+        int litIndexCount{0};
+        QOpenGLVertexArrayObject litEdgeVao;
+        QOpenGLBuffer litEdgeVbo{QOpenGLBuffer::VertexBuffer};
+        int litEdgeVertexCount{0};
+        std::string partKey;  // what the sketch and lit buffers were built from
+        // A scan coloured by its distance to a part, one colour per vertex.
+        QOpenGLVertexArrayObject devVao;
+        QOpenGLBuffer devVbo{QOpenGLBuffer::VertexBuffer};
+        std::shared_ptr<const DeviationMap> devSource;
         std::vector<std::int32_t> regionHighlight;  // what the buffer was built with
         // A quad mesh draws its wireframe as the quads' edges, not the triangles'.
         QOpenGLVertexArrayObject wireVao;
@@ -108,6 +141,9 @@ private:
     };
     void upload(GpuMesh& g, const TriMesh& m);
     void uploadRegions(GpuMesh& g, const TriMesh& m, const Features* f);
+    void uploadPart(GpuMesh& g, const Body& b);
+    void uploadDeviation(GpuMesh& g, const TriMesh& m, const DeviationMap& d);
+    void drawLegend();
     void requestOpenEdges(GpuMesh& g);
     void uploadOpenEdges(GpuMesh& g);
     QMatrix4x4 viewMatrix() const;
@@ -132,7 +168,8 @@ private:
     float distance_{100.f};
     float yaw_{-45.f}, pitch_{30.f};
     float sceneRadius_{50.f};
-    bool wireframe_{false}, openEdges_{true}, flat_{false}, shapes_{true};
+    bool wireframe_{false}, openEdges_{true}, flat_{false}, shapes_{true}, sketches_{true};
+    PartHighlight partHighlight_;
     std::uint64_t highlightBody_{0};
     std::vector<std::int32_t> highlightRegions_;
     Pick marker_;

@@ -4,6 +4,7 @@
 #include "app/AppCommands.h"
 #include "app/CommandDialog.h"
 #include "app/SettingsDialog.h"
+#include "app/SketchEditor.h"
 #include "app/Viewport.h"
 #include "commands/Guide.h"
 #include "core/util/Version.h"
@@ -18,7 +19,10 @@
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QCheckBox>
+#include <QComboBox>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QLabel>
 #include <QListWidget>
 #include <QMenuBar>
@@ -56,6 +60,38 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
             for (const auto& r : pickedShapes_)
                 if (const Feature* f = b->features->find(r.toStdString())) shapes.push_back({{"ref", f->ref()}, {"name", f->name}, {"type", primitiveName(f->shape.type)}});
         j["shapes"] = shapes;
+        // A part: the item picked in its history, and the faces and edges of its solid.
+        if (auto b = doc_.findBody(selectedRef().toStdString()); b && b->isPart()) {
+            if (!partItem_.isEmpty()) {
+                const std::string it = partItem_.toStdString();
+                j["partItem"] = it.rfind("p:", 0) == 0 ? json{{"parameter", it.substr(2)}} : json{{"ref", it}};
+            }
+            auto info = [](const ShapeInfo& i) {
+                json k{{"type", i.type}, {"size", i.size}};
+                if (i.radius > 0) k["radius"] = i.radius;
+                if (i.radius2 > 0) k["radius2"] = i.radius2;
+                if (i.axis.norm() > 0) k["axis"] = {i.axis.x(), i.axis.y(), i.axis.z()};
+                k["origin"] = {i.origin.x(), i.origin.y(), i.origin.z()};
+                return k;
+            };
+            json faces = json::array(), edges = json::array();
+            for (int f : pickedFaces_) {
+                json k = info(b->solid.faceInfo(f));
+                k["index"] = f;
+                faces.push_back(k);
+            }
+            for (int e : pickedEdges_) {
+                json k = info(b->solid.edgeInfo(e));
+                k["index"] = e;
+                if (b->view && static_cast<std::size_t>(e) < b->view->edgeMiddle.size()) {
+                    const Vec3d m = b->view->edgeMiddle[static_cast<std::size_t>(e)];
+                    k["middle"] = {m.x(), m.y(), m.z()};  // pass to part.fillet's points
+                }
+                edges.push_back(k);
+            }
+            j["faces"] = faces;
+            j["edges"] = edges;
+        }
         return j;
     };
     access.pick = [this, selection = access.selection](double x, double y, bool add) {
@@ -183,12 +219,24 @@ void MainWindow::buildActions() {
         auto* a = add(pointsMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
-    for (const char* name : {"part.new", "part.sketch_from_section", "part.sketch", "part.extrude", "part.revolve", "part.fillet", "part.parameter", "part.edit", "part.delete", "part.list",
-                             "part.compare", "mesh.section"}) {
+    for (const char* name : {"part.new", "part.sketch_from_section", "part.sketch", "part.extrude", "part.revolve", "part.fillet", "part.parameter", "part.edit", "part.move",
+                             "part.delete", "part.list", "part.compare", "mesh.section"}) {
         auto* a = add(partMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
-        if (std::string(name) == "part.fillet" || std::string(name) == "part.list") partMenu->addSeparator();
+        if (std::string(name) == "part.sketch") {
+            add(partMenu, tr("Edit the picked sketch…"), [this]() {
+                if (partItem_.startsWith('s')) editSketch(selected_, partItem_.mid(1).toULongLong());
+                else QMessageBox::information(this, tr("OpenRevers"), tr("Pick a sketch in the Model panel first."));
+            });
+            add(partMenu, tr("New sketch on the picked face…"), &MainWindow::newSketchOnFace);
+        }
+        if (std::string(name) == "part.fillet") {
+            add(partMenu, tr("Round the picked edges…"), &MainWindow::filletPickedEdges);
+            partMenu->addSeparator();
+        }
+        if (std::string(name) == "part.list") partMenu->addSeparator();
     }
+    for (const char* name : {"body.set_opacity", "body.clear_deviation"}) add(bodyMenu, cmdText(name), [this, name]() { runFromUi(name); });
     for (const char* name : {"body.rename", "body.duplicate", "body.delete"}) add(bodyMenu, cmdText(name), [this, name]() { runFromUi(name); });
 
     for (auto [text, view] : std::initializer_list<std::pair<QString, const char*>>{{tr("Isometric"), "iso"}, {tr("Front"), "front"}, {tr("Back"), "back"},
@@ -210,6 +258,7 @@ void MainWindow::buildActions() {
     toggle(tr("Open edges"), true, [this](bool on) { viewport_->setOpenEdges(on); });
     toggle(tr("Flat shading"), false, [this](bool on) { viewport_->setFlatShading(on); });
     toggle(tr("Shapes by colour"), true, [this](bool on) { viewport_->setShowShapes(on); });
+    toggle(tr("Sketches of parts"), true, [this](bool on) { viewport_->setShowSketches(on); });
     viewMenu->addSeparator();
     viewMenu->setObjectName("viewMenu");
 
@@ -238,10 +287,20 @@ void MainWindow::buildDocks() {
     tree_->header()->setStretchLastSection(false);
     tree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     tree_->setRootIsDecorated(false);
+    tree_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(tree_, &QTreeWidget::customContextMenuRequested, this, &MainWindow::showTreeMenu);
     connect(tree_, &QTreeWidget::itemSelectionChanged, this, [this]() {
+        if (updatingTree_) return;
         auto items = tree_->selectedItems();
+        const std::uint64_t was = selected_;
         selected_ = items.isEmpty() ? 0 : items.first()->data(0, Qt::UserRole).toULongLong();
+        partItem_ = items.isEmpty() ? QString() : items.first()->data(0, Qt::UserRole + 1).toString();
+        if (selected_ != was) {
+            pickedFaces_.clear();
+            pickedEdges_.clear();
+        }
         viewport_->setSelected(selected_);
+        refreshPartHighlight();
         refreshProperties();
         refreshShapes();
     });
@@ -250,15 +309,31 @@ void MainWindow::buildDocks() {
         const QString ref = "b" + QString::number(item->data(0, Qt::UserRole).toULongLong());
         run("body.set_visible", {{"body", ref.toStdString()}, {"visible", item->checkState(0) == Qt::Checked}});
     });
-    connect(tree_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int) { runFromUi(item && item->parent() ? "part.edit" : "body.rename"); });
+    connect(tree_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int) {
+        const QString it = item ? item->data(0, Qt::UserRole + 1).toString() : QString();
+        if (it.startsWith('s')) editSketch(selected_, it.mid(1).toULongLong());
+        else if (it.isEmpty()) runFromUi("body.rename");
+        else if (props_->rowCount() > 0) {  // a parameter or an operation: its values are in the properties, ready to edit
+            props_->setFocus();
+            for (int r = 0; r < props_->rowCount(); ++r)
+                if (props_->item(r, 1) && (props_->item(r, 1)->flags() & Qt::ItemIsEditable)) {
+                    props_->setCurrentCell(r, 1);
+                    props_->editItem(props_->item(r, 1));
+                    break;
+                }
+        }
+    });
     dock(tr("Model"), "ModelDock", tree_, Qt::LeftDockWidgetArea);
 
     props_ = new QTableWidget(0, 2);
     props_->setHorizontalHeaderLabels({tr("Property"), tr("Value")});
     props_->horizontalHeader()->setStretchLastSection(true);
     props_->verticalHeader()->setVisible(false);
-    props_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    props_->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed | QAbstractItemView::AnyKeyPressed);
     props_->setWordWrap(false);
+    connect(props_, &QTableWidget::itemChanged, this, [this](QTableWidgetItem* it) {
+        if (!updatingProps_ && it && it->column() == 1) onPropertyEdited(it->row());
+    });
     dock(tr("Properties"), "PropertiesDock", props_, Qt::LeftDockWidgetArea);
     resizeDocks({findChild<QDockWidget*>("ModelDock")}, {340}, Qt::Horizontal);
 
@@ -320,18 +395,22 @@ void MainWindow::refreshTree() {
         auto* item = new QTreeWidgetItem(tree_, {QString::fromStdString(b.name), count});
         if (b.isPart()) {
             // The history under the part: parameters, sketches, then the operations in order.
-            auto child = [&](const QString& text, const QString& note, const std::string& tip) {
+            auto child = [&](const QString& text, const QString& note, const std::string& tip, const QString& id) {
                 auto* c = new QTreeWidgetItem(item, {text, note});
                 c->setData(0, Qt::UserRole, QVariant::fromValue<qulonglong>(b.id));
+                c->setData(0, Qt::UserRole + 1, id);
                 c->setToolTip(0, QString::fromStdString(tip));
                 c->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
+                if (b.id == selected_ && id == partItem_) c->setSelected(true);
                 return c;
             };
-            for (const auto& [name, value] : b.model->parameters) child(QString::fromStdString(name), QLocale().toString(value, 'g', 6), tr("Parameter").toStdString());
-            for (const auto& sk : b.model->sketches) child(QString::fromStdString(sk.name), tr("sketch"), sk.ref());
+            for (const auto& [name, value] : b.model->parameters)
+                child(QString::fromStdString(name), QLocale().toString(value, 'g', 6), tr("Parameter").toStdString(), "p:" + QString::fromStdString(name));
+            for (const auto& sk : b.model->sketches) child(QString::fromStdString(sk.name), tr("sketch"), sk.ref() + " · " + tr("double-click to edit").toStdString(), QString::fromStdString(sk.ref()));
             for (const auto& op : b.model->operations) {
-                auto* c = child(QString::fromStdString(op.name), QString::fromUtf8(opModeName(op.mode)), op.ref() + " · " + opKindName(op.kind));
+                auto* c = child(QString::fromStdString(op.name), QString::fromUtf8(opModeName(op.mode)), op.ref() + " · " + opKindName(op.kind), QString::fromStdString(op.ref()));
                 if (op.suppressed) c->setForeground(0, palette().brush(QPalette::Disabled, QPalette::Text));
+                if (!b.buildError.empty() && b.buildError.find(op.ref()) != std::string::npos) c->setForeground(0, QColor(200, 40, 40));
             }
             item->setExpanded(true);
         }
@@ -340,12 +419,15 @@ void MainWindow::refreshTree() {
         item->setCheckState(0, b.visible ? Qt::Checked : Qt::Unchecked);
         item->setToolTip(0, QString::fromStdString(b.ref() + (b.source.empty() ? "" : "\n" + b.source)));
         item->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
-        if (b.id == selected_) item->setSelected(true);
+        if (b.id == selected_ && partItem_.isEmpty()) item->setSelected(true);
     }
     updatingTree_ = false;
+    refreshPartHighlight();
 }
 
 void MainWindow::refreshProperties() {
+    updatingProps_ = true;
+    struct Done { bool& f; ~Done() { f = false; } } done{updatingProps_};
     props_->setRowCount(0);
     auto b = doc_.findBody(selectedRef().toStdString());
     if (!b) return;
@@ -354,10 +436,18 @@ void MainWindow::refreshProperties() {
     auto row = [&](const QString& k, const QString& v) {
         const int r = props_->rowCount();
         props_->insertRow(r);
-        props_->setItem(r, 0, new QTableWidgetItem(k));
-        props_->setItem(r, 1, new QTableWidgetItem(v));
+        auto* key = new QTableWidgetItem(k);
+        key->setFlags(key->flags() & ~Qt::ItemIsEditable);
+        auto* val = new QTableWidgetItem(v);
+        val->setFlags(val->flags() & ~Qt::ItemIsEditable);
+        props_->setItem(r, 0, key);
+        props_->setItem(r, 1, val);
     };
     auto mm = [&](float v) { return loc.toString(v, 'f', 3); };
+    if (b->isPart() && !partItem_.isEmpty()) {
+        showPartProperties(*b);
+        return;
+    }
     row(tr("Name"), QString::fromStdString(b->name));
     row(tr("Reference"), QString::fromStdString(b->ref()));
     if (b->isPart()) {
@@ -410,9 +500,48 @@ void MainWindow::onPicked(const Pick& p, bool add) {
         status_->clear();
         return;
     }
+    if (p.body != selected_) {
+        pickedFaces_.clear();
+        pickedEdges_.clear();
+    }
     selectBody(p.body);
     QLocale loc;
     QString where = tr("Point %1, %2, %3 mm").arg(loc.toString(p.point.x(), 'f', 3), loc.toString(p.point.y(), 'f', 3), loc.toString(p.point.z(), 'f', 3));
+    if (auto b = doc_.findBody("b" + std::to_string(p.body)); b && b->isPart()) {
+        // A part: an edge near the click wins over the face under it; Ctrl adds or takes away.
+        auto toggle = [&](std::vector<int>& list, int i) {
+            auto it = std::find(list.begin(), list.end(), i);
+            if (add && it != list.end()) list.erase(it);
+            else if (it == list.end()) list.push_back(i);
+        };
+        if (!add) {
+            pickedFaces_.clear();
+            pickedEdges_.clear();
+        }
+        auto describe = [&](const ShapeInfo& i, bool face) {
+            QString t = face ? tr("Face") : tr("Edge");
+            static const std::map<std::string, const char*> names{{"plane", QT_TR_NOOP("plane")}, {"cylinder", QT_TR_NOOP("cylinder")}, {"cone", QT_TR_NOOP("cone")},
+                                                                  {"sphere", QT_TR_NOOP("sphere")}, {"torus", QT_TR_NOOP("torus")}, {"bspline", QT_TR_NOOP("free-form")},
+                                                                  {"line", QT_TR_NOOP("line")}, {"circle", QT_TR_NOOP("circle")}, {"ellipse", QT_TR_NOOP("ellipse")}};
+            auto n = names.find(i.type);
+            t += " · " + (n != names.end() ? tr(n->second) : QString::fromStdString(i.type));
+            if (i.radius > 0) t += " · Ø " + loc.toString(2 * i.radius, 'f', 3);
+            t += face ? " · " + loc.toString(i.size, 'f', 2) + " mm²" : " · " + loc.toString(i.size, 'f', 3) + " mm";
+            return t;
+        };
+        if (p.solidEdge >= 0) {
+            toggle(pickedEdges_, p.solidEdge);
+            where += " · " + describe(b->solid.edgeInfo(p.solidEdge), false);
+        } else if (p.solidFace >= 0) {
+            toggle(pickedFaces_, p.solidFace);
+            where += " · " + describe(b->solid.faceInfo(p.solidFace), true);
+        }
+        const auto n = pickedFaces_.size() + pickedEdges_.size();
+        if (n > 1) where += " · " + tr("%1 picked").arg(n);
+        refreshPartHighlight();
+        status_->setText(where);
+        return;
+    }
     // The shape whose region holds the clicked face.
     QString shape;
     if (auto b = doc_.findBody("b" + std::to_string(p.body)); b && b->features && p.face < b->features->faceRegion.size()) {
@@ -464,6 +593,32 @@ void MainWindow::showContextMenu(const Pick& p, const QPoint& globalPos) {
     };
     const bool onBody = p.hit();
     const bool hasShape = !pickedShapes_.isEmpty();
+    if (auto b = doc_.findBody(selectedRef().toStdString()); onBody && b && b->isPart()) {
+        // On a part: what can be done with the faces and edges picked.
+        if (p.solidFace >= 0 && std::find(pickedFaces_.begin(), pickedFaces_.end(), p.solidFace) == pickedFaces_.end() && p.solidEdge < 0) {
+            pickedFaces_ = {p.solidFace};
+            pickedEdges_.clear();
+            refreshPartHighlight();
+        }
+        QAction* sk = menu.addAction(tr("New sketch on this face…"), this, &MainWindow::newSketchOnFace);
+        sk->setEnabled(pickedFaces_.size() == 1 && b->solid.faceInfo(pickedFaces_.front()).type == "plane");
+        QAction* fl = menu.addAction(tr("Round the picked edges…"), this, &MainWindow::filletPickedEdges);
+        fl->setEnabled(!pickedEdges_.empty());
+        menu.addSeparator();
+        menu.addAction(tr("Compare with a scan…"), this, &MainWindow::compareWithScan);
+        menu.addAction(b->opacity < 1.f ? tr("Make opaque") : tr("See through"), this, [this, b]() {
+            run("body.set_opacity", {{"body", b->ref()}, {"opacity", b->opacity < 1.f ? 1.0 : 0.4}});
+        });
+        menu.exec(globalPos);
+        return;
+    }
+    if (auto b = doc_.findBody(selectedRef().toStdString()); onBody && b) {
+        if (b->deviation) menu.addAction(tr("Remove deviation colours"), this, [this, b]() { run("body.clear_deviation", {{"body", b->ref()}}); });
+        menu.addAction(b->opacity < 1.f ? tr("Make opaque") : tr("See through"), this, [this, b]() {
+            run("body.set_opacity", {{"body", b->ref()}, {"opacity", b->opacity < 1.f ? 1.0 : 0.4}});
+        });
+        menu.addSeparator();
+    }
     item("features.fit", onBody);
     item("features.refit", hasShape);
     item("features.measure", pickedShapes_.size() >= 2);
@@ -476,6 +631,322 @@ void MainWindow::showContextMenu(const Pick& p, const QPoint& globalPos) {
     menu.addSeparator();
     item("features.segment", onBody);
     menu.exec(globalPos);
+}
+
+void MainWindow::refreshPartHighlight() {
+    PartHighlight h;
+    if (auto b = doc_.findBody(selectedRef().toStdString()); b && b->isPart()) {
+        // A rebuilt solid numbers its faces and edges anew: the old picks mean nothing.
+        if (pickedOn_ != b->view.get()) {
+            pickedFaces_.clear();
+            pickedEdges_.clear();
+            pickedOn_ = b->view.get();
+        }
+        h.body = b->id;
+        h.faces = pickedFaces_;
+        h.edges = pickedEdges_;
+        // The sketch picked, or the one the picked operation is made from.
+        if (partItem_.startsWith('s')) h.sketches.push_back(partItem_.mid(1).toULongLong());
+        if (partItem_.startsWith('o'))
+            if (const Operation* o = b->model->operation(partItem_.toStdString()); o && (o->kind == OpKind::Extrude || o->kind == OpKind::Revolve))
+                h.sketches.push_back(o->sketch);
+    }
+    viewport_->setPartHighlight(h);
+}
+
+namespace {
+/// A value typed in the properties: a number (in the local or the C form) or a parameter's name.
+json valueFromText(const QString& text, bool* ok) {
+    const QString t = text.trimmed();
+    bool good = false;
+    double v = QLocale().toDouble(t, &good);
+    if (!good) v = QLocale::c().toDouble(t, &good);
+    *ok = good || (!t.isEmpty() && t.front().isLetter());
+    return good ? json(v) : json(t.toStdString());
+}
+QString valueText(const Value& v) { return v.parameter.empty() ? QLocale().toString(v.number, 'g', 8) : QString::fromStdString(v.parameter); }
+}  // namespace
+
+void MainWindow::showPartProperties(const Body& b) {
+    // Rows: a label, the value, and in the label's data the field the value edits.
+    QLocale loc;
+    auto row = [&](const QString& k, const QString& v, const QString& field = {}, const QString& tip = {}) {
+        const int r = props_->rowCount();
+        props_->insertRow(r);
+        auto* key = new QTableWidgetItem(k);
+        key->setFlags(key->flags() & ~Qt::ItemIsEditable);
+        key->setData(Qt::UserRole, field);
+        auto* val = new QTableWidgetItem(v);
+        if (field.isEmpty()) val->setFlags(val->flags() & ~Qt::ItemIsEditable);
+        else {
+            val->setToolTip(tip.isEmpty() ? tr("Double-click to change: a number, or a parameter's name") : tip);
+            QFont f = val->font();
+            f.setBold(true);
+            val->setFont(f);
+        }
+        props_->setItem(r, 0, key);
+        props_->setItem(r, 1, val);
+        return r;
+    };
+    const std::string it = partItem_.toStdString();
+    if (it.rfind("p:", 0) == 0) {
+        const std::string name = it.substr(2);
+        row(tr("Parameter"), QString::fromStdString(name));
+        auto pv = b.model->parameters.find(name);
+        row(tr("Value"), pv != b.model->parameters.end() ? loc.toString(pv->second, 'g', 10) : QString(), "value", tr("Double-click to change; the operations that use it are rebuilt"));
+        QStringList users;
+        for (const auto& o : b.model->operations)
+            for (const Value* v : {&o.start, &o.end, &o.angle, &o.radius})
+                if (v->parameter == name && !users.contains(QString::fromStdString(o.name))) users << QString::fromStdString(o.name);
+        row(tr("Used by"), users.isEmpty() ? tr("nothing yet") : users.join(", "));
+    } else if (const Sketch* sk = b.model->sketch(it)) {
+        row(tr("Sketch"), QString::fromStdString(sk->name), "name", tr("Double-click to rename"));
+        row(tr("Reference"), QString::fromStdString(sk->ref()));
+        std::size_t segs = 0;
+        for (const auto& l : sk->profile.loops) segs += l.segments.size();
+        row(tr("Loops / segments"), QString("%1 / %2").arg(sk->profile.loops.size()).arg(segs));
+        const auto& pl = sk->profile.plane;
+        auto v3 = [&](const Vec3d& v) { return loc.toString(v.x(), 'f', 4) + "; " + loc.toString(v.y(), 'f', 4) + "; " + loc.toString(v.z(), 'f', 4); };
+        row(tr("Plane origin"), v3(pl.origin), "origin", tr("Double-click to move the plane: x; y; z"));
+        row(tr("Plane normal"), v3(pl.normal), "normal", tr("Double-click to turn the plane: x; y; z"));
+        row(tr("Plane x direction"), v3(pl.xDir));
+        row(tr("Edit"), tr("double-click the sketch in the Model panel"));
+    } else if (const Operation* o = b.model->operation(it)) {
+        row(tr("Operation"), QString::fromStdString(o->name), "name", tr("Double-click to rename"));
+        row(tr("Reference"), QString::fromStdString(o->ref() + " · " + opKindName(o->kind)));
+        const int modeRow = row(tr("Mode"), QString::fromUtf8(opModeName(o->mode)));
+        auto* mode = new QComboBox();
+        for (const char* m : {"new", "join", "cut", "intersect"}) mode->addItem(QString::fromUtf8(m));
+        mode->setCurrentText(QString::fromUtf8(opModeName(o->mode)));
+        connect(mode, &QComboBox::currentTextChanged, this, [this, ref = b.ref(), op = o->ref()](const QString& m) {
+            run("part.edit", {{"body", ref}, {"operation", op}, {"mode", m.toStdString()}});
+        });
+        props_->setCellWidget(modeRow, 1, mode);
+        const int supRow = row(tr("Suppressed"), QString());
+        auto* sup = new QCheckBox(tr("left out of the part"));
+        sup->setChecked(o->suppressed);
+        connect(sup, &QCheckBox::toggled, this, [this, ref = b.ref(), op = o->ref()](bool on) {
+            run("part.edit", {{"body", ref}, {"operation", op}, {"suppressed", on}});
+        });
+        props_->setCellWidget(supRow, 1, sup);
+        switch (o->kind) {
+            case OpKind::Extrude:
+                if (const Sketch* s2 = b.model->sketch("s" + std::to_string(o->sketch))) row(tr("Sketch"), QString::fromStdString(s2->name));
+                row(tr("From (mm)"), valueText(o->start), "start");
+                row(tr("To (mm)"), valueText(o->end), "end");
+                break;
+            case OpKind::Revolve:
+                if (const Sketch* s2 = b.model->sketch("s" + std::to_string(o->sketch))) row(tr("Sketch"), QString::fromStdString(s2->name));
+                row(tr("Angle (°)"), valueText(o->angle), "angle");
+                break;
+            case OpKind::Fillet:
+                row(tr("Edges"), loc.toString(static_cast<qlonglong>(o->edgePoints.size())));
+                row(tr("Radius (mm)"), valueText(o->radius), "radius");
+                break;
+            case OpKind::Import: break;
+        }
+        if (!b.buildError.empty() && b.buildError.find(o->ref()) != std::string::npos) row(tr("Error"), QString::fromStdString(b.buildError));
+    }
+    props_->resizeColumnsToContents();
+    props_->horizontalHeader()->setStretchLastSection(true);
+}
+
+void MainWindow::onPropertyEdited(int r) {
+    auto b = doc_.findBody(selectedRef().toStdString());
+    if (!b || !b->isPart() || !props_->item(r, 0) || !props_->item(r, 1)) return;
+    const QString field = props_->item(r, 0)->data(Qt::UserRole).toString();
+    if (field.isEmpty()) return;
+    QTableWidgetItem* cell = props_->item(r, 1);
+    const std::string it = partItem_.toStdString();
+    const std::string ref = b->ref();
+    // Put the shown value back if the edit is refused: the document is the truth.
+    auto restore = [this]() { QMetaObject::invokeMethod(this, [this]() { refreshProperties(); }, Qt::QueuedConnection); };
+    if (it.rfind("p:", 0) == 0) {
+        bool ok = false;
+        const json v = valueFromText(cell->text(), &ok);
+        if (!ok || !v.is_number()) { restore(); return; }
+        run("part.parameter", {{"body", ref}, {"name", it.substr(2)}, {"value", v}});
+        return;
+    }
+    if (it.front() == 's') {
+        if (field == "name") {
+            run("part.edit_sketch", {{"body", ref}, {"sketch", it}, {"name", cell->text().trimmed().toStdString()}});
+            return;
+        }
+        const Sketch* sk = b->model->sketch(it);
+        if (!sk) return;
+        const QStringList parts = cell->text().split(';');
+        if (parts.size() != 3) { restore(); return; }
+        double v[3];
+        for (int k = 0; k < 3; ++k) {
+            bool ok = false;
+            v[k] = QLocale().toDouble(parts[k].trimmed(), &ok);
+            if (!ok) v[k] = QLocale::c().toDouble(parts[k].trimmed(), &ok);
+            if (!ok) { restore(); return; }
+        }
+        const auto& pl = sk->profile.plane;
+        json plane{{"origin", {pl.origin.x(), pl.origin.y(), pl.origin.z()}}, {"normal", {pl.normal.x(), pl.normal.y(), pl.normal.z()}}, {"xDir", {pl.xDir.x(), pl.xDir.y(), pl.xDir.z()}}};
+        plane[field.toStdString()] = {v[0], v[1], v[2]};
+        run("part.edit_sketch", {{"body", ref}, {"sketch", it}, {"plane", plane}});
+        return;
+    }
+    json in{{"body", ref}, {"operation", it}};
+    if (field == "name") in["name"] = cell->text().trimmed().toStdString();
+    else {
+        bool ok = false;
+        const json v = valueFromText(cell->text(), &ok);
+        if (!ok) { restore(); return; }
+        in[field.toStdString()] = v;
+    }
+    run("part.edit", in);
+}
+
+void MainWindow::showTreeMenu(const QPoint& pos) {
+    QTreeWidgetItem* item = tree_->itemAt(pos);
+    if (!item) return;
+    tree_->setCurrentItem(item);
+    const QString it = item->data(0, Qt::UserRole + 1).toString();
+    auto b = doc_.findBody(selectedRef().toStdString());
+    if (!b) return;
+    QMenu menu(this);
+    const std::string ref = b->ref();
+    if (it.isEmpty()) {
+        menu.addAction(tr("Rename…"), this, [this]() { runFromUi("body.rename"); });
+        menu.addAction(b->opacity < 1.f ? tr("Make opaque") : tr("See through"), this, [this, ref, op = b->opacity]() {
+            run("body.set_opacity", {{"body", ref}, {"opacity", op < 1.f ? 1.0 : 0.4}});
+        });
+        if (b->deviation) menu.addAction(tr("Remove deviation colours"), this, [this, ref]() { run("body.clear_deviation", {{"body", ref}}); });
+        if (b->isPart()) {
+            menu.addSeparator();
+            menu.addAction(tr("Compare with a scan…"), this, &MainWindow::compareWithScan);
+            menu.addAction(QString::fromStdString(registry_.find("part.export_step")->title.in(lang_.toStdString())) + "…", this, [this]() { runFromUi("part.export_step"); });
+        }
+        menu.addSeparator();
+        menu.addAction(tr("Delete"), this, [this, ref]() { run("body.delete", {{"body", ref}}); });
+    } else if (it.startsWith("p:")) {
+        menu.addAction(tr("Change value…"), this, [this, ref, name = it.mid(2), b]() {
+            bool ok = false;
+            const double now = b->model->parameters.count(name.toStdString()) ? b->model->parameters.at(name.toStdString()) : 0.0;
+            const double v = QInputDialog::getDouble(this, tr("Parameter"), name, now, -1e6, 1e6, 4, &ok);
+            if (ok) run("part.parameter", {{"body", ref}, {"name", name.toStdString()}, {"value", v}});
+        });
+    } else if (it.startsWith('s')) {
+        menu.addAction(tr("Edit sketch…"), this, [this, id = it.mid(1).toULongLong()]() { editSketch(selected_, id); });
+        menu.addAction(tr("Extrude…"), this, [this]() { runFromUi("part.extrude"); });
+        menu.addSeparator();
+        menu.addAction(tr("Delete"), this, [this, ref, it]() { run("part.delete", {{"body", ref}, {"item", it.toStdString()}}); });
+    } else if (const Operation* o = b->model->operation(it.toStdString())) {
+        const auto& ops = b->model->operations;
+        std::size_t index = 0;
+        while (index < ops.size() && ops[index].id != o->id) ++index;
+        if (o->kind == OpKind::Extrude || o->kind == OpKind::Revolve)
+            menu.addAction(tr("Edit its sketch…"), this, [this, sk = o->sketch]() { editSketch(selected_, sk); });
+        menu.addAction(o->suppressed ? tr("Unsuppress") : tr("Suppress"), this, [this, ref, it, sup = o->suppressed]() {
+            run("part.edit", {{"body", ref}, {"operation", it.toStdString()}, {"suppressed", !sup}});
+        });
+        QAction* up = menu.addAction(tr("Move up"), this, [this, ref, it, index]() { run("part.move", {{"body", ref}, {"operation", it.toStdString()}, {"position", static_cast<long long>(index)}}); });
+        up->setEnabled(index > 0);
+        QAction* down = menu.addAction(tr("Move down"), this, [this, ref, it, index]() { run("part.move", {{"body", ref}, {"operation", it.toStdString()}, {"position", static_cast<long long>(index + 2)}}); });
+        down->setEnabled(index + 1 < ops.size());
+        menu.addSeparator();
+        menu.addAction(tr("Delete"), this, [this, ref, it]() { run("part.delete", {{"body", ref}, {"item", it.toStdString()}}); });
+    }
+    menu.exec(tree_->viewport()->mapToGlobal(pos));
+}
+
+void MainWindow::editSketch(std::uint64_t bodyId, std::uint64_t sketchId) {
+    auto b = doc_.findBody("b" + std::to_string(bodyId));
+    if (!b || !b->isPart()) return;
+    const Sketch* sk = b->model->sketch("s" + std::to_string(sketchId));
+    if (!sk) return;
+    SketchEditor ed(sk->profile, QString::fromStdString(sk->name), doc_.bodies(), lang_, this);
+    if (ed.exec() != QDialog::Accepted) return;
+    json loops = profileToJson(ed.profile())["loops"];
+    run("part.edit_sketch", {{"body", b->ref()}, {"sketch", sk->ref()}, {"loops", loops}});
+}
+
+void MainWindow::newSketchOnFace() {
+    auto b = doc_.findBody(selectedRef().toStdString());
+    if (!b || !b->isPart() || pickedFaces_.size() != 1) {
+        QMessageBox::information(this, tr("OpenRevers"), tr("Pick one flat face of a part first (click on it in the view)."));
+        return;
+    }
+    const ShapeInfo f = b->solid.faceInfo(pickedFaces_.front());
+    if (f.type != "plane") {
+        QMessageBox::information(this, tr("OpenRevers"), tr("A sketch needs a flat face."));
+        return;
+    }
+    Profile p;
+    p.plane.origin = f.origin;
+    p.plane.normal = f.axis;
+    // x along the world axis that lies most in the face.
+    Vec3d x = Vec3d::UnitX();
+    if (std::abs(f.axis.dot(x)) > 0.9) x = Vec3d::UnitY();
+    p.plane.xDir = x;
+    p.plane.normalize();
+    SketchEditor ed(p, tr("New sketch"), doc_.bodies(), lang_, this);
+    if (ed.exec() != QDialog::Accepted) return;
+    const Profile out = ed.profile();
+    if (out.loops.empty()) return;
+    json j = profileToJson(out);
+    run("part.sketch", {{"body", b->ref()}, {"plane", j["plane"]}, {"loops", j["loops"]}}, [this](const json& r) {
+        partItem_ = QString::fromStdString(r.value("ref", ""));
+        refreshTree();
+        refreshProperties();
+    });
+}
+
+void MainWindow::filletPickedEdges() {
+    auto b = doc_.findBody(selectedRef().toStdString());
+    if (!b || !b->isPart() || pickedEdges_.empty() || !b->view) {
+        QMessageBox::information(this, tr("OpenRevers"), tr("Pick the edges to round in the view first (Ctrl+click adds more)."));
+        return;
+    }
+    bool ok = false;
+    const double r = QInputDialog::getDouble(this, tr("Round edges"), tr("Radius (mm) for the %1 picked edges:").arg(pickedEdges_.size()), 0.5, 0.001, 1000, 3, &ok);
+    if (!ok) return;
+    json pts = json::array();
+    for (int e : pickedEdges_)
+        if (static_cast<std::size_t>(e) < b->view->edgeMiddle.size()) {
+            const Vec3d m = b->view->edgeMiddle[static_cast<std::size_t>(e)];
+            pts.push_back({m.x(), m.y(), m.z()});
+        }
+    pickedEdges_.clear();
+    run("part.fillet", {{"body", b->ref()}, {"points", pts}, {"radius", r}});
+}
+
+void MainWindow::compareWithScan() {
+    // The part picked and the scan: the only mesh body, or asked for.
+    auto b = doc_.findBody(selectedRef().toStdString());
+    if (!b || !b->isPart()) {
+        runFromUi("part.compare");
+        return;
+    }
+    QStringList scans;
+    for (const auto& x : doc_.bodies())
+        if (!x.isPart() && !x.mesh->faces.empty()) scans << QString::fromStdString(x.ref() + " · " + x.name);
+    if (scans.isEmpty()) {
+        QMessageBox::information(this, tr("OpenRevers"), tr("There is no scan to compare with."));
+        return;
+    }
+    bool ok = true;
+    const QString scan = scans.size() == 1 ? scans.front() : QInputDialog::getItem(this, tr("Compare with a scan"), tr("Scan:"), scans, 0, false, &ok);
+    if (!ok) return;
+    const double tol = QInputDialog::getDouble(this, tr("Compare with a scan"), tr("Tolerance (mm):"), 0.2, 0.001, 100, 3, &ok);
+    if (!ok) return;
+    run("part.compare", {{"body", b->ref()}, {"scan", scan.section(' ', 0, 0).toStdString()}, {"tolerance", tol}}, [this](const json& r) {
+        QLocale loc;
+        QStringList lines;
+        lines << QString::fromStdString(r.value("summary", ""));
+        for (const auto& z : r.value("zones", json::array())) {
+            const auto& c = z["centre"];
+            lines << tr("Zone at %1, %2, %3: %4 % of the scan, %5 mm (%6)")
+                         .arg(loc.toString(c[0].get<double>(), 'f', 1), loc.toString(c[1].get<double>(), 'f', 1), loc.toString(c[2].get<double>(), 'f', 1),
+                              loc.toString(z["percent"].get<double>(), 'f', 1), loc.toString(z["meanDistance"].get<double>(), 'f', 3), QString::fromStdString(z["side"].get<std::string>()));
+        }
+        log(tr("Compare"), lines.join("\n"));
+        status_->setText(lines.front());
+    });
 }
 
 void MainWindow::refreshShapes() {

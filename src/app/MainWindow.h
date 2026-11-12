@@ -85,6 +85,20 @@ private:
     void showContextMenu(const Pick& p, const QPoint& globalPos);
     void selectBody(std::uint64_t id);
     void syncShapeSelection();
+    // A part: the item picked in its history ("p:<name>", "s<id>", "o<id>"; empty:
+    // the part itself), and the faces and edges of its solid picked in the view.
+    QString partItem_;
+    std::vector<int> pickedFaces_, pickedEdges_;
+    const void* pickedOn_{nullptr};  // the part's view the picks index into
+    bool updatingProps_{false};
+    void refreshPartHighlight();
+    void showTreeMenu(const QPoint& pos);
+    void showPartProperties(const Body& b);
+    void onPropertyEdited(int row);
+    void editSketch(std::uint64_t body, std::uint64_t sketch);
+    void newSketchOnFace();
+    void filletPickedEdges();
+    void compareWithScan();
     QListWidget* history_{nullptr};
     QPlainTextEdit* log_{nullptr};
     QLabel* status_{nullptr};

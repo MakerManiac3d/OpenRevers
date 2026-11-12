@@ -14,13 +14,25 @@ Document::Document() = default;
 
 std::vector<Body> Document::bodies() const {
     std::lock_guard lock(m_);
-    return state_.bodies;
+    std::vector<Body> out = state_.bodies;
+    for (auto& b : out) withDisplay(b);
+    return out;
+}
+
+void Document::withDisplay(Body& b) const {
+    // A deviation map shows only on the triangles it was measured on.
+    auto it = deviation_.find(b.id);
+    b.deviation = it != deviation_.end() && it->second->mesh == b.mesh.get() ? it->second : nullptr;
 }
 
 std::optional<Body> Document::findBody(const std::string& ref) const {
     std::lock_guard lock(m_);
     for (const auto& b : state_.bodies)
-        if (b.ref() == ref || b.name == ref) return b;
+        if (b.ref() == ref || b.name == ref) {
+            Body out = b;
+            withDisplay(out);
+            return out;
+        }
     return std::nullopt;
 }
 
@@ -97,25 +109,62 @@ void Document::setMesh(std::uint64_t id, std::shared_ptr<const TriMesh> mesh, st
     b->features = std::move(features);
 }
 
-Body Document::addPart(std::string name, std::shared_ptr<const Model> model, Solid solid, std::shared_ptr<const TriMesh> mesh, std::string buildError) {
+PartTriangles partTriangles(const Solid& solid) {
+    PartTriangles out;
+    if (solid.empty()) {
+        out.mesh = std::make_shared<TriMesh>();
+        out.view = std::make_shared<PartView>();
+        return out;
+    }
+    // Fine enough that a Ø2.75 hole looks round and a 0.2 mm step shows.
+    const auto b = solid.bounds();
+    const double deflection = std::clamp(0.0005 * (b.max() - b.min()).norm(), 0.002, 0.05);
+    SolidTessellation t = solid.tessellate(deflection);
+    auto view = std::make_shared<PartView>();
+    view->faceOf = std::move(t.faceOf);
+    view->edges = std::move(t.edges);
+    view->edgeMiddle = std::move(t.edgeMiddle);
+    out.mesh = std::make_shared<TriMesh>(std::move(t.mesh));
+    out.view = std::move(view);
+    return out;
+}
+
+Body Document::addPart(std::string name, std::shared_ptr<const Model> model, Solid solid, PartTriangles triangles, std::string buildError) {
     std::lock_guard lock(m_);
-    Body b = addBody(std::move(name), std::move(mesh));
+    Body b = addBody(std::move(name), std::move(triangles.mesh));
     Body* nb = find(b.id);
     nb->model = std::move(model);
     nb->solid = std::move(solid);
+    nb->view = std::move(triangles.view);
     nb->buildError = std::move(buildError);
     nb->color = {0.78f, 0.80f, 0.84f};
     return *nb;
 }
 
-void Document::setPart(std::uint64_t id, std::shared_ptr<const Model> model, Solid solid, std::shared_ptr<const TriMesh> mesh, std::string buildError) {
+void Document::setPart(std::uint64_t id, std::shared_ptr<const Model> model, Solid solid, PartTriangles triangles, std::string buildError) {
     std::lock_guard lock(m_);
     Body* b = find(id);
     b->model = std::move(model);
     b->solid = std::move(solid);
-    b->mesh = std::move(mesh);
+    b->mesh = std::move(triangles.mesh);
+    b->view = std::move(triangles.view);
     b->features = nullptr;
     b->buildError = std::move(buildError);
+}
+
+void Document::setOpacity(std::uint64_t id, float opacity) {
+    std::lock_guard lock(m_);
+    find(id)->opacity = std::clamp(opacity, 0.05f, 1.0f);
+}
+
+void Document::setDeviation(std::uint64_t id, std::shared_ptr<const DeviationMap> map) {
+    {
+        std::lock_guard lock(m_);
+        find(id);
+        if (map) deviation_[id] = std::move(map);
+        else deviation_.erase(id);
+    }
+    notify();  // shown at once; not a step of the history, nor saved
 }
 
 void Document::setFeatures(std::uint64_t id, std::shared_ptr<const Features> features) {

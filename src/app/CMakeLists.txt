@@ -7,7 +7,8 @@ qt_add_executable(OpenRevers WIN32 MACOSX_BUNDLE
   CommandDialog.cpp CommandDialog.h
   AgentServer.cpp AgentServer.h
   AppCommands.cpp AppCommands.h
-  SettingsDialog.cpp SettingsDialog.h)
+  SettingsDialog.cpp SettingsDialog.h
+  SketchEditor.cpp SketchEditor.h)
 target_link_libraries(OpenRevers PRIVATE orv_core
   Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Network Qt6::Concurrent)
 target_include_directories(OpenRevers PRIVATE ${PROJECT_SOURCE_DIR}/src)

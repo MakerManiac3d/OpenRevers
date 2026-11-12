@@ -56,7 +56,7 @@ claude mcp add --scope user openrevers -- "C:\Program Files\OpenRevers\bin\openr
 `--lang es` o `--lang en` fija el idioma de las descripciones; por defecto se
 usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 
-## Herramientas (versión 0.4)
+## Herramientas (versión 0.5)
 
 | Herramienta | Qué hace | Cambia el proyecto |
 | --- | --- | --- |
@@ -79,7 +79,7 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `features_list` | Formas del cuerpo con medidas, posición y σ | No |
 | `features_measure` | Ángulo y distancia entre dos formas | No |
 | `features_rename` / `features_delete` | Renombrar o borrar formas | Sí |
-| `view_selection` | Lo que la persona ha señalado con el ratón: punto, cuerpo y formas en orden (solo con la ventana abierta) | No |
+| `view_selection` | Lo que la persona ha señalado con el ratón: punto, cuerpo y formas en orden; en una pieza, el parámetro, boceto u operación elegido en el árbol y las caras y aristas del sólido (tipo, medida, eje; en las aristas, el punto medio para `part_fillet`). Solo con la ventana abierta | No |
 | `view_pick` | Hacer clic en la vista como la persona (x, y de 0 a 1; `add` para añadir) | No |
 | `align_principal` | Alinea a los ejes principales | Sí |
 | `align_datums` | Alineación 3-2-1 por formas (caras, ejes, centros) | Sí |
@@ -91,16 +91,16 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `mesh_section` | Dónde corta un plano a una malla: polilíneas en coordenadas del plano, simplificadas. El contorno del que sacar un boceto | No |
 | `part_new` | Pieza paramétrica vacía | Sí |
 | `part_sketch_from_section` | Corta el escaneo con un plano y convierte cada contorno cerrado en rectas y arcos dentro de una tolerancia (círculos enteros, esquinas vivas, arcos tangentes); devuelve la medida de cada segmento | Sí |
-| `part_sketch` · `part_edit_sketch` | Boceto: lazos cerrados de rectas, arcos y círculos en un plano (un lazo dentro de otro es un agujero) | Sí |
+| `part_sketch` · `part_edit_sketch` | Boceto: lazos cerrados de rectas, arcos y círculos en un plano (un lazo dentro de otro es un agujero). `part_edit_sketch` cambia los lazos, el plano o el nombre, cada uno por separado | Sí |
 | `part_extrude` · `part_revolve` · `part_fillet` | Operaciones; se combinan con la pieza (`new`, `join`, `cut`, `intersect`). Los valores pueden ser números o nombres de parámetros | Sí |
 | `part_parameter` | Crea o cambia un parámetro con nombre; la pieza se reconstruye | Sí |
-| `part_edit` · `part_delete` | Cambiar valores, modo o supresión de una operación; borrar operaciones o bocetos. Un cambio que rompe la pieza no se aplica | Sí |
+| `part_edit` · `part_delete` · `part_move` | Cambiar valores, modo o supresión de una operación; borrar operaciones o bocetos; mover una operación en el historial. Un cambio que rompe la pieza no se aplica | Sí |
 | `part_list` | Parámetros, bocetos, operaciones y el sólido (volumen, área, caras, tamaño) | No |
-| `part_compare` | Distancias con signo del escaneo al sólido: mediana, percentiles 90 y 95, parte dentro de ±tolerancia | No |
+| `part_compare` | Distancias con signo del escaneo al sólido: mediana, percentiles 90 y 95, parte dentro de ±tolerancia y **zonas** fuera de ella (centro, tamaño, % del escaneo, distancia media y lado). Con `colorMap` colorea el escaneo en la vista (no es un paso de deshacer) | No |
 | `part_export_step` · `part_import_step` | STEP (AP214, mm) | No · Sí |
 | `mesh_export_tsm` | Escribe una malla de quads cerrada como T-Spline `.tsm` para Fusion | No |
 | `project_save` · `project_open` · `project_new` | Proyecto `.orvp` | — |
-| `body_list` · `body_rename` · `body_duplicate` · `body_delete` · `body_set_visible` | Cuerpos | — |
+| `body_list` · `body_rename` · `body_duplicate` · `body_delete` · `body_set_visible` · `body_set_opacity` · `body_clear_deviation` | Cuerpos; opacidad para ver uno dentro de otro; quitar los colores de `part_compare` | — |
 | `history_undo` · `history_redo` | Deshacer y rehacer | — |
 | `view_set` · `view_capture` | Gira la vista y devuelve una imagen PNG (solo con la ventana) | No |
 
