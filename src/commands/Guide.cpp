@@ -5,7 +5,7 @@ namespace orv {
 
 namespace {
 
-const char* kWorkflowEn = R"(## Workflow (version 0.8: scanning, cleaning and joining scans, mesh preparation, shapes, alignment, parametric parts, free-form surfaces and editing by hand)
+const char* kWorkflowEn = R"(## Workflow (version 0.10: scanning, cleaning and joining scans, mesh preparation, shapes, alignment, parametric parts, free-form surfaces and editing by hand)
 1. `session_state` — what is open. Never discard someone's unsaved work: save it first.
 2. `mesh_import` with the full path of the scan. Units are millimetres. Or scan straight in (Windows, CrealityScan installed, scanner plugged in): `scan_status` (is the library there?), `scan_connect` (mode object_small/medium/big, material), `scan_preview`, `scan_start` (the person moves the scanner; points show live in the view), `scan_stop`, then `scan_export_to_body` (as points, or as mesh for the scanner's own mesh). Ask the person before starting: they hold the scanner.
 3. `mesh_analyze` — read holes, pieces, non-manifold edges, flipped faces and the mean edge length before changing anything. Tell the person what you found.
@@ -21,7 +21,7 @@ Free-form shapes (phase 4): an organic outline: `part_sketch_from_section` with 
 Every changing step is one undo step: `history_undo` takes it back. Report numbers, not impressions.
 )";
 
-const char* kWorkflowEs = R"(## Flujo de trabajo (versión 0.8: escaneo, limpieza y unión de escaneos, preparación de mallas, formas, alineación, pieza paramétrica, superficies libres y edición a mano)
+const char* kWorkflowEs = R"(## Flujo de trabajo (versión 0.10: escaneo, limpieza y unión de escaneos, preparación de mallas, formas, alineación, pieza paramétrica, superficies libres y edición a mano)
 1. `session_state`: qué hay abierto. Nunca descartes trabajo sin guardar de otra persona: guárdalo antes.
 2. `mesh_import` con la ruta completa del escaneo. Las unidades son milímetros. O escanea directamente (Windows, con CrealityScan instalado y el escáner conectado): `scan_status` (¿está la biblioteca?), `scan_connect` (modo object_small/medium/big, material), `scan_preview`, `scan_start` (la persona mueve el escáner; los puntos se ven en vivo), `scan_stop` y después `scan_export_to_body` (como puntos, o como malla para la malla del propio escáner). Pregunta a la persona antes de empezar: es quien sostiene el escáner.
 3. `mesh_analyze`: lee agujeros, piezas, aristas no manifold, caras invertidas y la longitud media de arista antes de cambiar nada. Cuéntale a la persona lo que has encontrado.
@@ -59,12 +59,14 @@ const char* kSafetyEn = R"(## Safety
 - An agent reads and writes only inside the folders allowed in Settings → AI agent (by default the user's home folder).
 - Files are never overwritten unless `overwrite: true` is passed; a project with unsaved changes is never replaced unless `discard: true` is passed. Ask the person before passing either.
 - OpenRevers makes no connection to the internet. What you read from it goes to your model provider: say so if the person seems unaware.
+- Any tool that changes the document takes `dryRun: true`: it is worked out on a copy and answers with its result and `preview` {changed, added, removed}, with nothing changed and nothing in the history. Use it to check a risky step (a crop, a plane removal, a cut) before doing it.
 )";
 
 const char* kSafetyEs = R"(## Seguridad
 - Un agente solo lee y escribe dentro de las carpetas permitidas en Ajustes → Agente IA (por defecto, la carpeta personal del usuario).
 - Nunca se sobrescribe un archivo sin `overwrite: true`, ni se reemplaza un proyecto con cambios sin guardar sin `discard: true`. Pregunta a la persona antes de usar cualquiera de los dos.
 - OpenRevers no se conecta a internet. Lo que leas de él va al proveedor de tu modelo: dilo si la persona no parece saberlo.
+- Toda herramienta que cambia el documento admite `dryRun: true`: se calcula sobre una copia y responde con su resultado y `preview` {changed, added, removed}, sin cambiar nada ni entrar en el historial. Úsalo para comprobar un paso arriesgado (un recorte, quitar un plano, un corte) antes de darlo.
 )";
 
 }  // namespace

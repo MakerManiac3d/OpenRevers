@@ -124,6 +124,7 @@ Viewport::~Viewport() {
     makeCurrent();
     gpu_.clear();
     liveGpu_.reset();
+    ghostGpu_.clear();
     selVbo_.destroy();
     selVao_.destroy();
     doneCurrent();
@@ -691,10 +692,17 @@ void Viewport::paintGL() {
     meshProg_.setUniformValue("uAlpha", 1.f);
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.f, 1.f);
+    // A body a preview changes is seen through, so its ghost shows.
+    auto ghosted = [&](const Body& b) {
+        for (const auto& g : ghosts_)
+            if (g.id == b.id) return true;
+        return false;
+    };
+    auto opacity = [&](const Body& b) { return ghosted(b) ? std::min(b.opacity, 0.25f) : b.opacity; };
     auto drawBody = [&](const Body& b) {
         auto& g = *gpu_.at(b.id);
         meshProg_.setUniformValue("uColor", QVector3D(b.color[0], b.color[1], b.color[2]));
-        meshProg_.setUniformValue("uAlpha", b.opacity);
+        meshProg_.setUniformValue("uAlpha", opacity(b));
         // Tint the selected body only when there is another to tell it from.
         meshProg_.setUniformValue("uHighlight", b.id == selected_ && bodies_.size() > 1 && !b.deviation ? 1.f : 0.f);
         if (b.deviation && g.devSource == b.deviation && g.devVao.isCreated()) {
@@ -725,7 +733,7 @@ void Viewport::paintGL() {
         g.vao.release();
     };
     for (const auto& b : bodies_)
-        if (b.visible && b.opacity >= 1.f) drawBody(b);
+        if (b.visible && opacity(b) >= 1.f) drawBody(b);
     glDisable(GL_POLYGON_OFFSET_FILL);
     // A scan in progress: its points, in amber.
     if (liveDirty_) {
@@ -831,14 +839,49 @@ void Viewport::paintGL() {
     }
     // Bodies seen through, last: blended over what is behind them.
     bool anySeeThrough = false;
-    for (const auto& b : bodies_) anySeeThrough |= b.visible && b.opacity < 1.f;
+    for (const auto& b : bodies_) anySeeThrough |= b.visible && opacity(b) < 1.f;
     if (anySeeThrough) {
         meshProg_.bind();
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthMask(GL_FALSE);
         for (const auto& b : bodies_)
-            if (b.visible && b.opacity < 1.f) drawBody(b);
+            if (b.visible && opacity(b) < 1.f) drawBody(b);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+        meshProg_.setUniformValue("uAlpha", 1.f);
+    }
+    // A preview: what the command would make, as amber ghosts.
+    if (ghostsDirty_) {
+        ghostsDirty_ = false;
+        ghostGpu_.clear();
+        for (const auto& g : ghosts_) {
+            auto gm = std::make_unique<GpuMesh>();
+            if (g.mesh && !g.mesh->vertices.empty()) upload(*gm, *g.mesh);
+            ghostGpu_.push_back(std::move(gm));
+        }
+    }
+    if (!ghostGpu_.empty()) {
+        meshProg_.bind();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+        meshProg_.setUniformValue("uColor", QVector3D(1.0f, 0.62f, 0.15f));
+        meshProg_.setUniformValue("uAlpha", 0.5f);
+        meshProg_.setUniformValue("uHighlight", 0.f);
+        for (const auto& g : ghostGpu_) {
+            if (g->indexCount == 0 && g->pointCount == 0) continue;
+            g->vao.bind();
+            if (g->pointCount > 0) {
+                meshProg_.setUniformValue("uPoints", true);
+                glPointSize(2.f);
+                glDrawArrays(GL_POINTS, 0, g->pointCount);
+                meshProg_.setUniformValue("uPoints", false);
+            } else {
+                glDrawElements(GL_TRIANGLES, g->indexCount, GL_UNSIGNED_INT, nullptr);
+            }
+            g->vao.release();
+        }
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
         meshProg_.setUniformValue("uAlpha", 1.f);
@@ -991,6 +1034,31 @@ QImage Viewport::capture(int w, int h) {
     return img;
 }
 
+void Viewport::setGhosts(std::vector<Body> ghosts) {
+    ghosts_ = std::move(ghosts);
+    ghostsDirty_ = true;
+    update();
+}
+
+void Viewport::setHandles(std::vector<Handle> handles) {
+    handles_ = std::move(handles);
+    if (dragHandle_ >= static_cast<int>(handles_.size())) dragHandle_ = -1;
+    update();
+}
+
+void Viewport::setGuides(std::vector<Guide> guides) {
+    guides_ = std::move(guides);
+    update();
+}
+
+bool Viewport::screenPoint(const Vec3d& v, QPointF& out) const {
+    const QMatrix4x4 mvp = projMatrix() * viewMatrix();
+    const QVector4D c = mvp * QVector4D(static_cast<float>(v.x()), static_cast<float>(v.y()), static_cast<float>(v.z()), 1.f);
+    if (c.w() <= 0) return false;
+    out = QPointF((c.x() / c.w() * 0.5 + 0.5) * static_cast<qreal>(width()), (0.5 - c.y() / c.w() * 0.5) * static_cast<qreal>(height()));
+    return true;
+}
+
 void Viewport::setLassoMode(bool on) {
     lassoMode_ = on;
     setCursor(on ? Qt::CrossCursor : Qt::ArrowCursor);
@@ -1102,7 +1170,7 @@ void Viewport::drawOverlay(const QMatrix4x4& mvp) {
         glDepthFunc(GL_LESS);
     }
     // Pair marks and the lasso being drawn: on top, in screen space.
-    if (lassoPath_.isEmpty() && pairMoving_.empty() && pairReference_.empty()) return;
+    if (lassoPath_.isEmpty() && pairMoving_.empty() && pairReference_.empty() && guides_.empty() && handles_.empty()) return;
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     const qreal sx = static_cast<qreal>(width()), sy = static_cast<qreal>(height());
@@ -1123,6 +1191,20 @@ void Viewport::drawOverlay(const QMatrix4x4& mvp) {
             p.drawText(QRectF(q.x() - 9, q.y() - 9, 18, 18), Qt::AlignCenter, QString::number(i + 1));
         }
     };
+    for (const auto& g : guides_) {
+        QPointF qa, qb;
+        if (!screenPoint(g.a, qa) || !screenPoint(g.b, qb)) continue;
+        p.setPen(QPen(g.color, 1.5));
+        p.drawLine(qa, qb);
+    }
+    for (std::size_t i = 0; i < handles_.size(); ++i) {
+        QPointF q;
+        if (!screenPoint(handles_[i].pos, q)) continue;
+        const bool active = static_cast<int>(i) == dragHandle_;
+        p.setPen(QPen(Qt::black, 1.5));
+        p.setBrush(handles_[i].color);
+        p.drawEllipse(q, active ? 8 : 6, active ? 8 : 6);
+    }
     marks(pairMoving_, QColor(255, 150, 40));
     marks(pairReference_, QColor(60, 200, 230));
     if (lassoPath_.size() >= 2) {
@@ -1136,6 +1218,25 @@ void Viewport::mousePressEvent(QMouseEvent* e) {
     lastPos_ = e->position().toPoint();
     dragButton_ = e->button();
     dragged_ = false;
+    // A handle under the pointer is dragged, not the view.
+    dragHandle_ = -1;
+    if (e->button() == Qt::LeftButton) {
+        double best = 10.0;
+        for (std::size_t i = 0; i < handles_.size(); ++i) {
+            QPointF q;
+            if (!screenPoint(handles_[i].pos, q)) continue;
+            const double d = std::hypot(q.x() - e->position().x(), q.y() - e->position().y());
+            if (d < best) {
+                best = d;
+                dragHandle_ = static_cast<int>(i);
+            }
+        }
+        if (dragHandle_ >= 0) {
+            const QVector3D ey = eye(), c = target_;
+            dragNormal_ = Vec3d(ey.x() - c.x(), ey.y() - c.y(), ey.z() - c.z()).normalized();
+            return;
+        }
+    }
     lassoing_ = lassoMode_ && e->button() == Qt::LeftButton && !(e->modifiers() & Qt::AltModifier);
     if (lassoing_) {
         lassoPath_.clear();
@@ -1148,6 +1249,24 @@ void Viewport::mouseMoveEvent(QMouseEvent* e) {
     const QPoint d = p - lastPos_;
     lastPos_ = p;
     if (d.manhattanLength() > 0) dragged_ = true;
+    if (dragHandle_ >= 0) {
+        // Along the screen, at the handle's depth: the ray meets the plane
+        // through the handle facing the camera.
+        const QMatrix4x4 inv = (projMatrix() * viewMatrix()).inverted();
+        const float x = 2.f * static_cast<float>(e->position().x()) / static_cast<float>(std::max(1, width())) - 1.f;
+        const float y = 1.f - 2.f * static_cast<float>(e->position().y()) / static_cast<float>(std::max(1, height()));
+        const QVector3D a = inv.map(QVector3D(x, y, -1.f)), b = inv.map(QVector3D(x, y, 1.f));
+        const Vec3d o(a.x(), a.y(), a.z()), dir = Vec3d(b.x() - a.x(), b.y() - a.y(), b.z() - a.z()).normalized();
+        Handle& h = handles_[static_cast<std::size_t>(dragHandle_)];
+        const double den = dir.dot(dragNormal_);
+        if (std::abs(den) > 1e-9) {
+            h.pos = o + dir * ((h.pos - o).dot(dragNormal_) / den);
+            emit handleDragged(h.id, h.pos, false);
+        }
+        lastPos_ = e->position().toPoint();
+        update();
+        return;
+    }
     if (lassoing_) {
         lassoPath_.push_back(e->position());
         update();
@@ -1170,6 +1289,13 @@ void Viewport::mouseMoveEvent(QMouseEvent* e) {
 }
 
 void Viewport::mouseReleaseEvent(QMouseEvent* e) {
+    if (dragHandle_ >= 0) {
+        const Handle h = handles_[static_cast<std::size_t>(dragHandle_)];
+        dragHandle_ = -1;
+        dragButton_ = Qt::NoButton;
+        if (dragged_) emit handleDragged(h.id, h.pos, true);
+        return;
+    }
     if (lassoing_) {
         lassoing_ = false;
         dragButton_ = Qt::NoButton;

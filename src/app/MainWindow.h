@@ -109,6 +109,13 @@ private:
     void showResult(const QString& name, const json& r);
     void addResult(const QString& title, const QString& caller, bool ok, const json& params, const json& result, const QString& message);
     void openPanel(const QString& name, const json& initial = json::object());
+    // What the panel's command would do, shown while its values change.
+    QTimer* previewTimer_{nullptr};
+    int previewGen_{0};
+    std::vector<Viewport::Guide> panelGuides_, resultGuides_;
+    void updatePanelView();
+    void runPreview();
+    void clearPreview();
     void newSketchOnFace();
     void filletPickedEdges();
     void compareWithScan();

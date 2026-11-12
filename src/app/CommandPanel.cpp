@@ -3,7 +3,9 @@
 
 #include "doc/Model.h"
 
+#include <QApplication>
 #include <QButtonGroup>
+#include <QEvent>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -18,6 +20,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSpinBox>
+#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -30,8 +33,37 @@ namespace orv {
 
 namespace {
 
+/// The wheel scrolls the panel; it changes a number or a list only when that
+/// control has been clicked into (so passing over the form changes nothing).
+class WheelGuard : public QObject {
+public:
+    using QObject::QObject;
+    bool eventFilter(QObject* o, QEvent* e) override {
+        if (e->type() == QEvent::Wheel) {
+            auto* w = qobject_cast<QWidget*>(o);
+            if (w && !w->hasFocus()) {
+                e->ignore();
+                return true;
+            }
+        }
+        return false;
+    }
+};
+
+WheelGuard* wheelGuard() {
+    static auto* g = new WheelGuard(qApp);
+    return g;
+}
+
+template <class W>
+W* guarded(W* w) {
+    w->setFocusPolicy(Qt::StrongFocus);
+    w->installEventFilter(wheelGuard());
+    return w;
+}
+
 QDoubleSpinBox* coordinate() {
-    auto* sp = new QDoubleSpinBox();
+    auto* sp = guarded(new QDoubleSpinBox());
     sp->setRange(-1e7, 1e7);
     sp->setDecimals(4);
     sp->setMinimumWidth(70);
@@ -87,6 +119,9 @@ CommandPanel::CommandPanel(QWidget* parent) : QWidget(parent) {
     arms_ = new QButtonGroup(this);
     arms_->setExclusive(false);
     auto* buttons = new QHBoxLayout();
+    live_ = new QCheckBox(tr("See it live"));
+    live_->setToolTip(tr("Show what it would do (in amber) while you change the values; nothing changes until Apply"));
+    buttons->addWidget(live_);
     apply_ = new QPushButton(tr("Apply"));
     apply_->setDefault(true);
     auto* close = new QPushButton(tr("Close"));
@@ -99,12 +134,55 @@ CommandPanel::CommandPanel(QWidget* parent) : QWidget(parent) {
         if (command_) emit applyRequested(QString::fromStdString(command_->name), values());
     });
     connect(close, &QPushButton::clicked, this, &CommandPanel::closeRequested);
+    connect(live_, &QCheckBox::toggled, this, &CommandPanel::valuesChanged);
+    // Any change of any control: compared a few times a second.
+    poll_ = new QTimer(this);
+    poll_->setInterval(250);
+    connect(poll_, &QTimer::timeout, this, [this]() {
+        if (!command_ || !isVisible()) return;
+        json v = values();
+        if (v == last_) return;
+        last_ = std::move(v);
+        emit valuesChanged();
+    });
+    poll_->start();
+}
+
+bool CommandPanel::live() const { return live_->isChecked(); }
+
+std::vector<Viewport::Handle> CommandPanel::handles() const {
+    std::vector<Viewport::Handle> out;
+    const json v = values();
+    for (const auto& f : fields_) {
+        if (!f.handle || !v.contains(f.key)) continue;
+        const json& p = f.kind == FieldKind::Plane ? v[f.key]["origin"] : v[f.key];
+        if (!p.is_array() || p.size() != 3) continue;
+        out.push_back({QString::fromStdString(f.key), Vec3d(p[0].get<double>(), p[1].get<double>(), p[2].get<double>()), QColor(255, 170, 40)});
+    }
+    return out;
+}
+
+void CommandPanel::moveHandle(const QString& id, const Vec3d& pos) {
+    for (auto& f : fields_) {
+        if (QString::fromStdString(f.key) != id || !f.write) continue;
+        const json p = json::array({pos.x(), pos.y(), pos.z()});
+        if (f.kind == FieldKind::Plane) {
+            json pl = f.read();
+            if (!pl.is_object()) pl = json::object();
+            pl["origin"] = p;
+            f.write(pl);
+        } else {
+            f.write(p);
+        }
+    }
 }
 
 void CommandPanel::open(const Command& command, const Context& context, const json& initial) {
     command_ = &command;
     ctx_ = context;
+    live_->setChecked(false);
     build(initial);
+    last_ = json();
 }
 
 void CommandPanel::refresh(const Context& context) {
@@ -237,7 +315,7 @@ QWidget* CommandPanel::makeField(Field& f, const json& s, bool required) {
 
     switch (f.kind) {
         case FieldKind::Body: {
-            auto* box = new QComboBox();
+            auto* box = guarded(new QComboBox());
             if (!required) box->addItem(QString(), QString());
             for (const auto& b : ctx_.bodies) box->addItem(itemText(b.name, b.ref()), QString::fromStdString(b.ref()));
             int i = box->findData(ctx_.selectedBody);
@@ -266,7 +344,7 @@ QWidget* CommandPanel::makeField(Field& f, const json& s, bool required) {
         case FieldKind::Surface:
         case FieldKind::PartItem:
         case FieldKind::Parameter: {
-            auto* box = new QComboBox();
+            auto* box = guarded(new QComboBox());
             box->setEditable(true);  // a name, or a word such as "all"
             const FieldKind kind = f.kind;
             const bool optional = !required;
@@ -414,7 +492,7 @@ QWidget* CommandPanel::makeField(Field& f, const json& s, bool required) {
             return withArm(edit, browse);
         }
         case FieldKind::Choice: {
-            auto* box = new QComboBox();
+            auto* box = guarded(new QComboBox());
             for (const auto& e : s["enum"]) box->addItem(QString::fromStdString(e.get<std::string>()));
             box->setCurrentText(QString::fromStdString(s.value("default", "")));
             f.read = [box]() { return json(box->currentText().toStdString()); };
@@ -433,7 +511,7 @@ QWidget* CommandPanel::makeField(Field& f, const json& s, bool required) {
             return edit;
         }
         case FieldKind::Number: {
-            auto* spin = new QDoubleSpinBox();
+            auto* spin = guarded(new QDoubleSpinBox());
             const double mn = s.value("minimum", -1e9), mx = s.value("maximum", 1e9), def = s.value("default", 0.0);
             spin->setRange(mn, mx);
             const double mag = std::max({std::abs(def), std::abs(mn), 1e-6});
@@ -447,7 +525,7 @@ QWidget* CommandPanel::makeField(Field& f, const json& s, bool required) {
             return spin;
         }
         case FieldKind::Integer: {
-            auto* spin = new QSpinBox();
+            auto* spin = guarded(new QSpinBox());
             spin->setRange(static_cast<int>(std::max<long long>(s.value("minimum", 0LL), INT32_MIN)), static_cast<int>(std::min<long long>(s.value("maximum", 1000000LL), INT32_MAX)));
             spin->setValue(static_cast<int>(s.value("default", 0LL)));
             f.read = [spin]() { return json(spin->value()); };
@@ -467,7 +545,7 @@ QWidget* CommandPanel::makeField(Field& f, const json& s, bool required) {
         }
         case FieldKind::Value: {
             // A number or a parameter's name: the part's parameters to choose from.
-            auto* box = new QComboBox();
+            auto* box = guarded(new QComboBox());
             box->setEditable(true);
             if (s.contains("default")) box->setEditText(s["default"].is_number() ? QLocale().toString(s["default"].get<double>()) : QString::fromStdString(s["default"].dump()));
             auto refill = [this, box]() {
@@ -507,6 +585,7 @@ QWidget* CommandPanel::makeField(Field& f, const json& s, bool required) {
             f.read = [boxes]() { return readXyz(*boxes); };
             f.write = [boxes](const json& v) { writeXyz(*boxes, v); };
             if (f.kind == FieldKind::Point2) return r;
+            f.handle = !direction;
             f.pick = [boxes, direction](const Pick& p) {
                 const Vec3d v = direction ? p.normal : p.point;
                 writeXyz(*boxes, json::array({v.x(), v.y(), v.z()}));
@@ -568,6 +647,7 @@ QWidget* CommandPanel::makeField(Field& f, const json& s, bool required) {
             g->addRow(tr("X direction"), row(*x, 3));
             writeXyz(*n, json::array({0, 0, 1}));
             writeXyz(*x, json::array({1, 0, 0}));
+            f.handle = true;
             f.read = [group, o, n, x]() {
                 if (group->isCheckable() && !group->isChecked()) return json(nullptr);
                 return json{{"origin", readXyz(*o)}, {"normal", readXyz(*n)}, {"xDir", readXyz(*x)}};

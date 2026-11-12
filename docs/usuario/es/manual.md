@@ -55,6 +55,14 @@ los mismos datos, sin escribir JSON:
   - los cuerpos de *Unir escaneos* se marcan;
   - los lazos de un boceto se dibujan con **Dibujar en el editor de
     bocetos…**.
+- **Ver en vivo** (casilla del panel): mientras cambias los valores, el
+  resultado se muestra en ámbar sobre el cuerpo original, que se vuelve
+  semitransparente; una sección se dibuja en magenta. No cambia nada ni entra
+  en el historial hasta *Aplicar*.
+- **Tiradores en la vista:** los puntos del panel (centro de una esfera,
+  esquinas de una caja, origen de un plano) aparecen como puntos naranjas que
+  se arrastran con el ratón; la caja, la esfera y el plano se dibujan como
+  guías.
 - **Buscar un comando** (Ctrl+K): escribe lo que quieres hacer, en español o
   en inglés («sección», «rellenar», «alinear»), y Intro abre el panel.
 - **Resultados** (pestaña junto al registro): cada comando, tuyo o del

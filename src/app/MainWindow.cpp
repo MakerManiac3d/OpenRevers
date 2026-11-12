@@ -45,6 +45,8 @@
 #include <QTime>
 #include <QDialog>
 #include <QLineEdit>
+#include <QFutureWatcher>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QUrl>
@@ -458,8 +460,31 @@ void MainWindow::buildDocks() {
     panelDock_->hide();
     panel_->setSelectionSource([this]() { return std::make_pair(viewport_->selectionBody(), viewport_->selection()); });
     connect(panel_, &CommandPanel::closeRequested, panelDock_, &QDockWidget::hide);
+    connect(panelDock_, &QDockWidget::visibilityChanged, this, [this](bool shown) {
+        if (!shown) clearPreview();
+    });
     connect(panel_, &CommandPanel::applyRequested, this, [this](const QString& name, const json& params) {
+        ++previewGen_;
+        viewport_->setGhosts({});
         run(name, params, [this, name](const json& r) { showResult(name, r); });
+    });
+    previewTimer_ = new QTimer(this);
+    previewTimer_->setSingleShot(true);
+    previewTimer_->setInterval(350);
+    connect(previewTimer_, &QTimer::timeout, this, &MainWindow::runPreview);
+    connect(panel_, &CommandPanel::valuesChanged, this, [this]() {
+        updatePanelView();
+        if (panel_->live()) previewTimer_->start();
+        else {
+            ++previewGen_;
+            viewport_->setGhosts({});
+            resultGuides_.clear();
+            updatePanelView();
+        }
+    });
+    connect(viewport_, &Viewport::handleDragged, this, [this](const QString& id, const Vec3d& pos, bool) {
+        panel_->moveHandle(id, pos);
+        updatePanelView();
     });
     connect(panel_, &CommandPanel::sketchEditorRequested, this, [this](const QString& command, const json& v) {
         const QString body = v.contains("body") ? QString::fromStdString(v["body"].get<std::string>()) : selectedRef();
@@ -482,11 +507,155 @@ void MainWindow::openPanel(const QString& name, const json& initial) {
     ctx.lang = lang_;
     ctx.pickedShapes = pickedShapes_;
     if (lastPick_.hit() && lastPick_.body == selected_) ctx.lastPick = lastPick_;
+    clearPreview();
     panel_->open(*c, ctx, initial);
     const bool wasHidden = !panelDock_->isVisible();
     panelDock_->show();
     panelDock_->raise();
     if (wasHidden) resizeDocks({panelDock_}, {height() * 3 / 5}, Qt::Vertical);
+}
+
+namespace {
+Vec3d vec(const json& j, const Vec3d& def) {
+    if (!j.is_array() || j.size() != 3) return def;
+    return {j[0].get<double>(), j[1].get<double>(), j[2].get<double>()};
+}
+}  // namespace
+
+void MainWindow::updatePanelView() {
+    if (!panel_->command() || !panelDock_->isVisible()) return;
+    const json v = panel_->values();
+    const std::string name = panel_->command()->name;
+    // Guides from the form: a box from min and max, a sphere from centre and
+    // radius, a plane from origin and normal (or a plane field).
+    std::vector<Viewport::Guide> g;
+    const QColor col(230, 120, 20);
+    Box3 scene;
+    for (const auto& b : doc_.bodies())
+        if (b.visible && b.mesh && !b.mesh->vertices.empty()) {
+            const Box3 bb = b.mesh->bounds();
+            scene.add(bb.min);
+            scene.add(bb.max);
+        }
+    const double size = !scene.empty() ? std::max(10.0, 0.6 * static_cast<double>(scene.diagonal())) : 50.0;
+    const std::string shape = v.value("shape", "");
+    const bool crop = name == "mesh.crop";
+    if (v.contains("min") && v.contains("max") && (!crop || shape == "box")) {
+        const Vec3d a = vec(v["min"], Vec3d::Zero()), b = vec(v["max"], Vec3d::Zero());
+        auto c = [&](int i) { return Vec3d(i & 1 ? b.x() : a.x(), i & 2 ? b.y() : a.y(), i & 4 ? b.z() : a.z()); };
+        const int edges[12][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3}, {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+        for (const auto& e : edges) g.push_back({c(e[0]), c(e[1]), col});
+    }
+    if (v.contains("centre") && v.contains("radius") && (!crop || shape == "sphere")) {
+        const Vec3d c = vec(v["centre"], Vec3d::Zero());
+        const double r = v["radius"].get<double>();
+        for (int axis = 0; axis < 3; ++axis)
+            for (int i = 0; i < 48; ++i) {
+                auto pt = [&](int k) {
+                    const double t = 2 * 3.14159265358979323846 * k / 48;
+                    Vec3d d = Vec3d::Zero();
+                    d[(axis + 1) % 3] = std::cos(t);
+                    d[(axis + 2) % 3] = std::sin(t);
+                    return Vec3d(c + r * d);
+                };
+                g.push_back({pt(i), pt(i + 1), col});
+            }
+    }
+    json plane;
+    if (v.contains("plane") && v["plane"].is_object()) plane = v["plane"];
+    else if (v.contains("origin") && v.contains("normal") && (!crop || shape == "plane")) plane = {{"origin", v["origin"]}, {"normal", v["normal"]}};
+    else if (v.contains("point") && v.contains("normal")) plane = {{"origin", v["point"]}, {"normal", v["normal"]}};
+    if (plane.is_object()) {
+        const Vec3d o = vec(plane.value("origin", json()), Vec3d::Zero());
+        Vec3d n = vec(plane.value("normal", json()), Vec3d::UnitZ());
+        if (n.norm() > 1e-12) {
+            n.normalize();
+            const Vec3d x = n.unitOrthogonal(), y = n.cross(x);
+            const double h = size / 2;
+            const Vec3d p[4] = {o + h * (x + y), o + h * (-x + y), o + h * (-x - y), o + h * (x - y)};
+            for (int i = 0; i < 4; ++i) g.push_back({p[i], p[(i + 1) % 4], col});
+            g.push_back({o, o + n * (size / 6), QColor(40, 120, 230)});
+        }
+    }
+    panelGuides_ = g;
+    auto all = panelGuides_;
+    all.insert(all.end(), resultGuides_.begin(), resultGuides_.end());
+    viewport_->setGuides(all);
+    // Only the handles of the region chosen (a crop shows one shape at a time).
+    auto hs = panel_->handles();
+    if (crop)
+        hs.erase(std::remove_if(hs.begin(), hs.end(), [&](const Viewport::Handle& h) {
+                     const std::string k = h.id.toStdString();
+                     if (shape == "sphere") return k != "centre";
+                     if (shape == "box") return k != "min" && k != "max";
+                     return k != "origin";
+                 }),
+                 hs.end());
+    viewport_->setHandles(hs);
+}
+
+void MainWindow::runPreview() {
+    const Command* c = panel_->command();
+    if (!c || !panel_->live() || !panelDock_->isVisible()) return;
+    const int gen = ++previewGen_;
+    const std::string name = c->name;
+    const json params = panel_->values();
+    const bool mutates = c->mutates;
+    const std::string lang = lang_.toStdString();
+    // On a worker: on a copy of the document (dryRun) for a change, as it is
+    // for a question (a section).
+    auto* watcher = new QFutureWatcher<Preview>(this);
+    connect(watcher, &QFutureWatcher<Preview>::finished, this, [this, watcher, gen, name]() {
+        watcher->deleteLater();
+        if (gen != previewGen_) return;  // the values moved on meanwhile
+        Preview p;
+        try {
+            p = watcher->result();
+        } catch (const std::exception& e) {
+            viewport_->setGhosts({});
+            resultGuides_.clear();
+            updatePanelView();
+            status_->setText(tr("Preview: %1").arg(QString::fromUtf8(e.what())));
+            return;
+        }
+        viewport_->setGhosts(p.changed);
+        // A section's outline, drawn where it lies.
+        resultGuides_.clear();
+        if (p.result.is_object() && p.result.contains("polylines") && p.result.contains("plane")) {
+            const json& pl = p.result["plane"];
+            const Vec3d o = vec(pl["origin"], Vec3d::Zero()), n = vec(pl["normal"], Vec3d::UnitZ()), x = vec(pl["xDir"], Vec3d::UnitX());
+            const Vec3d y = n.cross(x);
+            for (const auto& poly : p.result["polylines"]) {
+                const json& pts = poly["points"];
+                const std::size_t k = pts.size();
+                for (std::size_t i = 0; i + 1 < k + (poly.value("closed", false) ? 1 : 0); ++i) {
+                    const json& a = pts[i];
+                    const json& b = pts[(i + 1) % k];
+                    resultGuides_.push_back({o + a[0].get<double>() * x + a[1].get<double>() * y, o + b[0].get<double>() * x + b[1].get<double>() * y, QColor(200, 30, 160)});
+                }
+            }
+        }
+        updatePanelView();
+        const QString sum = QString::fromStdString(p.result.is_object() ? p.result.value("summary", "") : "");
+        status_->setText(tr("Preview (nothing changed yet): %1").arg(sum));
+    });
+    watcher->setFuture(QtConcurrent::run([this, name, params, mutates, lang]() {
+        CommandContext ctx{doc_, PathPolicy::unrestricted(), lang, "user", nullptr};
+        if (mutates) return registry_.preview(name, params, ctx);
+        Preview p;
+        p.result = registry_.run(name, params, ctx);
+        return p;
+    }));
+}
+
+void MainWindow::clearPreview() {
+    ++previewGen_;
+    if (previewTimer_) previewTimer_->stop();
+    panelGuides_.clear();
+    resultGuides_.clear();
+    viewport_->setGhosts({});
+    viewport_->setGuides({});
+    viewport_->setHandles({});
 }
 
 void MainWindow::newSketch(const QString& body, const json& plane, const QString& name) {
@@ -569,20 +738,33 @@ void MainWindow::showPalette() {
     for (const Command* c : registry_.all()) {
         auto* it = new QListWidgetItem(QString::fromStdString(c->title.in(lang_.toStdString())) + "   ·   " + QString::fromStdString(c->name), list);
         it->setData(Qt::UserRole, QString::fromStdString(c->name));
-        it->setData(Qt::UserRole + 1, QString::fromStdString(c->title.en + " " + c->title.es + " " + c->name + " " + c->description.en + " " + c->description.es).toLower());
+        it->setData(Qt::UserRole + 1, QString::fromStdString(c->name).toLower());
+        it->setData(Qt::UserRole + 2, QString::fromStdString(c->title.en + " " + c->title.es).toLower());
+        it->setData(Qt::UserRole + 3, QString::fromStdString(c->description.en + " " + c->description.es).toLower());
         it->setToolTip(QString::fromStdString(c->description.in(lang_.toStdString())));
     }
+    // Best first: the name itself, then words of the name, of the title, of the description.
     auto filter = [list](const QString& text) {
-        const QStringList words = text.toLower().split(' ', Qt::SkipEmptyParts);
-        int first = -1;
+        const QString q = text.trimmed().toLower();
+        const QStringList words = q.split(' ', Qt::SkipEmptyParts);
+        int best = -1, bestScore = 0;
         for (int i = 0; i < list->count(); ++i) {
-            const QString hay = list->item(i)->data(Qt::UserRole + 1).toString();
-            bool show = true;
-            for (const auto& w : words) show = show && hay.contains(w);
-            list->item(i)->setHidden(!show);
-            if (show && first < 0) first = i;
+            auto* it = list->item(i);
+            const QString name = it->data(Qt::UserRole + 1).toString(), title = it->data(Qt::UserRole + 2).toString(),
+                          desc = it->data(Qt::UserRole + 3).toString();
+            int score = 1;
+            for (const auto& w : words) {
+                if (name.contains(w)) score += 6;
+                else if (title.contains(w)) score += 4;
+                else if (desc.contains(w)) score += 1;
+                else { score = 0; break; }
+            }
+            if (!q.isEmpty() && name == q) score += 100;
+            it->setHidden(score == 0);
+            it->setData(Qt::UserRole + 4, score);
+            if (score > bestScore) { bestScore = score; best = i; }
         }
-        if (first >= 0) list->setCurrentRow(first);
+        if (best >= 0) list->setCurrentRow(best);
     };
     connect(search, &QLineEdit::textChanged, &dlg, filter);
     connect(search, &QLineEdit::returnPressed, &dlg, &QDialog::accept);

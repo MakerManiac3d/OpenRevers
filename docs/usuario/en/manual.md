@@ -54,6 +54,13 @@ data, without typing JSON:
   - a loft's sketches are ticked and dragged into order;
   - the bodies to join are ticked;
   - a sketch's loops are drawn with **Draw in the sketch editor…**.
+- **See it live** (panel checkbox): while you change the values, the result
+  is shown in amber over the original body, which turns see-through; a
+  section is drawn in magenta. Nothing changes or enters the history until
+  *Apply*.
+- **Handles in the view:** the panel's points (a sphere's centre, a box's
+  corners, a plane's origin) show as orange dots you drag with the mouse; the
+  box, sphere and plane are drawn as guides.
 - **Find a command** (Ctrl+K): type what you want to do («section», «fill»,
   «align»), and Enter opens the panel.
 - **Results** (tab beside the log): every command, yours or the agent's, with

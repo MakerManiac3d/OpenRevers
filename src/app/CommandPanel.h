@@ -16,6 +16,8 @@
 
 class QAbstractButton;
 class QButtonGroup;
+class QCheckBox;
+class QTimer;
 class QComboBox;
 class QFormLayout;
 class QLabel;
@@ -46,6 +48,11 @@ public:
     /// Whether a field is waiting for a click in the view, and that click.
     bool wantsPick() const;
     void takePick(const Pick& pick);
+    /// The points of the form as handles to drag in the view, and a dragged one back.
+    std::vector<Viewport::Handle> handles() const;
+    void moveHandle(const QString& id, const Vec3d& pos);
+    /// "See it live": the result shown as it would be, while the form changes.
+    bool live() const;
     /// Where the lasso selection is read from (mesh-faces fields).
     void setSelectionSource(std::function<std::pair<std::uint64_t, std::vector<std::uint32_t>>()> source) { selection_ = std::move(source); }
 
@@ -54,6 +61,8 @@ signals:
     /// The loops of a sketch are drawn in the sketch editor: `values` = what the form holds.
     void sketchEditorRequested(const QString& command, const json& values);
     void closeRequested();
+    /// Something in the form changed (checked a few times a second).
+    void valuesChanged();
 
 private:
     struct Field {
@@ -64,6 +73,7 @@ private:
         std::function<void(const Pick&)> pick;  // empty: not filled from the view
         bool keepArmed{false};                  // a list of clicks: stays armed
         QAbstractButton* arm{nullptr};
+        bool handle{false};  // a position to drag in the view
     };
     void build(const json& initial);
     QWidget* makeField(Field& f, const json& s, bool required);
@@ -82,6 +92,9 @@ private:
     QWidget* form_{nullptr};
     QButtonGroup* arms_{nullptr};
     QPushButton* apply_{nullptr};
+    QCheckBox* live_{nullptr};
+    QTimer* poll_{nullptr};
+    json last_;
 };
 
 }  // namespace orv

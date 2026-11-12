@@ -1,5 +1,22 @@
 # Cambios · Changelog
 
+## 0.10.0 — 12 de noviembre de 2026 (vista previa y tiradores)
+
+- **Ver en vivo** en el panel de comandos: el resultado se calcula sobre una
+  copia del documento mientras cambias los valores y se dibuja en ámbar, con
+  el cuerpo original semitransparente. Las secciones se ven como contornos
+  magenta. Nada cambia ni entra en el historial hasta *Aplicar*.
+- **`dryRun`** para el agente y la línea de órdenes: cualquier comando que
+  cambia el documento responde con lo que haría (`preview`: cuerpos
+  cambiados, nuevos y quitados) sin tocarlo.
+- **Tiradores y guías en la vista:** puntos del panel que se arrastran con el
+  ratón (centro de esfera, esquinas de caja, origen de plano); la caja, la
+  esfera y el plano se dibujan; *Recortar* muestra solo los de su forma.
+- La rueda del ratón ya no cambia un valor del panel al desplazarlo; solo el
+  campo con el foco.
+- *Buscar un comando* ordena por relevancia: el nombre exacto va primero.
+- Prueba nueva: la vista previa no cambia el documento ni el historial.
+
 ## 0.9.0 — 12 de noviembre de 2026 (control manual al nivel del agente, primer bloque)
 
 - **Panel de comandos acoplado y no modal**, en lugar del formulario. Se gira

@@ -186,3 +186,17 @@ language of the descriptions, and `--headless` forces the headless mode.
 Cada campo de los esquemas lleva su tipo de control (`x-kind`) para que el
 usuario pueda dar lo mismo desde el panel de comandos de la aplicación. Ver
 [paridad.md](../desarrollo/paridad.md).
+
+## Probar antes de cambiar (dryRun) · Try before changing
+
+Toda herramienta que cambia el documento admite `"dryRun": true`. Se calcula
+sobre una copia del documento (barata: las mallas se comparten) y responde con
+su resultado normal más `"dryRun": true` y
+`"preview": {"changed": [...], "added": [...], "removed": [...]}` con las
+referencias de los cuerpos. El documento y el historial quedan igual. Es lo
+mismo que usa la casilla *Ver en vivo* del panel.
+
+Every tool that changes the document takes `"dryRun": true`: it runs on a
+copy and answers with its usual result plus `dryRun` and `preview`
+{changed, added, removed}; the document and history stay as they were. It is
+what the panel's *See it live* checkbox uses.

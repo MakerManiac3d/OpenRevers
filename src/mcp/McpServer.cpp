@@ -107,6 +107,18 @@ json McpServer::initialize(const json& params) {
             {"instructions", instructions}};
 }
 
+namespace {
+/// A command that changes the model can be tried first: dryRun works it out on
+/// a copy and says what it would change, touching nothing.
+json withDryRun(json schema, bool mutates, bool es) {
+    if (!mutates || !schema.is_object()) return schema;
+    schema["properties"]["dryRun"] = {{"type", "boolean"},
+                                      {"description", es ? "Probar sin cambiar nada: devuelve el resultado y qué cuerpos cambiarían (preview)"
+                                                         : "Try it without changing anything: returns the result and which bodies would change (preview)"}};
+    return schema;
+}
+}  // namespace
+
 json McpServer::listTools() {
     json tools = json::array();
     const bool es = lang_ == "es";
@@ -116,7 +128,7 @@ json McpServer::listTools() {
         json t = {{"name", toolName(c["name"].get<std::string>())},
                   {"title", title},
                   {"description", desc},
-                  {"inputSchema", cleanSchema(c["schema"])},
+                  {"inputSchema", withDryRun(cleanSchema(c["schema"]), c.value("mutates", false), es)},
                   {"annotations", {{"readOnlyHint", !c.value("mutates", false) && c["name"] != "mesh.export" && c["name"] != "project.save"},
                                    {"destructiveHint", c["name"] == "body.delete"},
                                    {"openWorldHint", false}}}};

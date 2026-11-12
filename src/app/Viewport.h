@@ -73,6 +73,23 @@ public:
     /// Numbered marks for aligning by pairs: on the moving body (orange)
     /// and on the reference (cyan).
     void setPairMarks(std::vector<Vec3d> moving, std::vector<Vec3d> reference);
+    /// What a command would do (its preview): these bodies drawn as amber
+    /// ghosts over the real ones. Empty: none.
+    void setGhosts(std::vector<Body> ghosts);
+    /// Handles a person drags in the view (a point of the command panel).
+    struct Handle {
+        QString id;
+        Vec3d pos;
+        QColor color;
+    };
+    void setHandles(std::vector<Handle> handles);
+    /// Guide lines drawn over everything (a crop box, a sphere, a plane, a
+    /// section's outline).
+    struct Guide {
+        Vec3d a, b;
+        QColor color;
+    };
+    void setGuides(std::vector<Guide> guides);
     /// The points of a scan in progress, drawn over everything in amber (null:
     /// none). Only shown: not a body, not in the history.
     void setLiveCloud(std::shared_ptr<const TriMesh> cloud);
@@ -99,6 +116,8 @@ signals:
     void contextRequested(const orv::Pick& pick, const QPoint& globalPos);
     /// A lasso was drawn: what it selected (`add`: Ctrl was held).
     void lassoSelected(std::uint64_t body, std::vector<std::uint32_t> faces, bool add);
+    /// A handle dragged to `pos` (`done`: the button was let go).
+    void handleDragged(const QString& id, const orv::Vec3d& pos, bool done);
 
 protected:
     void initializeGL() override;
@@ -202,6 +221,14 @@ private:
     QOpenGLVertexArrayObject selVao_;
     QOpenGLBuffer selVbo_{QOpenGLBuffer::VertexBuffer};
     std::vector<Vec3d> pairMoving_, pairReference_;
+    std::vector<Body> ghosts_;
+    std::vector<std::unique_ptr<GpuMesh>> ghostGpu_;
+    bool ghostsDirty_{false};
+    std::vector<Handle> handles_;
+    std::vector<Guide> guides_;
+    int dragHandle_{-1};
+    Vec3d dragNormal_{Vec3d::UnitZ()};
+    bool screenPoint(const Vec3d& p, QPointF& out) const;
     std::shared_ptr<const TriMesh> live_;
     std::unique_ptr<GpuMesh> liveGpu_;
     bool liveDirty_{false};

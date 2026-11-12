@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "commands/Command.h"
+#include <set>
+#include <map>
 
 #include <cmath>
 
@@ -105,9 +107,55 @@ json CommandRegistry::validate(const Command& c, const json& in) {
     return out;
 }
 
+Preview CommandRegistry::preview(const std::string& name, const json& params, CommandContext& ctx) const {
+    const Command* c = find(name);
+    if (!c) throw CommandError("not_found", "No command \"" + name + "\"");
+    json in = params;
+    if (in.is_object()) in.erase("dryRun");
+    const std::vector<Body> before = ctx.doc.bodies();
+    Document scratch;
+    scratch.reset(before, ctx.doc.nextId());
+    CommandContext sctx{scratch, ctx.paths, ctx.lang, ctx.caller, nullptr};
+    Preview p;
+    p.result = run(name, in, sctx);
+    if (!c->mutates) return p;
+    std::map<std::uint64_t, const Body*> old;
+    for (const auto& b : before) old[b.id] = &b;
+    std::set<std::uint64_t> still;
+    for (const auto& b : scratch.bodies()) {
+        still.insert(b.id);
+        const auto it = old.find(b.id);
+        if (it == old.end()) {
+            p.added.push_back(b.ref());
+            p.changed.push_back(b);
+        } else if (it->second->mesh != b.mesh || it->second->model != b.model) {
+            p.changed.push_back(b);
+        }
+    }
+    for (const auto& b : before)
+        if (!still.count(b.id)) p.removed.push_back(b.ref());
+    return p;
+}
+
 json CommandRegistry::run(const std::string& name, const json& params, CommandContext& ctx) const {
     const Command* c = find(name);
     if (!c) throw CommandError("not_found", "No command \"" + name + "\"");
+    // dryRun: what it would do, the document untouched.
+    if (params.is_object() && params.contains("dryRun") && params["dryRun"].is_boolean()) {
+        const bool dry = params["dryRun"].get<bool>();
+        json in = params;
+        in.erase("dryRun");
+        if (dry && c->mutates && !c->appOnly) {
+            Preview p = preview(name, in, ctx);
+            json out = p.result.is_object() ? p.result : json{{"result", p.result}};
+            json changed = json::array();
+            for (const auto& b : p.changed) changed.push_back(b.ref());
+            out["dryRun"] = true;
+            out["preview"] = {{"changed", changed}, {"added", p.added}, {"removed", p.removed}};
+            return out;
+        }
+        return run(name, in, ctx);
+    }
     const json input = validate(*c, params);
     if (!c->mutates) {
         try {

@@ -44,3 +44,17 @@ manual que automática.
 2. Si hace falta un control nuevo, añádelo a `FieldKind` y al panel en el
    mismo cambio.
 3. La prueba de paridad no deja pasar un campo sin control.
+
+## Vista previa (0.10)
+
+`CommandRegistry::preview()` ejecuta un comando que cambia el documento sobre
+un `Document` de usar y tirar, creado con `reset()` a partir de los cuerpos
+actuales (copia barata: los cuerpos comparten sus mallas y modelos por
+`shared_ptr`). Los cuerpos con otra malla u otro modelo, los nuevos y los
+quitados forman el `Preview`. Lo usan:
+
+- el panel, con *Ver en vivo* (en otro hilo, con `QtConcurrent`; solo cuenta
+  el último cálculo pedido);
+- el agente y la línea de órdenes, con `"dryRun": true` en `run()`.
+
+`tests/test_preview.cpp` comprueba que el documento y el historial no cambian.

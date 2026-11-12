@@ -49,6 +49,15 @@ struct CommandContext {
     std::string say(const std::string& en, const std::string& es) const { return lang == "es" ? es : en; }
 };
 
+/// What a command would do, worked out on a copy of the document: nothing in
+/// the real one changes and nothing enters the history.
+struct Preview {
+    json result;
+    std::vector<Body> changed;          // bodies new or different after it
+    std::vector<std::string> added;     // refs of the new ones
+    std::vector<std::string> removed;   // refs of the ones it would remove
+};
+
 struct Command {
     std::string name;          // "mesh.fill_holes"; agents see "mesh_fill_holes"
     std::string group;         // menu / ribbon group: file, mesh, body, view, history, help
@@ -69,6 +78,8 @@ public:
     /// Validate `params` against the command's schema (filling defaults), run
     /// it, and make it one undo step. Throws CommandError.
     json run(const std::string& name, const json& params, CommandContext& ctx) const;
+    /// Run a command that changes the document on a copy of it (dryRun).
+    Preview preview(const std::string& name, const json& params, CommandContext& ctx) const;
 
     /// The input with defaults filled; throws CommandError(invalid_input).
     static json validate(const Command& c, const json& params);
