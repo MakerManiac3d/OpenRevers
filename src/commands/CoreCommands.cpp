@@ -10,6 +10,7 @@
 #include "core/points/PointCloud.h"
 #include "commands/FeatureCommands.h"
 #include "commands/PartCommands.h"
+#include "commands/ScanCommands.h"
 #include "core/util/Version.h"
 #include "doc/Project.h"
 
@@ -127,6 +128,7 @@ std::string extensionOf(const fs::path& p) {
 void registerCoreCommands(CommandRegistry& R) {
     registerFeatureCommands(R);
     registerPartCommands(R);
+    registerScanCommands(R);
     using namespace schema;
 
     // ------------------------------------------------------------ files --

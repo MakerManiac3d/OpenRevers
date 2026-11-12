@@ -121,6 +121,7 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
 Viewport::~Viewport() {
     makeCurrent();
     gpu_.clear();
+    liveGpu_.reset();
     doneCurrent();
 }
 
@@ -319,8 +320,21 @@ void Viewport::setSelected(std::uint64_t id) {
     update();
 }
 
+void Viewport::setLiveCloud(std::shared_ptr<const TriMesh> cloud) {
+    const bool first = !live_ && cloud && !cloud->vertices.empty() && bodies_.empty();
+    live_ = std::move(cloud);
+    liveDirty_ = true;
+    if (first) fitAll();
+    update();
+}
+
 Box3 Viewport::sceneBounds() const {
     Box3 bb;
+    if (live_ && !live_->vertices.empty()) {
+        const Box3 x = live_->bounds();
+        bb.add(x.min);
+        bb.add(x.max);
+    }
     for (const auto& b : bodies_) {
         if (!b.visible) continue;
         const Box3 x = b.mesh->bounds();
@@ -698,6 +712,27 @@ void Viewport::paintGL() {
     for (const auto& b : bodies_)
         if (b.visible && b.opacity >= 1.f) drawBody(b);
     glDisable(GL_POLYGON_OFFSET_FILL);
+    // A scan in progress: its points, in amber.
+    if (liveDirty_) {
+        liveDirty_ = false;
+        if (live_ && !live_->vertices.empty()) {
+            if (!liveGpu_) liveGpu_ = std::make_unique<GpuMesh>();
+            upload(*liveGpu_, *live_);
+        } else {
+            liveGpu_.reset();
+        }
+    }
+    if (liveGpu_ && liveGpu_->pointCount > 0) {
+        meshProg_.setUniformValue("uColor", QVector3D(1.0f, 0.62f, 0.15f));
+        meshProg_.setUniformValue("uAlpha", 1.f);
+        meshProg_.setUniformValue("uHighlight", 0.f);
+        meshProg_.setUniformValue("uPoints", true);
+        glPointSize(2.f);
+        liveGpu_->vao.bind();
+        glDrawArrays(GL_POINTS, 0, liveGpu_->pointCount);
+        liveGpu_->vao.release();
+        meshProg_.setUniformValue("uPoints", false);
+    }
     // Faces of a part picked: drawn again over themselves, in amber.
     meshProg_.setUniformValue("uAlpha", 1.f);
     meshProg_.setUniformValue("uHighlight", 0.f);

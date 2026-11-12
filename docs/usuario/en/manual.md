@@ -1,4 +1,4 @@
-# OpenRevers manual (version 0.6)
+# OpenRevers manual (version 0.7)
 
 OpenRevers prepares scanned meshes for reverse engineering. This version
 covers **phase 1**: open the scan, see what is wrong with it, repair it and
@@ -256,6 +256,35 @@ made by sections and a loft instead.
 Everything you do by hand is visible to the AI agent (`view_selection` tells
 it which parameter, sketch or operation, which faces and which edges you
 picked), so you can point at something and ask it to carry on from there.
+
+## Scanning from OpenRevers (phase 6)
+
+With **CrealityScan installed** (Windows) and the scanner plugged in by USB
+(Raptor, Otter, Ferret…), the **Scan** menu drives the scanner without
+leaving OpenRevers:
+
+1. **Scanner status:** whether CrealityScan's scanning library was found.
+   OpenRevers does not ship it; it uses the one you installed
+   (`C:\Program Files\CrealityScan\…\Plugins\x86_64`, or the folder in
+   the `ORV_CREALITYSCAN_DIR` variable).
+2. **Connect scanner:** what you scan (small, medium or big object, face,
+   person), accuracy, surface (standard, black, white, reflective) and light
+   (infrared or blue laser).
+3. **Preview**, to aim, then **Start scanning**. The points show in amber in
+   the view as they come. **Pause scanning** stops adding points and
+   **Start scanning** goes on.
+4. **Stop scanning** and **Scan to body:** the points (with normals) or the
+   scanner's own mesh go into the project as a new body, in millimetres. Work
+   on it like any imported scan.
+5. **Disconnect scanner** when done.
+
+Close CrealityScan before connecting: only one program can use the scanner
+at a time. To try it without a scanner, **Use the scan simulator** gives a
+test plate.
+
+This is new: until tried on a real scanner, some details (the device's name,
+the units) may come out wrong. If something fails, the log says what the
+library returned.
 
 ## Settings
 

@@ -95,6 +95,8 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `part_loft` | Sólido que pasa por varios bocetos en orden (secciones de un álabe, extremos de un conducto), suave o reglado | Sí |
 | `part_pattern` | Copias de lo que hizo otra operación alrededor de un eje (`count` y `angle` pueden ser parámetros) | Sí |
 | `part_surface_from_scan` | Superficie libre (B-spline bicúbica) ajustada a una zona del escaneo: una forma segmentada (`shape`) o una esfera (`centre`, `radius`); devuelve rms y máximo | Sí |
+| `scan_status` · `scan_devices` · `scan_connect` · `scan_preview` · `scan_start` · `scan_pause` · `scan_stop` · `scan_disconnect` · `scan_use_simulator` | Manejar el escáner a través de la biblioteca de CrealityScan (Windows) o el simulador | No |
+| `scan_export_to_body` | Pasar el escaneo (puntos o malla del escáner) a un cuerpo nuevo | Sí |
 | `part_cut_by_surface` · `part_thicken` | Quitar lo que queda por encima o por debajo de una superficie libre; engrosarla hasta un sólido | Sí |
 | `part_extrude` · `part_revolve` · `part_fillet` | Operaciones; se combinan con la pieza (`new`, `join`, `cut`, `intersect`). Los valores pueden ser números o nombres de parámetros | Sí |
 | `part_parameter` | Crea o cambia un parámetro con nombre; la pieza se reconstruye | Sí |

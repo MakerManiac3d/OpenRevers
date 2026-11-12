@@ -62,6 +62,9 @@ public:
     bool showSketches() const { return sketches_; }
     /// The point shown as picked (none: hit() false).
     void setPickMarker(const Pick& p);
+    /// The points of a scan in progress, drawn over everything in amber (null:
+    /// none). Only shown: not a body, not in the history.
+    void setLiveCloud(std::shared_ptr<const TriMesh> cloud);
     /// The surface under a widget position (logical pixels).
     Pick pickAt(const QPoint& pos) const;
     bool showShapes() const { return shapes_; }
@@ -173,6 +176,9 @@ private:
     std::uint64_t highlightBody_{0};
     std::vector<std::int32_t> highlightRegions_;
     Pick marker_;
+    std::shared_ptr<const TriMesh> live_;
+    std::unique_ptr<GpuMesh> liveGpu_;
+    bool liveDirty_{false};
     QOpenGLVertexArrayObject markerVao_;
     QOpenGLBuffer markerVbo_{QOpenGLBuffer::VertexBuffer};
 

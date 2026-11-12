@@ -1,5 +1,27 @@
 # Cambios · Changelog
 
+## 0.7.0 — 12 de noviembre de 2026 (fase 6: escaneo directo, primer bloque)
+
+- **Menú Escanear y comandos `scan.*`:** conectar un escáner de CrealityScan
+  (Raptor, Otter, Ferret…), vista previa, escanear, pausar, terminar y pasar
+  el escaneo a un cuerpo (puntos con normales, o la malla del escáner). Los
+  mismos comandos para la interfaz, los scripts y el agente de IA.
+- **Vista en vivo:** mientras se escanea, los puntos aparecen en ámbar en la
+  vista. No entran en el historial hasta que se pasan a un cuerpo.
+- **Sin código de terceros:** OpenRevers carga en tiempo de ejecución
+  `lib_orbbec_scan.dll` desde la instalación de CrealityScan del usuario; no
+  la distribuye. Las declaraciones de la interfaz son propias, sacadas de los
+  metadatos de CrealityScan. Solo se resuelven 22 funciones del ciclo de
+  escaneo; nunca las de firmware, wifi, registro o IA (lo comprueba una
+  prueba).
+- **Licencia:** permiso adicional de la sección 7 de la GPL para cargar esas
+  bibliotecas ([LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md)).
+- **Simulador de escaneo** (`ORV_SCAN_SIMULATOR=1` o *Usar el simulador de
+  escaneo*) para probar sin escáner.
+- Pendiente: la prueba con el Raptor, que confirmará valores de
+  enumeraciones, unidades y el registro del dispositivo
+  ([escaneo-obscan.md](docs/desarrollo/escaneo-obscan.md)).
+
 ## 0.6.1 — 12 de noviembre de 2026
 
 - El mapa de desviación y los colores de las formas se ven también desde el

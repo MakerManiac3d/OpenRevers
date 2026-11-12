@@ -15,7 +15,7 @@ else()
   set(CPACK_PACKAGE_FILE_NAME "OpenRevers-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 
-install(FILES LICENSE README.md THIRD_PARTY.md DESTINATION share/doc/openrevers)
+install(FILES LICENSE LICENSE-EXCEPTION.md README.md THIRD_PARTY.md DESTINATION share/doc/openrevers)
 install(DIRECTORY docs/ DESTINATION share/doc/openrevers/docs)
 
 # The licences of the libraries built into the executables, as their terms ask.

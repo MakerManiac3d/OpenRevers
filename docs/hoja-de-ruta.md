@@ -97,6 +97,13 @@ redistribuye código de Creality ni de Orbbec.
 7. **Prueba con el Raptor:** un escaneo completo hasta cuerpo, comparado con
    el mismo escaneo exportado desde CrealityScan.
 
+Hecho en la v0.7: pasos 1 (firmas de las 220 funciones y de las
+estructuras), 3 (excepción en [LICENSE-EXCEPTION.md](../LICENSE-EXCEPTION.md)),
+4, 5 y 6, con un escáner simulado para las pruebas. Del paso 2 está hecho el
+análisis de las importaciones y de OrbbecSDK; falta buscar URLs dentro de la
+DLL y vigilar la red en la prueba real. Falta el paso 7. Detalles y lo que
+queda por confirmar: [escaneo-obscan.md](desarrollo/escaneo-obscan.md).
+
 Modelos que nombra la biblioteca: Otter, Otter Lite, Ferret, Raptor, Raptor
 Pro, Raptor Pro Max, Raptor X, Raptor Mini, Raptor E y Sermoon P1.
 

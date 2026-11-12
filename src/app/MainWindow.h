@@ -13,6 +13,7 @@
 #include <QMainWindow>
 
 class QLabel;
+class QTimer;
 class QListWidget;
 class QPlainTextEdit;
 class QTreeWidget;
@@ -99,6 +100,10 @@ private:
     void newSketchOnFace();
     void filletPickedEdges();
     void compareWithScan();
+    // Scanning: while the scanner runs, its points are shown live.
+    void pollScan();
+    QTimer* scanTimer_{nullptr};
+    bool scanShown_{false};
     QListWidget* history_{nullptr};
     QPlainTextEdit* log_{nullptr};
     QLabel* status_{nullptr};

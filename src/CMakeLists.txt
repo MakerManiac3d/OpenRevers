@@ -43,6 +43,9 @@ add_library(orv_core STATIC
   commands/CoreCommands.cpp
   commands/FeatureCommands.cpp
   commands/PartCommands.cpp
+  commands/ScanCommands.cpp
+  scan/ScanBackend.cpp
+  scan/ObScanBackend.cpp
   commands/Guide.cpp
   mcp/McpServer.cpp
   mcp/LocalBackend.cpp

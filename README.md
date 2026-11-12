@@ -103,6 +103,11 @@ modificarlo y redistribuirlo; quien distribuya una versión modificada debe
 publicar su código con la misma licencia. Las librerías de terceros conservan
 sus licencias ([THIRD_PARTY.md](THIRD_PARTY.md)).
 
+**Permiso adicional (sección 7 de la GPL):** OpenRevers puede cargar en
+tiempo de ejecución las bibliotecas de escaneo que instala CrealityScan; el
+texto está en [LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md). Esas bibliotecas
+no se distribuyen con OpenRevers.
+
 © 2026 MakerManiac3d.
 
 ---
@@ -130,4 +135,4 @@ surfaces and inspection follow ([roadmap](docs/hoja-de-ruta.md)).
   details in [docs/mcp/README.md](docs/mcp/README.md).
 - **Privacy:** no internet connection of its own; the agent link is on
   127.0.0.1 with a token and limited to the folders you allow.
-- **Licence:** GPL-3.0-or-later.
+- **Licence:** GPL-3.0-or-later, with an additional permission (section 7) to load at run time the scanning libraries CrealityScan installs ([LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md)).

@@ -5,9 +5,9 @@ namespace orv {
 
 namespace {
 
-const char* kWorkflowEn = R"(## Workflow (version 0.6: mesh preparation, shapes, alignment, parametric parts, free-form surfaces and editing by hand)
+const char* kWorkflowEn = R"(## Workflow (version 0.7: scanning, mesh preparation, shapes, alignment, parametric parts, free-form surfaces and editing by hand)
 1. `session_state` — what is open. Never discard someone's unsaved work: save it first.
-2. `mesh_import` with the full path of the scan. Units are millimetres.
+2. `mesh_import` with the full path of the scan. Units are millimetres. Or scan straight in (Windows, CrealityScan installed, scanner plugged in): `scan_status` (is the library there?), `scan_connect` (mode object_small/medium/big, material), `scan_preview`, `scan_start` (the person moves the scanner; points show live in the view), `scan_stop`, then `scan_export_to_body` (as points, or as mesh for the scanner's own mesh). Ask the person before starting: they hold the scanner.
 3. `mesh_analyze` — read holes, pieces, non-manifold edges, flipped faces and the mean edge length before changing anything. Tell the person what you found.
 4. `mesh_repair` — weld, clean and orient in one step. Then `mesh_analyze` again.
 5. `mesh_fill_holes` with `maxEdges` a little above the size of the holes you mean to close; the scan's outer rim is usually the longest loop: leave it open unless the part is closed.
@@ -21,9 +21,9 @@ Free-form shapes (phase 4): an organic outline: `part_sketch_from_section` with 
 Every changing step is one undo step: `history_undo` takes it back. Report numbers, not impressions.
 )";
 
-const char* kWorkflowEs = R"(## Flujo de trabajo (versión 0.6: preparación de mallas, formas, alineación, pieza paramétrica, superficies libres y edición a mano)
+const char* kWorkflowEs = R"(## Flujo de trabajo (versión 0.7: escaneo, preparación de mallas, formas, alineación, pieza paramétrica, superficies libres y edición a mano)
 1. `session_state`: qué hay abierto. Nunca descartes trabajo sin guardar de otra persona: guárdalo antes.
-2. `mesh_import` con la ruta completa del escaneo. Las unidades son milímetros.
+2. `mesh_import` con la ruta completa del escaneo. Las unidades son milímetros. O escanea directamente (Windows, con CrealityScan instalado y el escáner conectado): `scan_status` (¿está la biblioteca?), `scan_connect` (modo object_small/medium/big, material), `scan_preview`, `scan_start` (la persona mueve el escáner; los puntos se ven en vivo), `scan_stop` y después `scan_export_to_body` (como puntos, o como malla para la malla del propio escáner). Pregunta a la persona antes de empezar: es quien sostiene el escáner.
 3. `mesh_analyze`: lee agujeros, piezas, aristas no manifold, caras invertidas y la longitud media de arista antes de cambiar nada. Cuéntale a la persona lo que has encontrado.
 4. `mesh_repair`: une, limpia y orienta en un paso. Después, `mesh_analyze` otra vez.
 5. `mesh_fill_holes` con `maxEdges` algo mayor que el tamaño de los agujeros que quieres cerrar; el borde exterior del escaneo suele ser el lazo más largo: déjalo abierto salvo que la pieza sea cerrada.

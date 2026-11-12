@@ -21,6 +21,14 @@ licence; all are GPL-3.0 compatible.*
 | [libE57Format](https://github.com/asmaloney/libE57Format) | 3.4.1 | BSL-1.0 | Solo para escribir los archivos E57 de prueba (`tests/data/e57`); el programa lee E57 con código propio | No se distribuye |
 | Runtime de Microsoft Visual C++ | el de la compilación | Licencia redistribuible de Microsoft | Ejecución en Windows | Copiado junto al ejecutable |
 
+**Bibliotecas de escaneo de CrealityScan** (`lib_orbbec_scan.dll`,
+`OrbbecSDK.dll` y las que estas cargan): **no se distribuyen**. Si el usuario
+tiene CrealityScan instalado, OpenRevers las carga en tiempo de ejecución
+desde la carpeta de CrealityScan para manejar el escáner (fase 6), con el
+permiso adicional de [LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md). Las
+declaraciones de `src/scan/ObScanApi.h` son propias
+([docs/desarrollo/escaneo-obscan.md](docs/desarrollo/escaneo-obscan.md)).
+
 El instalador copia los textos de licencia de los componentes compilados en
 `share/doc/openrevers/licenses`.
 

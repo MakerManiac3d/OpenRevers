@@ -1,4 +1,4 @@
-# Manual de OpenRevers (versión 0.6)
+# Manual de OpenRevers (versión 0.7)
 
 OpenRevers prepara mallas escaneadas para la ingeniería inversa. Esta versión
 cubre la **fase 1**: abrir el escaneo, ver qué le pasa, repararlo y dejarlo
@@ -273,6 +273,35 @@ hay que hacerla por secciones y loft.
 Todo lo que haces a mano lo ve el agente de IA (`view_selection` le dice qué
 parámetro, boceto u operación, qué caras y qué aristas has elegido), así que
 puedes señalar algo y pedirle que siga desde ahí.
+
+## Escanear desde OpenRevers (fase 6)
+
+Con **CrealityScan instalado** (Windows) y el escáner conectado por USB
+(Raptor, Otter, Ferret…), el menú **Escanear** maneja el escáner sin salir
+de OpenRevers:
+
+1. **Estado del escáner:** dice si se ha encontrado la biblioteca de escaneo
+   de CrealityScan. OpenRevers no la incluye; usa la de tu instalación
+   (`C:\Program Files\CrealityScan\…\Plugins\x86_64`, o la carpeta que
+   indique la variable `ORV_CREALITYSCAN_DIR`).
+2. **Conectar escáner:** elige qué escaneas (objeto pequeño, mediano, grande,
+   cara o persona), la precisión, la superficie (normal, negra, blanca,
+   reflectante) y la luz (infrarroja o láser azul).
+3. **Vista previa**, para apuntar, y **Empezar a escanear**. Los puntos
+   aparecen en ámbar en la vista según llegan. **Pausar el escaneo** deja de
+   sumar puntos y **Empezar a escanear** continúa.
+4. **Terminar el escaneo** y **Escaneo a cuerpo:** los puntos (con normales)
+   o la malla que calcula el escáner pasan al proyecto como un cuerpo nuevo,
+   en milímetros. Desde ahí se trabaja como con cualquier escaneo importado.
+5. **Desconectar escáner** al acabar.
+
+Antes de abrir el escáner, cierra CrealityScan: solo un programa puede
+usarlo a la vez. Para probar sin escáner, **Usar el simulador de escaneo**
+da una placa de prueba.
+
+Es una función nueva: hasta probarla con un escáner real, algunos detalles
+(el nombre del dispositivo, las unidades) pueden salir mal. Si algo falla,
+el registro dice qué devolvió la biblioteca.
 
 ## Ajustes
 

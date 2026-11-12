@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-add_executable(orv_tests test_mesh.cpp test_document.cpp test_quads.cpp test_3mf.cpp test_points.cpp test_e57.cpp test_fit.cpp test_segment.cpp test_align.cpp test_solid.cpp)
+add_executable(orv_tests test_mesh.cpp test_document.cpp test_quads.cpp test_3mf.cpp test_points.cpp test_e57.cpp test_fit.cpp test_segment.cpp test_align.cpp test_solid.cpp test_scan.cpp)
 target_link_libraries(orv_tests PRIVATE orv_core orv_miniz GTest::gtest_main)
 target_include_directories(orv_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(orv_tests PRIVATE ORV_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")

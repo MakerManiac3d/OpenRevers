@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app/MainWindow.h"
 
+#include "scan/ScanBackend.h"
+
 #include "app/AppCommands.h"
 #include "app/CommandDialog.h"
 #include "app/SettingsDialog.h"
@@ -36,6 +38,7 @@
 #include <QTableWidget>
 #include <QTextBrowser>
 #include <QToolBar>
+#include <QTimer>
 #include <QTreeWidget>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -143,6 +146,10 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
     restoreState(settings.value("window/state").toByteArray());
     if (!settings.contains("window/geometry")) resize(1440, 900);
 
+    scanTimer_ = new QTimer(this);
+    connect(scanTimer_, &QTimer::timeout, this, &MainWindow::pollScan);
+    scanTimer_->start(400);
+
     agent_->start();
     refresh();
     log(tr("OpenRevers"), tr("Version %1. Everything runs on this computer.").arg(kVersionString));
@@ -150,11 +157,30 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
 
 MainWindow::~MainWindow() { doc_.setOnChanged({}); }
 
+void MainWindow::pollScan() {
+    // Never wait for the scanner here: a command may be using it.
+    auto& mgr = ScanManager::instance();
+    auto lock = mgr.tryLock();
+    if (!lock.owns_lock() || !mgr.started()) return;
+    std::shared_ptr<TriMesh> cloud;
+    try {
+        const ScanState st = mgr.backend().status().state;
+        if (st == ScanState::Previewing || st == ScanState::Scanning || st == ScanState::Paused || st == ScanState::Stopped)
+            cloud = mgr.backend().cloud(300000);
+    } catch (...) {
+        cloud.reset();
+    }
+    const bool show = cloud && !cloud->vertices.empty();
+    if (show || scanShown_) viewport_->setLiveCloud(show ? cloud : nullptr);
+    scanShown_ = show;
+}
+
 void MainWindow::buildActions() {
     auto* fileMenu = menuBar()->addMenu(tr("&File"));
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
     auto* meshMenu = menuBar()->addMenu(tr("&Mesh"));
     auto* pointsMenu = menuBar()->addMenu(tr("&Points"));
+    auto* scanMenu = menuBar()->addMenu(tr("S&can"));
     auto* shapesMenu = menuBar()->addMenu(tr("S&hapes"));
     auto* alignMenu = menuBar()->addMenu(tr("&Align"));
     auto* partMenu = menuBar()->addMenu(tr("&Part"));
@@ -218,6 +244,12 @@ void MainWindow::buildActions() {
     for (const char* name : {"points.thin", "points.estimate_normals", "points.to_mesh"}) {
         auto* a = add(pointsMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
+    }
+    for (const char* name : {"scan.status", "scan.connect", "scan.preview", "scan.start", "scan.pause", "scan.stop", "scan.export_to_body",
+                             "scan.disconnect", "scan.use_simulator"}) {
+        auto* a = add(scanMenu, cmdText(name), [this, name]() { runFromUi(name); });
+        a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
+        if (std::string(name) == "scan.connect" || std::string(name) == "scan.export_to_body") scanMenu->addSeparator();
     }
     for (const char* name : {"part.new", "part.sketch_from_section", "part.sketch", "part.extrude", "part.revolve", "part.loft", "part.pattern", "part.fillet",
                              "part.surface_from_scan", "part.cut_by_surface", "part.thicken", "part.parameter", "part.edit", "part.move", "part.delete", "part.list",

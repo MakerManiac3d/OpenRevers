@@ -74,6 +74,7 @@ ES = {
     "Point %1, %2, %3 mm": "Punto %1, %2, %3 mm",
     " (σ %1 mm)": " (σ %1 mm)",
     "&Points": "&Puntos",
+    "S&can": "Es&canear",
     "%1 points": "%1 puntos",
     "Points": "Puntos",
     "Normals": "Normales",
