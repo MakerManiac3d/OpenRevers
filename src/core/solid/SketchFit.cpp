@@ -258,28 +258,72 @@ LoopFit fitLoop(const std::vector<Vec2d>& raw, const SketchFitOptions& o) {
         else joint[(k + 1) % m] = c + r * (joint[(k + 1) % m] - c).normalized();
         centreOf[k] = c;
     }
+    // Every joint is final now: each arc gets its centre on its chord's
+    // bisector (both ends exactly on its circle, whatever its neighbours did
+    // to the joints), and its sense from the way the section turns round it.
     Loop l;
+    std::vector<std::size_t> pieceOf;  // the piece each segment came from
     for (std::size_t k = 0; k < m; ++k) {
         const Piece& pc = pieces[k];
         const Vec2d a = joint[k], b = joint[(k + 1) % m];
         if ((b - a).norm() < 1e-9) continue;
+        pieceOf.push_back(k);
         if (!pc.arc) {
             l.segments.push_back(Segment::line(a, b));
             continue;
         }
-        // The centre on the chord's bisector, nearest the fitted one: both ends on the circle.
         const Vec2d mid = 0.5 * (a + b), along = (b - a).normalized(), across(-along.y(), along.x());
-        const Vec2d c = centreOf[k] ? *centreOf[k] : Vec2d(mid + across * (pc.centre - mid).dot(across));
-        const Vec2d sample = q[(pc.from + pc.to) / 2 % n];  // a point in the arc's middle decides its sense
-        auto ang = [&](const Vec2d& v) { return std::atan2(v.y() - c.y(), v.x() - c.x()); };
-        auto ccwFrom = [](double x, double y) {
-            double d = y - x;
-            while (d < 0) d += 2 * kPi;
-            return d;
-        };
-        const bool ccw = ccwFrom(ang(a), ang(sample)) < ccwFrom(ang(a), ang(b));
-        l.segments.push_back(Segment::arc(a, b, c, ccw));
+        const Vec2d target = centreOf[k] ? *centreOf[k] : pc.centre;
+        const Vec2d c = mid + across * (target - mid).dot(across);
+        // The angle the section's points sweep round the centre, signed.
+        double sweep = 0;
+        const std::size_t sweepTo = pc.to < pc.from ? pc.to + n : pc.to;
+        for (std::size_t t = pc.from; t < sweepTo; ++t) {
+            const Vec2d u = q[t % n] - c, v = q[(t + 1) % n] - c;
+            sweep += std::atan2(u.x() * v.y() - u.y() * v.x(), u.dot(v));
+        }
+        l.segments.push_back(Segment::arc(a, b, c, sweep >= 0));
     }
+    // Each segment against its own points: a piece that strays (a bad joint,
+    // an arc the long way round) is mended or replaced by a line.
+    // Only the middle of a piece's points: its ends belong partly to the
+    // neighbours once the joints have moved to corners and tangent points.
+    auto worst = [&](const Segment& s, std::size_t k) {
+        std::size_t to = pieces[k].to;
+        if (to < pieces[k].from) to += n;  // the piece that wraps round the start
+        const std::size_t trim = (to - pieces[k].from) / 5;
+        double w = 0;
+        for (std::size_t t = pieces[k].from + trim; t + trim <= to; ++t) w = std::max(w, distToSegment(q[t % n], s));
+        return w;
+    };
+    const double strayLimit = 3 * o.tolerance;
+    for (std::size_t si = 0; si < l.segments.size(); ++si) {
+        Segment& s = l.segments[si];
+        if (s.kind != Segment::Kind::Arc) continue;
+        const std::size_t k = pieceOf[si];
+        if (worst(s, k) <= strayLimit) continue;
+        Segment flipped = s;
+        flipped.ccw = !s.ccw;
+        const Segment line = Segment::line(s.a, s.b);
+        const double wf = worst(flipped, k), wl = worst(line, k), ws = worst(s, k);
+        if (wf < ws && wf <= wl) s = flipped;
+        else if (wl < ws) s = line;
+    }
+    // A loop that is nearly round is a hole: a whole circle (scanned holes
+    // are seldom round to the tolerance of the outline, and the fit then
+    // breaks them into arcs and short flats). Round means: within three
+    // tolerances of one circle, with its area, and no flat longer than the radius.
+    if (l.segments.size() >= 2)
+        if (auto c = fitArc(p, 0, n - 1, strayLimit, 1e9)) {
+            bool round = std::abs(std::abs(l.area()) - kPi * c->radius * c->radius) < 0.05 * kPi * c->radius * c->radius;
+            for (const auto& s : l.segments) round = round && (s.kind != Segment::Kind::Line || s.length() < c->radius);
+            if (round) {
+                l.segments = {Segment::circle(c->centre, c->radius)};
+                out.loop = l;
+                for (const auto& r : raw) out.maxDeviation = std::max(out.maxDeviation, std::abs((r - c->centre).norm() - c->radius));
+                return out;
+            }
+        }
     out.loop = l;
     for (const auto& r : raw) {
         double d = 1e300;

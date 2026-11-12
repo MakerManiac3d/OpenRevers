@@ -1,6 +1,28 @@
 # Cambios · Changelog
 
-## 0.4.0 — en desarrollo (fase 3: sólido paramétrico)
+## 0.4.1 — 12 de noviembre de 2026
+
+Correcciones tras pasar la leva escaneada a STEP con la 0.4.0:
+
+- **Boceto desde una sección:**
+  - un arco podía salir por el lado largo (337° donde había un tramo recto de
+    4 mm): el sentido de cada arco sale ahora del giro de todos sus puntos, y
+    un segmento que se aleja más de tres tolerancias de sus puntos se corrige
+    o se cambia por una recta;
+  - dos arcos seguidos dejaban la junta fuera del círculo de uno de ellos (hasta
+    0,017 mm), y `part.edit_sketch` rechazaba después el boceto: el centro de
+    cada arco se coloca en la mediatriz de su cuerda cuando las juntas ya son
+    definitivas;
+  - un taladro escaneado algo ovalado (0,1 mm) salía en arcos y rectas
+    cortas: un lazo casi redondo (a menos de tres tolerancias de un círculo,
+    con su área y sin rectas más largas que el radio) es un círculo.
+- **Extruir un arco tras otro:** se rechazaba con «segment N does not join the
+  previous one» si los centros venían redondeados. Cada arco se construye ahora
+  por sus dos extremos y su punto medio, así que empieza exactamente donde
+  acabó el anterior.
+- Tests con la sección real de la leva.
+
+## 0.4.0 — 12 de noviembre de 2026 (fase 3: sólido paramétrico)
 
 - **Open CASCADE** para los sólidos exactos: los paquetes de Ubuntu en Linux;
   en Windows, una compilación propia y mínima de la 7.9.3 (solo modelado y

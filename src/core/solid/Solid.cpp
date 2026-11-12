@@ -98,6 +98,20 @@ TopoDS_Shape unify(const TopoDS_Shape& s) {
     return u.Shape();
 }
 
+/// The point halfway along an arc from a to b round its centre, in its sense.
+Vec2d arcMiddle(const Vec2d& a, const Vec2d& b, const Segment& s) {
+    const Vec2d u = a - s.centre, v = b - s.centre;
+    const double a0 = std::atan2(u.y(), u.x());
+    double sweep = std::atan2(v.y(), v.x()) - a0;
+    if (s.ccw) {
+        while (sweep <= 0) sweep += 2 * kPi;
+    } else {
+        while (sweep >= 0) sweep -= 2 * kPi;
+    }
+    const double r = 0.5 * (u.norm() + v.norm());
+    return s.centre + r * Vec2d(std::cos(a0 + 0.5 * sweep), std::sin(a0 + 0.5 * sweep));
+}
+
 TopoDS_Wire wireOf(const Loop& loop, const SketchPlane& pl) {
     BRepBuilderAPI_MakeWire mw;
     const auto& sg = loop.segments;
@@ -117,8 +131,10 @@ TopoDS_Wire wireOf(const Loop& loop, const SketchPlane& pl) {
         if (s.kind == Segment::Kind::Line) {
             mw.Add(BRepBuilderAPI_MakeEdge(GC_MakeSegment(pa, pb).Value()).Edge());
         } else {
-            const gp_Circ c(gp_Ax2(pnt(pl.toWorld(s.centre)), s.ccw ? n : n.Reversed()), s.radius);
-            GC_MakeArcOfCircle arc(c, pa, pb, Standard_True);
+            // Through its two ends and its middle: the ends are exactly the
+            // neighbours' (an arc made on its circle would project them, and a
+            // gap of a micron is enough for the wire to break).
+            GC_MakeArcOfCircle arc(pa, pnt(pl.toWorld(arcMiddle(a, b, s))), pb);
             if (!arc.IsDone()) throw SolidError("an arc could not be made (its ends are not on its circle)");
             mw.Add(BRepBuilderAPI_MakeEdge(arc.Value()).Edge());
         }
