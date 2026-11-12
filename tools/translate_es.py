@@ -12,6 +12,23 @@ from pathlib import Path
 from xml.sax.saxutils import escape, unescape
 
 ES = {
+    "%1 selected. Delete removes them.": "%1 seleccionados. Supr los borra.",
+    "Select with a lasso": "Seleccionar con lazo",
+    "Drag round what to delete (Ctrl adds to the selection; Alt+drag turns the view). Only faces facing you are taken.": "Rodea con el ratón lo que quieras borrar (Ctrl añade a la selección; Alt+arrastrar gira la vista). Solo se toman las caras que miran hacia ti.",
+    "Delete the selection": "Borrar la selección",
+    "Nothing selected: turn on Mesh → Select with a lasso and drag round what to delete.": "No hay nada seleccionado: activa Malla → Seleccionar con lazo y rodea lo que quieras borrar.",
+    "Align by pairs of points": "Alinear por pares de puntos",
+    "Click the same detail (a corner, the centre of a hole, a mark) on the scan to move and on the reference, in the same order: at least three pairs, spread out. Then Align: the pairs place it and the best fit finishes it.": "Haz clic en el mismo detalle (una esquina, el centro de un taladro, una marca) en el escaneo que se mueve y en el de referencia, en el mismo orden: tres pares al menos, separados entre sí. Después, Alinear: los pares lo colocan y el mejor ajuste lo termina.",
+    "Scan to move (orange)": "Escaneo que se mueve (naranja)",
+    "Reference (cyan)": "Referencia (cian)",
+    "Remove last": "Quitar el último",
+    "Clear": "Vaciar",
+    "Refine with best fit": "Afinar con el mejor ajuste",
+    "Align": "Alinear",
+    "Choose two different bodies.": "Elige dos cuerpos distintos.",
+    "Each point needs its pair: %1 on the scan, %2 on the reference.": "Cada punto necesita su pareja: %1 en el escaneo, %2 en la referencia.",
+    "%1 pairs; at least three are needed.": "%1 pares; hacen falta tres al menos.",
+    "%1 pairs: ready.": "%1 pares: listo.",
     "number or parameter name": "número o nombre de parámetro",
     "&Part": "&Pieza",
     "part": "pieza",

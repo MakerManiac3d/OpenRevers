@@ -95,6 +95,9 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `part_loft` | Sólido que pasa por varios bocetos en orden (secciones de un álabe, extremos de un conducto), suave o reglado | Sí |
 | `part_pattern` | Copias de lo que hizo otra operación alrededor de un eje (`count` y `angle` pueden ser parámetros) | Sí |
 | `part_surface_from_scan` | Superficie libre (B-spline bicúbica) ajustada a una zona del escaneo: una forma segmentada (`shape`) o una esfera (`centre`, `radius`); devuelve rms y máximo | Sí |
+| `mesh_remove_plane` · `mesh_remove_outliers` · `mesh_crop` · `mesh_delete_faces` | Limpiar un escaneo: la mesa, los puntos sueltos, una región, caras elegidas | Sí |
+| `align_global` · `align_point_pairs` | Alinear un escaneo sobre otro por su forma, sin posición de partida, o por pares de puntos | Sí |
+| `mesh_merge` | Unir escaneos alineados en un cuerpo nuevo | Sí |
 | `scan_status` · `scan_devices` · `scan_connect` · `scan_preview` · `scan_start` · `scan_pause` · `scan_stop` · `scan_disconnect` · `scan_use_simulator` | Manejar el escáner a través de la biblioteca de CrealityScan (Windows) o el simulador | No |
 | `scan_export_to_body` | Pasar el escaneo (puntos o malla del escáner) a un cuerpo nuevo | Sí |
 | `part_cut_by_surface` · `part_thicken` | Quitar lo que queda por encima o por debajo de una superficie libre; engrosarla hasta un sólido | Sí |

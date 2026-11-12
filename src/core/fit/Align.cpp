@@ -220,6 +220,28 @@ BestFitResult bestFit(const TriMesh& moving, const TriMesh& reference, const Bes
     const Vec3f lo = reference.bounds().min, hi = reference.bounds().max;
     const double diag = (hi - lo).cast<double>().norm();
     double cutoff = o.maxDistance > 0 ? o.maxDistance : 0.1 * diag;
+    // Matches are found vertex to nearest vertex: even when the surfaces lie
+    // exactly on each other they are up to about an edge apart, so the cut
+    // never goes below two mean edges of the reference (or point spacings).
+    double spacing = 0;
+    if (!reference.faces.empty()) {
+        std::size_t k = 0;
+        for (std::size_t f = 0; f < reference.faces.size(); f += std::max<std::size_t>(1, reference.faces.size() / 5000), ++k) {
+            const Tri& t = reference.faces[f];
+            spacing += static_cast<double>((reference.vertices[t[0]] - reference.vertices[t[1]]).norm());
+        }
+        spacing /= static_cast<double>(std::max<std::size_t>(k, 1));
+    } else {
+        std::size_t k = 0;
+        for (std::size_t i = 0; i < reference.vertices.size(); i += std::max<std::size_t>(1, reference.vertices.size() / 2000), ++k) {
+            std::uint32_t idx[2];
+            float d2[2];
+            tree.knnSearch(reference.vertices[i].data(), 2, idx, d2);
+            spacing += std::sqrt(static_cast<double>(d2[1]));
+        }
+        spacing /= static_cast<double>(std::max<std::size_t>(k, 1));
+    }
+    const double floorCut = 2 * spacing;
     std::vector<double> dist;
     for (int it = 0; it < o.maxIterations; ++it) {
         Eigen::Matrix<double, 6, 6> A = Eigen::Matrix<double, 6, 6>::Zero();
@@ -265,7 +287,7 @@ BestFitResult bestFit(const TriMesh& moving, const TriMesh& reference, const Bes
         r.iterations = it + 1;
         r.overlap = static_cast<double>(used) / static_cast<double>(src.size());
         // Tighten the correspondence cut as it converges.
-        cutoff = std::max(std::min(cutoff, 10.0 * c), o.maxDistance > 0 ? std::min(o.maxDistance, 3.0 * c) : 3.0 * c);
+        cutoff = std::max({std::min(cutoff, 10.0 * c), o.maxDistance > 0 ? std::min(o.maxDistance, 3.0 * c) : 3.0 * c, floorCut});
         if (w.norm() < 1e-7 && x.tail<3>().norm() < 1e-6 * std::max(diag, 1.0)) break;
     }
     // Final statistics with the final transform.

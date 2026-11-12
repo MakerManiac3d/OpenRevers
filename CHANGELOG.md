@@ -1,5 +1,29 @@
 # Cambios · Changelog
 
+## 0.8.0 — 12 de noviembre de 2026 (limpiar y alinear escaneos)
+
+- **Quitar la mesa** (`mesh.remove_plane`): el plano con más puntos (RANSAC
+  afinado por mínimos cuadrados), o uno dado; quita su franja y, si se pide,
+  lo que quede debajo. Para mallas y nubes.
+- **Quitar puntos sueltos** (`mesh.remove_outliers`): eliminación estadística
+  de atípicos por la distancia media a los vecinos.
+- **Recortar** (`mesh.crop`) por esfera, caja o semiespacio.
+- **Lazo en la vista** (*Malla → Seleccionar con lazo*, tecla L): rodea lo que
+  quieras quitar, que queda en rojo (solo las caras que miran hacia ti), y
+  **Supr** lo borra (`mesh.delete_faces`).
+- **Alineación automática** (`align.global`): descriptores FPFH emparejados
+  con RANSAC y después el ICP. No necesita posición de partida. Una escuadra
+  vista solo en parte, girada 130° y desplazada 150 mm, vuelve a su sitio
+  con menos de 0,2 mm de error.
+- **Alinear por pares de puntos** (`align.point_pairs` y su ventana): tres
+  pares o más con marcas numeradas en la vista, por mínimos cuadrados (Kabsch)
+  y después el ICP. Da la distancia que queda en cada par.
+- **Unir escaneos** (`mesh.merge`), como malla o como nube para
+  reconstruir.
+- **ICP:** la distancia de corte ya no baja de dos aristas medias de la
+  referencia. Cuando dos escaneos coincidían casi del todo, el solape salía
+  bajísimo (5 %) porque las parejas se buscan de vértice a vértice.
+
 ## 0.7.1 — 12 de noviembre de 2026
 
 Correcciones de la prueba de la 0.6.0 con la caja de aire de un kart:

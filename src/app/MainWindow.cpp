@@ -6,12 +6,15 @@
 #include "app/AppCommands.h"
 #include "app/CommandDialog.h"
 #include "app/SettingsDialog.h"
+#include "app/PairAlignDialog.h"
 #include "app/SketchEditor.h"
 #include "app/Viewport.h"
 #include "commands/Guide.h"
 #include "core/util/Version.h"
 
 #include <QDir>
+
+#include <algorithm>
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
@@ -139,6 +142,18 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
     });
     connect(agent_, &AgentServer::statusChanged, this, &MainWindow::refreshAgentStatus);
     connect(viewport_, &Viewport::picked, this, &MainWindow::onPicked);
+    connect(viewport_, &Viewport::lassoSelected, this, [this](std::uint64_t body, std::vector<std::uint32_t> faces, bool addTo) {
+        if (addTo && body == viewport_->selectionBody()) {
+            std::vector<std::uint32_t> all = viewport_->selection();
+            all.insert(all.end(), faces.begin(), faces.end());
+            std::sort(all.begin(), all.end());
+            all.erase(std::unique(all.begin(), all.end()), all.end());
+            faces = std::move(all);
+        }
+        const std::size_t n = faces.size();
+        viewport_->setSelection(body, std::move(faces));
+        status_->setText(tr("%1 selected. Delete removes them.").arg(n));
+    });
     connect(viewport_, &Viewport::contextRequested, this, &MainWindow::showContextMenu);
 
     QSettings settings;
@@ -233,14 +248,30 @@ void MainWindow::buildActions() {
         auto* a = add(meshMenu, cmdText(name), [this, name]() { runFromUi(name); }, {}, QStyle::SP_CustomBase, onTb);
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
+    meshMenu->addSeparator();
+    for (const char* name : {"mesh.remove_plane", "mesh.remove_outliers", "mesh.crop", "mesh.merge"}) {
+        auto* a = add(meshMenu, cmdText(name), [this, name]() { runFromUi(name); });
+        a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
+    }
+    {
+        auto* lasso = new QAction(tr("Select with a lasso"), this);
+        lasso->setObjectName("lasso");
+        lasso->setCheckable(true);
+        lasso->setShortcut(QKeySequence(Qt::Key_L));
+        lasso->setToolTip(tr("Drag round what to delete (Ctrl adds to the selection; Alt+drag turns the view). Only faces facing you are taken."));
+        connect(lasso, &QAction::toggled, this, [this](bool on) { viewport_->setLassoMode(on); });
+        meshMenu->addAction(lasso);
+        add(meshMenu, tr("Delete the selection"), &MainWindow::deleteSelection, QKeySequence(Qt::Key_Delete));
+    }
     for (const char* name : {"features.segment", "features.fit", "features.refit", "features.measure", "features.rename", "features.delete"}) {
         auto* a = add(shapesMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
-    for (const char* name : {"align.principal", "align.datums", "align.best_fit", "align.move"}) {
+    for (const char* name : {"align.principal", "align.datums", "align.best_fit", "align.global", "align.move"}) {
         auto* a = add(alignMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
+    add(alignMenu, cmdText("align.point_pairs") + "…", &MainWindow::showPairAlign);
     for (const char* name : {"points.thin", "points.estimate_normals", "points.to_mesh"}) {
         auto* a = add(pointsMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
@@ -410,6 +441,7 @@ void MainWindow::refresh() {
     if (!still) selected_ = bodies.empty() ? 0 : bodies.back().id;
     viewport_->setBodies(bodies);
     viewport_->setSelected(selected_);
+    if (pairDialog_) pairDialog_->setBodies(bodies);
     refreshTree();
     refreshProperties();
     refreshShapes();
@@ -524,7 +556,43 @@ void MainWindow::selectBody(std::uint64_t id) {
     }
 }
 
+void MainWindow::showPairAlign() {
+    if (!pairDialog_) {
+        pairDialog_ = new PairAlignDialog(doc_.bodies(), selected_, viewport_, this);
+        // Beside the view, not over it: the points are clicked in the view.
+        pairDialog_->adjustSize();
+        const QPoint corner = mapToGlobal(QPoint(width() - pairDialog_->width() - 20, 80));
+        pairDialog_->move(corner);
+        connect(pairDialog_, &PairAlignDialog::alignRequested, this,
+                [this](const QString& body, const QString& ref, const std::vector<Vec3d>& a, const std::vector<Vec3d>& b, bool refine) {
+                    json pa = json::array(), pb = json::array();
+                    for (const auto& v : a) pa.push_back({v.x(), v.y(), v.z()});
+                    for (const auto& v : b) pb.push_back({v.x(), v.y(), v.z()});
+                    run("align.point_pairs", {{"body", body.toStdString()}, {"reference", ref.toStdString()}, {"points", pa}, {"referencePoints", pb}, {"refine", refine}});
+                });
+    } else {
+        pairDialog_->setBodies(doc_.bodies());
+    }
+    pairDialog_->show();
+    pairDialog_->raise();
+}
+
+void MainWindow::deleteSelection() {
+    const auto& faces = viewport_->selection();
+    if (faces.empty() || !viewport_->selectionBody()) {
+        status_->setText(tr("Nothing selected: turn on Mesh → Select with a lasso and drag round what to delete."));
+        return;
+    }
+    json f = json::array();
+    for (auto i : faces) f.push_back(i);
+    run("mesh.delete_faces", {{"body", "b" + std::to_string(viewport_->selectionBody())}, {"faces", f}});
+}
+
 void MainWindow::onPicked(const Pick& p, bool add) {
+    if (pairDialog_ && pairDialog_->isVisible()) {
+        pairDialog_->addPick(p);
+        return;
+    }
     lastPick_ = p;
     viewport_->setPickMarker(p);
     if (!p.hit()) {

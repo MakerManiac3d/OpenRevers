@@ -62,6 +62,17 @@ public:
     bool showSketches() const { return sketches_; }
     /// The point shown as picked (none: hit() false).
     void setPickMarker(const Pick& p);
+    /// Lasso mode: a left drag draws a lasso (Alt+drag still turns the view)
+    /// and selects the faces (or points) of a scan facing the view inside it.
+    void setLassoMode(bool on);
+    bool lassoMode() const { return lassoMode_; }
+    /// The faces (or points of a cloud) selected, shown in red.
+    void setSelection(std::uint64_t body, std::vector<std::uint32_t> faces);
+    std::uint64_t selectionBody() const { return selBody_; }
+    const std::vector<std::uint32_t>& selection() const { return selFaces_; }
+    /// Numbered marks for aligning by pairs: on the moving body (orange)
+    /// and on the reference (cyan).
+    void setPairMarks(std::vector<Vec3d> moving, std::vector<Vec3d> reference);
     /// The points of a scan in progress, drawn over everything in amber (null:
     /// none). Only shown: not a body, not in the history.
     void setLiveCloud(std::shared_ptr<const TriMesh> cloud);
@@ -86,6 +97,8 @@ signals:
     void picked(const orv::Pick& pick, bool add);
     /// A right click (no drag): the place for a context menu.
     void contextRequested(const orv::Pick& pick, const QPoint& globalPos);
+    /// A lasso was drawn: what it selected (`add`: Ctrl was held).
+    void lassoSelected(std::uint64_t body, std::vector<std::uint32_t> faces, bool add);
 
 protected:
     void initializeGL() override;
@@ -176,6 +189,19 @@ private:
     std::uint64_t highlightBody_{0};
     std::vector<std::int32_t> highlightRegions_;
     Pick marker_;
+    void lassoSelect(bool add);
+    void drawOverlay(const QMatrix4x4& mvp);
+    bool lassoMode_{false}, lassoing_{false};
+    QVector<QPointF> lassoPath_;
+    std::uint64_t selBody_{0};
+    std::vector<std::uint32_t> selFaces_;
+    const TriMesh* selMesh_{nullptr};  // the mesh the indices refer to
+    bool selDirty_{false};
+    int selCount_{0};
+    bool selPoints_{false};
+    QOpenGLVertexArrayObject selVao_;
+    QOpenGLBuffer selVbo_{QOpenGLBuffer::VertexBuffer};
+    std::vector<Vec3d> pairMoving_, pairReference_;
     std::shared_ptr<const TriMesh> live_;
     std::unique_ptr<GpuMesh> liveGpu_;
     bool liveDirty_{false};

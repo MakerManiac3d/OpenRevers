@@ -102,6 +102,10 @@ private:
     void compareWithScan();
     // Scanning: while the scanner runs, its points are shown live.
     void pollScan();
+    // Cleaning by hand (lasso) and aligning by pairs of points.
+    class PairAlignDialog* pairDialog_{nullptr};
+    void showPairAlign();
+    void deleteSelection();
     QTimer* scanTimer_{nullptr};
     bool scanShown_{false};
     QListWidget* history_{nullptr};

@@ -5,6 +5,7 @@
 #include "commands/FeatureCommands.h"
 
 #include "core/fit/Align.h"
+#include "core/fit/Register.h"
 #include "core/fit/Segmentation.h"
 #include "core/mesh/EdgeMap.h"
 #include "doc/Document.h"
@@ -231,6 +232,109 @@ void registerFeatureCommands(CommandRegistry& R) {
                                             std::to_string(static_cast<int>(100 * r.overlap)) + " %.",
                                         b.name + " alineado con " + ref.name + ": RMS " + std::to_string(r4(r.rms)).substr(0, 6) + " mm, solape " +
                                             std::to_string(static_cast<int>(100 * r.overlap)) + " %.");
+               return out;
+           }});
+
+
+    R.add({"align.global", "align", {"Automatic alignment", "Alineación automática"},
+           {"Put a scan onto another from their shape alone, wherever each one is and however it is turned: shape descriptors (FPFH) matched under RANSAC, then the best-fit ICP. For scans of the same part from different sides (they must overlap: a third or more of the moving scan seen in the reference). Reports the overlap and the deviation left; check it in the view.",
+            "Coloca un escaneo sobre otro solo por su forma, estén donde estén y como estén girados: descriptores de forma (FPFH) emparejados con RANSAC y después el ICP de mejor ajuste. Para escaneos de la misma pieza desde lados distintos (deben solaparse: un tercio o más del escaneo que se mueve debe verse en el de referencia). Informa del solape y de la desviación que queda; compruébalo en la vista."},
+           object({{"body", body(kBody)}, {"reference", body({"The reference body (stays put)", "El cuerpo de referencia (no se mueve)"})},
+                   {"voxel", number({"Sampling cell (0: automatic, 1/60 of the size); larger is faster, smaller finds small details", "Celda de muestreo (0: automática, 1/60 del tamaño); mayor es más rápido, menor encuentra detalles pequeños"}, 0.0, 0.0, 1000.0, "mm")},
+                   {"refine", boolean({"Finish with the best-fit ICP", "Terminar con el ICP de mejor ajuste"}, true)}},
+                  {"body", "reference"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = ctx.doc.body(in["body"]);
+               const Body ref = ctx.doc.body(in["reference"]);
+               if (b.id == ref.id) throw CommandError("invalid_input", ctx.say("A body cannot be aligned to itself.", "Un cuerpo no se puede alinear consigo mismo."));
+               GlobalRegOptions o;
+               o.voxel = in["voxel"].get<double>();
+               o.refine = in["refine"].get<bool>();
+               GlobalRegResult r;
+               try {
+                   r = globalRegistration(*b.mesh, *ref.mesh, o);
+               } catch (const std::exception& e) {
+                   throw CommandError("failed", ctx.say("Automatic alignment failed: " + std::string(e.what()) + ". Try align.point_pairs (three points picked on each).",
+                                                        "La alineación automática ha fallado: " + std::string(e.what()) + ". Prueba con align.point_pairs (tres puntos elegidos en cada uno)."));
+               }
+               json out = applyTransform(ctx, b, r.transform);
+               out["reference"] = ref.ref();
+               out["voxel"] = r4(r.voxel);
+               out["matches"] = r.correspondences;
+               out["agreeing"] = r.inliers;
+               out["coarseOverlapPercent"] = r4(100 * r.coarseOverlap);
+               if (o.refine) {
+                   out["rms"] = r4(r.refined.rms);
+                   out["median"] = r4(r.refined.median);
+                   out["p95"] = r4(r.refined.p95);
+                   out["overlapPercent"] = r4(100 * r.refined.overlap);
+               }
+               const int ov = static_cast<int>(100 * (o.refine ? r.refined.overlap : r.coarseOverlap));
+               out["summary"] = ctx.say("Aligned " + b.name + " to " + ref.name + " by shape: overlap " + std::to_string(ov) + " %" +
+                                            (o.refine ? ", median " + std::to_string(r4(r.refined.median)).substr(0, 6) + " mm." : "."),
+                                        b.name + " alineado con " + ref.name + " por su forma: solape " + std::to_string(ov) + " %" +
+                                            (o.refine ? ", mediana " + std::to_string(r4(r.refined.median)).substr(0, 6) + " mm." : "."));
+               return out;
+           }});
+
+    R.add({"align.point_pairs", "align", {"Align by pairs of points", "Alinear por pares de puntos"},
+           {"Put a body onto a reference from three or more pairs of points picked on both (the same feature on each: a corner, a hole's centre, a mark), in the same order; then, with refine, the best-fit ICP. Gives each pair's remaining distance: a large one is a pair picked wrong.",
+            "Coloca un cuerpo sobre otro de referencia a partir de tres o más pares de puntos elegidos en los dos (el mismo detalle en cada uno: una esquina, el centro de un taladro, una marca), en el mismo orden; después, con refine, el ICP de mejor ajuste. Da la distancia que queda en cada par: una grande es un par mal elegido."},
+           object({{"body", body(kBody)}, {"reference", body({"The reference body (stays put)", "El cuerpo de referencia (no se mueve)"})},
+                   {"points", json{{"type", "array"}, {"minItems", 3}, {"items", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}}},
+                                   {"description", "Points on the body, [[x, y, z], ...]"}}},
+                   {"referencePoints", json{{"type", "array"}, {"minItems", 3}, {"items", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}}},
+                                            {"description", "The same points on the reference, in the same order"}}},
+                   {"refine", boolean({"Finish with the best-fit ICP", "Terminar con el ICP de mejor ajuste"}, true)}},
+                  {"body", "reference", "points", "referencePoints"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = ctx.doc.body(in["body"]);
+               const Body ref = ctx.doc.body(in["reference"]);
+               if (b.id == ref.id) throw CommandError("invalid_input", ctx.say("A body cannot be aligned to itself.", "Un cuerpo no se puede alinear consigo mismo."));
+               std::vector<Vec3d> a, c;
+               for (const auto& p : in["points"]) a.push_back(v3(p));
+               for (const auto& p : in["referencePoints"]) c.push_back(v3(p));
+               std::vector<double> res;
+               Transform t;
+               try {
+                   t = rigidFromPairs(a, c, &res);
+               } catch (const std::invalid_argument& e) {
+                   throw CommandError("invalid_input", e.what());
+               }
+               json pairs = json::array();
+               for (double d : res) pairs.push_back(r4(d));
+               BestFitResult fine;
+               const bool refine = in["refine"].get<bool>();
+               if (refine) {
+                   TriMesh moved = *b.mesh;
+                   transformMesh(moved, t);
+                   double worst = 0;
+                   for (double d : res) worst = std::max(worst, d);
+                   BestFitOptions bo;
+                   bo.maxDistance = std::max(1.0, 3 * worst);
+                   try {
+                       fine = bestFit(moved, *ref.mesh, bo);
+                       t = fine.transform * t;
+                   } catch (const std::runtime_error&) {
+                       // The pairs alone, then.
+                   }
+               }
+               json out = applyTransform(ctx, b, t);
+               out["reference"] = ref.ref();
+               out["pairResiduals"] = pairs;
+               if (refine && fine.iterations > 0) {
+                   out["rms"] = r4(fine.rms);
+                   out["median"] = r4(fine.median);
+                   out["overlapPercent"] = r4(100 * fine.overlap);
+               }
+               double worst = 0;
+               for (double d : res) worst = std::max(worst, d);
+               out["summary"] = ctx.say("Aligned " + b.name + " to " + ref.name + " by " + std::to_string(res.size()) + " pairs (worst pair " + std::to_string(r4(worst)).substr(0, 5) + " mm" +
+                                            (refine && fine.iterations > 0 ? ", then refined: median " + std::to_string(r4(fine.median)).substr(0, 6) + " mm)." : ")."),
+                                        b.name + " alineado con " + ref.name + " por " + std::to_string(res.size()) + " pares (peor par " + std::to_string(r4(worst)).substr(0, 5) + " mm" +
+                                            (refine && fine.iterations > 0 ? "; afinado después: mediana " + std::to_string(r4(fine.median)).substr(0, 6) + " mm)." : ")."));
                return out;
            }});
 

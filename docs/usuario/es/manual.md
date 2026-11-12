@@ -1,4 +1,4 @@
-# Manual de OpenRevers (versión 0.7)
+# Manual de OpenRevers (versión 0.8)
 
 OpenRevers prepara mallas escaneadas para la ingeniería inversa. Esta versión
 cubre la **fase 1**: abrir el escaneo, ver qué le pasa, repararlo y dejarlo
@@ -273,6 +273,43 @@ hay que hacerla por secciones y loft.
 Todo lo que haces a mano lo ve el agente de IA (`view_selection` le dice qué
 parámetro, boceto u operación, qué caras y qué aristas has elegido), así que
 puedes señalar algo y pedirle que siga desde ahí.
+
+## Limpiar y alinear escaneos
+
+**Limpiar** (menú *Malla*; sirve para mallas y nubes de puntos):
+
+- **Quitar la mesa:** encuentra el plano con más puntos (la mesa o la base
+  giratoria) y quita la franja de `distance` a cada lado y, con *beyond*,
+  todo lo que quede debajo. También se le puede dar el plano (un punto y su
+  normal hacia la pieza).
+- **Quitar puntos sueltos:** quita los puntos lejos de sus vecinos (ruido,
+  reflejos). Con un *ratio* menor quita más.
+- **Recortar:** conserva lo que queda dentro (o fuera) de una esfera, una caja
+  o un semiespacio.
+- **Seleccionar con lazo** (tecla L): arrastrando con el botón izquierdo
+  rodeas lo que quieres quitar y queda en rojo.
+  - Ctrl añade a la selección; Alt+arrastrar gira la vista.
+  - Solo se toman las caras que miran hacia ti, así que lo de detrás no se
+    toca.
+  - **Supr** lo borra (y se puede deshacer).
+- **Quitar piezas sueltas** (ya existía) para las islas que quedan después.
+
+**Alinear varios escaneos** (menú *Alinear*):
+
+- **Alineación automática:** coloca un escaneo sobre otro solo por su forma,
+  aunque estén lejos y girados. Necesitan solaparse (un tercio o más). Da el
+  solape y la desviación que queda.
+- **Alinear por pares de puntos:** se abre una ventana al lado de la vista.
+  1. Haz clic en el mismo detalle (una esquina, un taladro, una marca) en el
+     escaneo que se mueve (marcas naranjas) y en el de referencia (marcas
+     cian), en el mismo orden.
+  2. Con tres pares o más, *Alinear*. Basta con hacer clic cerca: el mejor
+     ajuste lo termina.
+- **Alineación de mejor ajuste** (ya existía) para afinar dos escaneos que
+  ya están cerca.
+- **Unir escaneos:** junta escaneos alineados en un cuerpo nuevo y oculta los
+  originales. Con *asPoints*, como nube de puntos para reconstruir una sola
+  malla con *Puntos → Malla desde puntos*.
 
 ## Escanear desde OpenRevers (fase 6)
 

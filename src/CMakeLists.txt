@@ -28,6 +28,8 @@ add_library(orv_core STATIC
   core/fit/Primitive.cpp
   core/fit/Segmentation.cpp
   core/fit/Align.cpp
+  core/fit/Register.cpp
+  core/mesh/MeshClean.cpp
   core/solid/BSpline.cpp
   core/solid/Profile.cpp
   core/solid/Solid.cpp

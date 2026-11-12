@@ -22,1067 +22,1092 @@
 <context>
     <name>orv::MainWindow</name>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="133"/>
+        <location filename="../src/app/MainWindow.cpp" line="136"/>
         <source>Agent: %1…</source>
         <translation>Agente: %1…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="133"/>
+        <location filename="../src/app/MainWindow.cpp" line="136"/>
         <source>%1…</source>
         <translation>%1…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="136"/>
+        <location filename="../src/app/MainWindow.cpp" line="139"/>
         <source>Agent</source>
         <translation>Agente</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="136"/>
+        <location filename="../src/app/MainWindow.cpp" line="139"/>
         <source>You</source>
         <translation>Tú</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="138"/>
+        <location filename="../src/app/MainWindow.cpp" line="141"/>
         <source>Failed: %1</source>
         <translation>Ha fallado: %1</translation>
     </message>
     <message>
         <location filename="../src/app/MainWindow.cpp" line="155"/>
-        <location filename="../src/app/MainWindow.cpp" line="262"/>
-        <location filename="../src/app/MainWindow.cpp" line="967"/>
-        <location filename="../src/app/MainWindow.cpp" line="972"/>
-        <location filename="../src/app/MainWindow.cpp" line="998"/>
-        <location filename="../src/app/MainWindow.cpp" line="1025"/>
-        <location filename="../src/app/MainWindow.cpp" line="1124"/>
-        <location filename="../src/app/MainWindow.cpp" line="1138"/>
-        <location filename="../src/app/MainWindow.cpp" line="1195"/>
-        <location filename="../src/app/MainWindow.cpp" line="1208"/>
+        <source>%1 selected. Delete removes them.</source>
+        <translation>%1 seleccionados. Supr los borra.</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="170"/>
+        <location filename="../src/app/MainWindow.cpp" line="293"/>
+        <location filename="../src/app/MainWindow.cpp" line="1035"/>
+        <location filename="../src/app/MainWindow.cpp" line="1040"/>
+        <location filename="../src/app/MainWindow.cpp" line="1066"/>
+        <location filename="../src/app/MainWindow.cpp" line="1093"/>
+        <location filename="../src/app/MainWindow.cpp" line="1192"/>
+        <location filename="../src/app/MainWindow.cpp" line="1206"/>
+        <location filename="../src/app/MainWindow.cpp" line="1263"/>
+        <location filename="../src/app/MainWindow.cpp" line="1276"/>
         <source>OpenRevers</source>
         <translation>OpenRevers</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="155"/>
+        <location filename="../src/app/MainWindow.cpp" line="170"/>
         <source>Version %1. Everything runs on this computer.</source>
         <translation>Versión %1. Todo se ejecuta en este equipo.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="179"/>
+        <location filename="../src/app/MainWindow.cpp" line="194"/>
         <source>&amp;File</source>
         <translation>&amp;Archivo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="180"/>
+        <location filename="../src/app/MainWindow.cpp" line="195"/>
         <source>&amp;Edit</source>
         <translation>&amp;Edición</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="181"/>
+        <location filename="../src/app/MainWindow.cpp" line="196"/>
         <source>&amp;Mesh</source>
         <translation>&amp;Malla</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="182"/>
+        <location filename="../src/app/MainWindow.cpp" line="197"/>
         <source>&amp;Points</source>
         <translation>&amp;Puntos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="183"/>
+        <location filename="../src/app/MainWindow.cpp" line="198"/>
         <source>S&amp;can</source>
         <translation>Es&amp;canear</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="184"/>
+        <location filename="../src/app/MainWindow.cpp" line="199"/>
         <source>S&amp;hapes</source>
         <translation>&amp;Formas</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="185"/>
+        <location filename="../src/app/MainWindow.cpp" line="200"/>
         <source>&amp;Align</source>
         <translation>&amp;Alinear</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="186"/>
+        <location filename="../src/app/MainWindow.cpp" line="201"/>
         <source>&amp;Part</source>
         <translation>&amp;Pieza</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="187"/>
+        <location filename="../src/app/MainWindow.cpp" line="202"/>
         <source>&amp;Body</source>
         <translation>&amp;Cuerpo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="188"/>
+        <location filename="../src/app/MainWindow.cpp" line="203"/>
         <source>&amp;View</source>
         <translation>&amp;Ver</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="189"/>
+        <location filename="../src/app/MainWindow.cpp" line="204"/>
         <source>&amp;AI agent</source>
         <translation>Agente &amp;IA</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="190"/>
+        <location filename="../src/app/MainWindow.cpp" line="205"/>
         <source>&amp;Help</source>
         <translation>A&amp;yuda</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="192"/>
+        <location filename="../src/app/MainWindow.cpp" line="207"/>
         <source>Main</source>
         <translation>Principal</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="211"/>
+        <location filename="../src/app/MainWindow.cpp" line="226"/>
         <source>&amp;New project</source>
         <translation>&amp;Nuevo proyecto</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="212"/>
+        <location filename="../src/app/MainWindow.cpp" line="227"/>
         <source>&amp;Open project…</source>
         <translation>&amp;Abrir proyecto…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="213"/>
+        <location filename="../src/app/MainWindow.cpp" line="228"/>
         <source>&amp;Save project</source>
         <translation>&amp;Guardar proyecto</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="214"/>
+        <location filename="../src/app/MainWindow.cpp" line="229"/>
         <source>Save project &amp;as…</source>
         <translation>Guardar proyecto &amp;como…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="216"/>
+        <location filename="../src/app/MainWindow.cpp" line="231"/>
         <source>&amp;Import mesh…</source>
         <translation>&amp;Importar malla…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="217"/>
+        <location filename="../src/app/MainWindow.cpp" line="232"/>
         <source>&amp;Export mesh…</source>
         <translation>&amp;Exportar malla…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="218"/>
+        <location filename="../src/app/MainWindow.cpp" line="233"/>
         <source>Export &amp;T-Spline for Fusion (.tsm)…</source>
         <translation>Exportar &amp;T-Spline para Fusion (.tsm)…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="222"/>
+        <location filename="../src/app/MainWindow.cpp" line="237"/>
         <source>&amp;Quit</source>
         <translation>&amp;Salir</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="225"/>
+        <location filename="../src/app/MainWindow.cpp" line="240"/>
         <source>&amp;Undo</source>
         <translation>&amp;Deshacer</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="226"/>
+        <location filename="../src/app/MainWindow.cpp" line="241"/>
         <source>&amp;Redo</source>
         <translation>&amp;Rehacer</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="260"/>
+        <location filename="../src/app/MainWindow.cpp" line="257"/>
+        <source>Select with a lasso</source>
+        <translation>Seleccionar con lazo</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="261"/>
+        <source>Drag round what to delete (Ctrl adds to the selection; Alt+drag turns the view). Only faces facing you are taken.</source>
+        <translation>Rodea con el ratón lo que quieras borrar (Ctrl añade a la selección; Alt+arrastrar gira la vista). Solo se toman las caras que miran hacia ti.</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="264"/>
+        <source>Delete the selection</source>
+        <translation>Borrar la selección</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="291"/>
         <source>Edit the picked sketch…</source>
         <translation>Editar el boceto elegido…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="262"/>
+        <location filename="../src/app/MainWindow.cpp" line="293"/>
         <source>Pick a sketch in the Model panel first.</source>
         <translation>Elige antes un boceto en el panel Modelo.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="264"/>
+        <location filename="../src/app/MainWindow.cpp" line="295"/>
         <source>New sketch on the picked face…</source>
         <translation>Boceto nuevo en la cara elegida…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="267"/>
-        <location filename="../src/app/MainWindow.cpp" line="640"/>
+        <location filename="../src/app/MainWindow.cpp" line="298"/>
+        <location filename="../src/app/MainWindow.cpp" line="708"/>
         <source>Round the picked edges…</source>
         <translation>Redondear las aristas elegidas…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="276"/>
+        <location filename="../src/app/MainWindow.cpp" line="307"/>
         <source>Isometric</source>
         <translation>Isométrica</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="276"/>
+        <location filename="../src/app/MainWindow.cpp" line="307"/>
         <source>Front</source>
         <translation>Frontal</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="276"/>
+        <location filename="../src/app/MainWindow.cpp" line="307"/>
         <source>Back</source>
         <translation>Posterior</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="277"/>
+        <location filename="../src/app/MainWindow.cpp" line="308"/>
         <source>Left</source>
         <translation>Izquierda</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="277"/>
+        <location filename="../src/app/MainWindow.cpp" line="308"/>
         <source>Right</source>
         <translation>Derecha</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="277"/>
+        <location filename="../src/app/MainWindow.cpp" line="308"/>
         <source>Top</source>
         <translation>Superior</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="277"/>
+        <location filename="../src/app/MainWindow.cpp" line="308"/>
         <source>Bottom</source>
         <translation>Inferior</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="281"/>
+        <location filename="../src/app/MainWindow.cpp" line="312"/>
         <source>&amp;Fit all</source>
         <translation>&amp;Encuadrar todo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="291"/>
+        <location filename="../src/app/MainWindow.cpp" line="322"/>
         <source>Mesh edges</source>
         <translation>Aristas de la malla</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="292"/>
+        <location filename="../src/app/MainWindow.cpp" line="323"/>
         <source>Open edges</source>
         <translation>Bordes abiertos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="293"/>
+        <location filename="../src/app/MainWindow.cpp" line="324"/>
         <source>Flat shading</source>
         <translation>Sombreado plano</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="294"/>
+        <location filename="../src/app/MainWindow.cpp" line="325"/>
         <source>Shapes by colour</source>
         <translation>Formas por colores</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="295"/>
+        <location filename="../src/app/MainWindow.cpp" line="326"/>
         <source>Sketches of parts</source>
         <translation>Bocetos de las piezas</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="299"/>
+        <location filename="../src/app/MainWindow.cpp" line="330"/>
         <source>Copy configuration for Claude &amp;Desktop</source>
         <translation>Copiar configuración para Claude &amp;Desktop</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="300"/>
+        <location filename="../src/app/MainWindow.cpp" line="331"/>
         <source>Copy command for Claude &amp;Code</source>
         <translation>Copiar comando para Claude &amp;Code</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="302"/>
+        <location filename="../src/app/MainWindow.cpp" line="333"/>
         <source>&amp;Settings…</source>
         <translation>&amp;Ajustes…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="304"/>
+        <location filename="../src/app/MainWindow.cpp" line="335"/>
         <source>&amp;Guide</source>
         <translation>&amp;Guía</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="305"/>
+        <location filename="../src/app/MainWindow.cpp" line="336"/>
         <source>Source code (GitHub)</source>
         <translation>Código fuente (GitHub)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="306"/>
+        <location filename="../src/app/MainWindow.cpp" line="337"/>
         <source>&amp;About OpenRevers</source>
         <translation>&amp;Acerca de OpenRevers</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="307"/>
+        <location filename="../src/app/MainWindow.cpp" line="338"/>
         <source>Se&amp;ttings…</source>
         <translation>A&amp;justes…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="320"/>
+        <location filename="../src/app/MainWindow.cpp" line="351"/>
         <source>Body</source>
         <translation>Cuerpo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="320"/>
-        <location filename="../src/app/MainWindow.cpp" line="500"/>
+        <location filename="../src/app/MainWindow.cpp" line="351"/>
+        <location filename="../src/app/MainWindow.cpp" line="532"/>
         <source>Triangles</source>
         <translation>Triángulos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="360"/>
+        <location filename="../src/app/MainWindow.cpp" line="391"/>
         <source>Model</source>
         <translation>Modelo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="363"/>
+        <location filename="../src/app/MainWindow.cpp" line="394"/>
         <source>Property</source>
         <translation>Propiedad</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="363"/>
-        <location filename="../src/app/MainWindow.cpp" line="735"/>
+        <location filename="../src/app/MainWindow.cpp" line="394"/>
+        <location filename="../src/app/MainWindow.cpp" line="803"/>
         <source>Value</source>
         <translation>Valor</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="371"/>
+        <location filename="../src/app/MainWindow.cpp" line="402"/>
         <source>Properties</source>
         <translation>Propiedades</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="375"/>
+        <location filename="../src/app/MainWindow.cpp" line="406"/>
         <source>Shape</source>
         <translation>Forma</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="375"/>
+        <location filename="../src/app/MainWindow.cpp" line="406"/>
         <source>Size</source>
         <translation>Medida</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="375"/>
+        <location filename="../src/app/MainWindow.cpp" line="406"/>
         <source>σ (mm)</source>
         <translation>σ (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="393"/>
+        <location filename="../src/app/MainWindow.cpp" line="424"/>
         <source>Shapes</source>
         <translation>Formas</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="396"/>
+        <location filename="../src/app/MainWindow.cpp" line="427"/>
         <source>History</source>
         <translation>Historial</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="401"/>
+        <location filename="../src/app/MainWindow.cpp" line="432"/>
         <source>Log</source>
         <translation>Registro</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="426"/>
+        <location filename="../src/app/MainWindow.cpp" line="458"/>
         <source>part</source>
         <translation>pieza</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="427"/>
+        <location filename="../src/app/MainWindow.cpp" line="459"/>
         <source>%1 points</source>
         <translation>%1 puntos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="442"/>
-        <location filename="../src/app/MainWindow.cpp" line="733"/>
-        <location filename="../src/app/MainWindow.cpp" line="916"/>
+        <location filename="../src/app/MainWindow.cpp" line="474"/>
+        <location filename="../src/app/MainWindow.cpp" line="801"/>
+        <location filename="../src/app/MainWindow.cpp" line="984"/>
         <source>Parameter</source>
         <translation>Parámetro</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="443"/>
+        <location filename="../src/app/MainWindow.cpp" line="475"/>
         <source>sketch</source>
         <translation>boceto</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="443"/>
+        <location filename="../src/app/MainWindow.cpp" line="475"/>
         <source>double-click to edit</source>
         <translation>doble clic para editar</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="444"/>
+        <location filename="../src/app/MainWindow.cpp" line="476"/>
         <source>surface</source>
         <translation>superficie</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="486"/>
+        <location filename="../src/app/MainWindow.cpp" line="518"/>
         <source>Name</source>
         <translation>Nombre</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="487"/>
-        <location filename="../src/app/MainWindow.cpp" line="743"/>
-        <location filename="../src/app/MainWindow.cpp" line="755"/>
-        <location filename="../src/app/MainWindow.cpp" line="829"/>
+        <location filename="../src/app/MainWindow.cpp" line="519"/>
+        <location filename="../src/app/MainWindow.cpp" line="811"/>
+        <location filename="../src/app/MainWindow.cpp" line="823"/>
+        <location filename="../src/app/MainWindow.cpp" line="897"/>
         <source>Reference</source>
         <translation>Referencia</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="489"/>
+        <location filename="../src/app/MainWindow.cpp" line="521"/>
         <source>Kind</source>
         <translation>Tipo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="489"/>
+        <location filename="../src/app/MainWindow.cpp" line="521"/>
         <source>Parametric part</source>
         <translation>Pieza paramétrica</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="490"/>
+        <location filename="../src/app/MainWindow.cpp" line="522"/>
         <source>Operations</source>
         <translation>Operaciones</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="492"/>
+        <location filename="../src/app/MainWindow.cpp" line="524"/>
         <source>Volume (mm³)</source>
         <translation>Volumen (mm³)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="493"/>
+        <location filename="../src/app/MainWindow.cpp" line="525"/>
         <source>Solid faces</source>
         <translation>Caras del sólido</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="495"/>
-        <location filename="../src/app/MainWindow.cpp" line="826"/>
+        <location filename="../src/app/MainWindow.cpp" line="527"/>
+        <location filename="../src/app/MainWindow.cpp" line="894"/>
         <source>Error</source>
         <translation>Error</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="497"/>
+        <location filename="../src/app/MainWindow.cpp" line="529"/>
         <source>Points</source>
         <translation>Puntos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="498"/>
+        <location filename="../src/app/MainWindow.cpp" line="530"/>
         <source>Normals</source>
         <translation>Normales</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="498"/>
+        <location filename="../src/app/MainWindow.cpp" line="530"/>
         <source>Yes</source>
         <translation>Sí</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="498"/>
+        <location filename="../src/app/MainWindow.cpp" line="530"/>
         <source>No</source>
         <translation>No</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="501"/>
+        <location filename="../src/app/MainWindow.cpp" line="533"/>
         <source>Vertices</source>
         <translation>Vértices</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="503"/>
+        <location filename="../src/app/MainWindow.cpp" line="535"/>
         <source>Quads</source>
         <translation>Quads</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="508"/>
+        <location filename="../src/app/MainWindow.cpp" line="540"/>
         <source>Size X × Y × Z (mm)</source>
         <translation>Tamaño X × Y × Z (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="509"/>
+        <location filename="../src/app/MainWindow.cpp" line="541"/>
         <source>Minimum (mm)</source>
         <translation>Mínimo (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="510"/>
+        <location filename="../src/app/MainWindow.cpp" line="542"/>
         <source>Maximum (mm)</source>
         <translation>Máximo (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="511"/>
+        <location filename="../src/app/MainWindow.cpp" line="543"/>
         <source>Area (mm²)</source>
         <translation>Área (mm²)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="512"/>
+        <location filename="../src/app/MainWindow.cpp" line="544"/>
         <source>Source</source>
         <translation>Origen</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="544"/>
+        <location filename="../src/app/MainWindow.cpp" line="583"/>
+        <source>Nothing selected: turn on Mesh → Select with a lasso and drag round what to delete.</source>
+        <translation>No hay nada seleccionado: activa Malla → Seleccionar con lazo y rodea lo que quieras borrar.</translation>
+    </message>
+    <message>
+        <location filename="../src/app/MainWindow.cpp" line="612"/>
         <source>Point %1, %2, %3 mm</source>
         <translation>Punto %1, %2, %3 mm</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="557"/>
+        <location filename="../src/app/MainWindow.cpp" line="625"/>
         <source>Face</source>
         <translation>Cara</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="557"/>
+        <location filename="../src/app/MainWindow.cpp" line="625"/>
         <source>Edge</source>
         <translation>Arista</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="558"/>
+        <location filename="../src/app/MainWindow.cpp" line="626"/>
         <source>plane</source>
         <translation>plano</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="558"/>
+        <location filename="../src/app/MainWindow.cpp" line="626"/>
         <source>cylinder</source>
         <translation>cilindro</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="558"/>
+        <location filename="../src/app/MainWindow.cpp" line="626"/>
         <source>cone</source>
         <translation>cono</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="559"/>
+        <location filename="../src/app/MainWindow.cpp" line="627"/>
         <source>sphere</source>
         <translation>esfera</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="559"/>
+        <location filename="../src/app/MainWindow.cpp" line="627"/>
         <source>torus</source>
         <translation>toro</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="559"/>
+        <location filename="../src/app/MainWindow.cpp" line="627"/>
         <source>free-form</source>
         <translation>libre</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="560"/>
+        <location filename="../src/app/MainWindow.cpp" line="628"/>
         <source>line</source>
         <translation>recta</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="560"/>
+        <location filename="../src/app/MainWindow.cpp" line="628"/>
         <source>circle</source>
         <translation>circunferencia</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="560"/>
+        <location filename="../src/app/MainWindow.cpp" line="628"/>
         <source>ellipse</source>
         <translation>elipse</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="575"/>
+        <location filename="../src/app/MainWindow.cpp" line="643"/>
         <source>%1 picked</source>
         <translation>%1 elegidas</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="587"/>
+        <location filename="../src/app/MainWindow.cpp" line="655"/>
         <source> (σ %1 mm)</source>
         <translation> (σ %1 mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="596"/>
+        <location filename="../src/app/MainWindow.cpp" line="664"/>
         <source>%1 shapes picked</source>
         <translation>%1 formas elegidas</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="638"/>
+        <location filename="../src/app/MainWindow.cpp" line="706"/>
         <source>New sketch on this face…</source>
         <translation>Boceto nuevo en esta cara…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="643"/>
-        <location filename="../src/app/MainWindow.cpp" line="907"/>
+        <location filename="../src/app/MainWindow.cpp" line="711"/>
+        <location filename="../src/app/MainWindow.cpp" line="975"/>
         <source>Compare with a scan…</source>
         <translation>Comparar con un escaneo…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="644"/>
-        <location filename="../src/app/MainWindow.cpp" line="652"/>
-        <location filename="../src/app/MainWindow.cpp" line="901"/>
+        <location filename="../src/app/MainWindow.cpp" line="712"/>
+        <location filename="../src/app/MainWindow.cpp" line="720"/>
+        <location filename="../src/app/MainWindow.cpp" line="969"/>
         <source>Make opaque</source>
         <translation>Hacer opaco</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="644"/>
-        <location filename="../src/app/MainWindow.cpp" line="652"/>
-        <location filename="../src/app/MainWindow.cpp" line="901"/>
+        <location filename="../src/app/MainWindow.cpp" line="712"/>
+        <location filename="../src/app/MainWindow.cpp" line="720"/>
+        <location filename="../src/app/MainWindow.cpp" line="969"/>
         <source>See through</source>
         <translation>Ver a través</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="651"/>
-        <location filename="../src/app/MainWindow.cpp" line="904"/>
+        <location filename="../src/app/MainWindow.cpp" line="719"/>
+        <location filename="../src/app/MainWindow.cpp" line="972"/>
         <source>Remove deviation colours</source>
         <translation>Quitar colores de desviación</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="721"/>
+        <location filename="../src/app/MainWindow.cpp" line="789"/>
         <source>Double-click to change: a number, or a parameter&apos;s name</source>
         <translation>Doble clic para cambiarlo: un número o el nombre de un parámetro</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="735"/>
+        <location filename="../src/app/MainWindow.cpp" line="803"/>
         <source>Double-click to change; the operations that use it are rebuilt</source>
         <translation>Doble clic para cambiarlo; se reconstruyen las operaciones que lo usan</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="740"/>
+        <location filename="../src/app/MainWindow.cpp" line="808"/>
         <source>Used by</source>
         <translation>Lo usa</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="740"/>
+        <location filename="../src/app/MainWindow.cpp" line="808"/>
         <source>nothing yet</source>
         <translation>nada todavía</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="742"/>
-        <location filename="../src/app/MainWindow.cpp" line="773"/>
-        <location filename="../src/app/MainWindow.cpp" line="778"/>
+        <location filename="../src/app/MainWindow.cpp" line="810"/>
+        <location filename="../src/app/MainWindow.cpp" line="841"/>
+        <location filename="../src/app/MainWindow.cpp" line="846"/>
         <source>Sketch</source>
         <translation>Boceto</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="742"/>
-        <location filename="../src/app/MainWindow.cpp" line="754"/>
+        <location filename="../src/app/MainWindow.cpp" line="810"/>
+        <location filename="../src/app/MainWindow.cpp" line="822"/>
         <source>Double-click to rename</source>
         <translation>Doble clic para cambiar el nombre</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="746"/>
+        <location filename="../src/app/MainWindow.cpp" line="814"/>
         <source>Loops / segments</source>
         <translation>Lazos / segmentos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="749"/>
+        <location filename="../src/app/MainWindow.cpp" line="817"/>
         <source>Plane origin</source>
         <translation>Origen del plano</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="749"/>
+        <location filename="../src/app/MainWindow.cpp" line="817"/>
         <source>Double-click to move the plane: x; y; z</source>
         <translation>Doble clic para mover el plano: x; y; z</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="750"/>
+        <location filename="../src/app/MainWindow.cpp" line="818"/>
         <source>Plane normal</source>
         <translation>Normal del plano</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="750"/>
+        <location filename="../src/app/MainWindow.cpp" line="818"/>
         <source>Double-click to turn the plane: x; y; z</source>
         <translation>Doble clic para girar el plano: x; y; z</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="751"/>
+        <location filename="../src/app/MainWindow.cpp" line="819"/>
         <source>Plane x direction</source>
         <translation>Dirección x del plano</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="752"/>
+        <location filename="../src/app/MainWindow.cpp" line="820"/>
         <source>Edit</source>
         <translation>Editar</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="752"/>
+        <location filename="../src/app/MainWindow.cpp" line="820"/>
         <source>double-click the sketch in the Model panel</source>
         <translation>doble clic en el boceto, en el panel Modelo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="754"/>
+        <location filename="../src/app/MainWindow.cpp" line="822"/>
         <source>Operation</source>
         <translation>Operación</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="756"/>
+        <location filename="../src/app/MainWindow.cpp" line="824"/>
         <source>Mode</source>
         <translation>Modo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="764"/>
+        <location filename="../src/app/MainWindow.cpp" line="832"/>
         <source>Suppressed</source>
         <translation>Suprimida</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="765"/>
+        <location filename="../src/app/MainWindow.cpp" line="833"/>
         <source>left out of the part</source>
         <translation>fuera de la pieza</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="774"/>
+        <location filename="../src/app/MainWindow.cpp" line="842"/>
         <source>From (mm)</source>
         <translation>Desde (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="775"/>
+        <location filename="../src/app/MainWindow.cpp" line="843"/>
         <source>To (mm)</source>
         <translation>Hasta (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="779"/>
-        <location filename="../src/app/MainWindow.cpp" line="801"/>
+        <location filename="../src/app/MainWindow.cpp" line="847"/>
+        <location filename="../src/app/MainWindow.cpp" line="869"/>
         <source>Angle (°)</source>
         <translation>Ángulo (°)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="782"/>
+        <location filename="../src/app/MainWindow.cpp" line="850"/>
         <source>Edges</source>
         <translation>Aristas</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="783"/>
+        <location filename="../src/app/MainWindow.cpp" line="851"/>
         <source>Radius (mm)</source>
         <translation>Radio (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="790"/>
+        <location filename="../src/app/MainWindow.cpp" line="858"/>
         <source>Sections</source>
         <translation>Secciones</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="791"/>
+        <location filename="../src/app/MainWindow.cpp" line="859"/>
         <source>Ruled</source>
         <translation>Reglada</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="792"/>
+        <location filename="../src/app/MainWindow.cpp" line="860"/>
         <source>flat between sections</source>
         <translation>plana entre secciones</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="799"/>
+        <location filename="../src/app/MainWindow.cpp" line="867"/>
         <source>Repeats</source>
         <translation>Repite</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="800"/>
+        <location filename="../src/app/MainWindow.cpp" line="868"/>
         <source>Copies</source>
         <translation>Copias</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="803"/>
+        <location filename="../src/app/MainWindow.cpp" line="871"/>
         <source>Axis point</source>
         <translation>Punto del eje</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="804"/>
+        <location filename="../src/app/MainWindow.cpp" line="872"/>
         <source>Axis direction</source>
         <translation>Dirección del eje</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="809"/>
-        <location filename="../src/app/MainWindow.cpp" line="828"/>
+        <location filename="../src/app/MainWindow.cpp" line="877"/>
+        <location filename="../src/app/MainWindow.cpp" line="896"/>
         <source>Surface</source>
         <translation>Superficie</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="811"/>
+        <location filename="../src/app/MainWindow.cpp" line="879"/>
         <source>Thickness (mm)</source>
         <translation>Espesor (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="813"/>
+        <location filename="../src/app/MainWindow.cpp" line="881"/>
         <source>Keeps</source>
         <translation>Deja</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="815"/>
+        <location filename="../src/app/MainWindow.cpp" line="883"/>
         <source>below the surface</source>
         <translation>lo de debajo de la superficie</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="816"/>
+        <location filename="../src/app/MainWindow.cpp" line="884"/>
         <source>above the surface</source>
         <translation>lo de encima de la superficie</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="830"/>
+        <location filename="../src/app/MainWindow.cpp" line="898"/>
         <source>Poles</source>
         <translation>Polos</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="831"/>
+        <location filename="../src/app/MainWindow.cpp" line="899"/>
         <source>Size (mm)</source>
         <translation>Tamaño (mm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="832"/>
+        <location filename="../src/app/MainWindow.cpp" line="900"/>
         <source>Fit to the scan</source>
         <translation>Ajuste al escaneo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="832"/>
+        <location filename="../src/app/MainWindow.cpp" line="900"/>
         <source>rms %1 mm, worst %2 mm</source>
         <translation>rms %1 mm, máximo %2 mm</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="834"/>
+        <location filename="../src/app/MainWindow.cpp" line="902"/>
         <source>Normal</source>
         <translation>Normal</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="900"/>
+        <location filename="../src/app/MainWindow.cpp" line="968"/>
         <source>Rename…</source>
         <translation>Cambiar nombre…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="911"/>
-        <location filename="../src/app/MainWindow.cpp" line="928"/>
-        <location filename="../src/app/MainWindow.cpp" line="933"/>
-        <location filename="../src/app/MainWindow.cpp" line="948"/>
+        <location filename="../src/app/MainWindow.cpp" line="979"/>
+        <location filename="../src/app/MainWindow.cpp" line="996"/>
+        <location filename="../src/app/MainWindow.cpp" line="1001"/>
+        <location filename="../src/app/MainWindow.cpp" line="1016"/>
         <source>Delete</source>
         <translation>Borrar</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="913"/>
+        <location filename="../src/app/MainWindow.cpp" line="981"/>
         <source>Change value…</source>
         <translation>Cambiar valor…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="920"/>
+        <location filename="../src/app/MainWindow.cpp" line="988"/>
         <source>Cut the part by it, keeping what is below</source>
         <translation>Cortar la pieza por ella y dejar lo de debajo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="921"/>
+        <location filename="../src/app/MainWindow.cpp" line="989"/>
         <source>Cut the part by it, keeping what is above</source>
         <translation>Cortar la pieza por ella y dejar lo de encima</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="922"/>
+        <location filename="../src/app/MainWindow.cpp" line="990"/>
         <source>Thicken…</source>
         <translation>Engrosar…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="924"/>
+        <location filename="../src/app/MainWindow.cpp" line="992"/>
         <source>Thicken a surface</source>
         <translation>Engrosar una superficie</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="924"/>
+        <location filename="../src/app/MainWindow.cpp" line="992"/>
         <source>Thickness (mm; negative: the other side):</source>
         <translation>Espesor (mm; en negativo, al otro lado):</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="930"/>
+        <location filename="../src/app/MainWindow.cpp" line="998"/>
         <source>Edit sketch…</source>
         <translation>Editar boceto…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="931"/>
+        <location filename="../src/app/MainWindow.cpp" line="999"/>
         <source>Extrude…</source>
         <translation>Extruir…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="939"/>
+        <location filename="../src/app/MainWindow.cpp" line="1007"/>
         <source>Edit its sketch…</source>
         <translation>Editar su boceto…</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="940"/>
+        <location filename="../src/app/MainWindow.cpp" line="1008"/>
         <source>Unsuppress</source>
         <translation>Volver a incluir</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="940"/>
+        <location filename="../src/app/MainWindow.cpp" line="1008"/>
         <source>Suppress</source>
         <translation>Suprimir</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="943"/>
+        <location filename="../src/app/MainWindow.cpp" line="1011"/>
         <source>Move up</source>
         <translation>Subir</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="945"/>
+        <location filename="../src/app/MainWindow.cpp" line="1013"/>
         <source>Move down</source>
         <translation>Bajar</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="967"/>
+        <location filename="../src/app/MainWindow.cpp" line="1035"/>
         <source>Pick one flat face of a part first (click on it in the view).</source>
         <translation>Elige antes una cara plana de una pieza (haz clic sobre ella en la vista).</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="972"/>
+        <location filename="../src/app/MainWindow.cpp" line="1040"/>
         <source>A sketch needs a flat face.</source>
         <translation>Un boceto necesita una cara plana.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="983"/>
+        <location filename="../src/app/MainWindow.cpp" line="1051"/>
         <source>New sketch</source>
         <translation>Boceto nuevo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="998"/>
+        <location filename="../src/app/MainWindow.cpp" line="1066"/>
         <source>Pick the edges to round in the view first (Ctrl+click adds more).</source>
         <translation>Elige antes en la vista las aristas que redondear (Ctrl+clic añade más).</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1002"/>
+        <location filename="../src/app/MainWindow.cpp" line="1070"/>
         <source>Round edges</source>
         <translation>Redondear aristas</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1002"/>
+        <location filename="../src/app/MainWindow.cpp" line="1070"/>
         <source>Radius (mm) for the %1 picked edges:</source>
         <translation>Radio (mm) para las %1 aristas elegidas:</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1025"/>
+        <location filename="../src/app/MainWindow.cpp" line="1093"/>
         <source>There is no scan to compare with.</source>
         <translation>No hay ningún escaneo con el que comparar.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1029"/>
-        <location filename="../src/app/MainWindow.cpp" line="1031"/>
+        <location filename="../src/app/MainWindow.cpp" line="1097"/>
+        <location filename="../src/app/MainWindow.cpp" line="1099"/>
         <source>Compare with a scan</source>
         <translation>Comparar con un escaneo</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1029"/>
+        <location filename="../src/app/MainWindow.cpp" line="1097"/>
         <source>Scan:</source>
         <translation>Escaneo:</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1031"/>
+        <location filename="../src/app/MainWindow.cpp" line="1099"/>
         <source>Tolerance (mm):</source>
         <translation>Tolerancia (mm):</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1039"/>
+        <location filename="../src/app/MainWindow.cpp" line="1107"/>
         <source>Zone at %1, %2, %3: %4 % of the scan, %5 mm (%6)</source>
         <translation>Zona en %1; %2; %3: %4 % del escaneo, %5 mm (%6)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1043"/>
+        <location filename="../src/app/MainWindow.cpp" line="1111"/>
         <source>Compare</source>
         <translation>Comparar</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1101"/>
+        <location filename="../src/app/MainWindow.cpp" line="1169"/>
         <source>Untitled</source>
         <translation>Sin título</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1107"/>
+        <location filename="../src/app/MainWindow.cpp" line="1175"/>
         <source>AI agent connected</source>
         <translation>Agente IA conectado</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1107"/>
+        <location filename="../src/app/MainWindow.cpp" line="1175"/>
         <source>AI agent: ready on 127.0.0.1:%1</source>
         <translation>Agente IA: listo en 127.0.0.1:%1</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1108"/>
+        <location filename="../src/app/MainWindow.cpp" line="1176"/>
         <source>What the agent reads goes to its AI model. Nothing else leaves this computer.</source>
         <translation>Lo que lee el agente va a su modelo de IA. Nada más sale de este equipo.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1110"/>
+        <location filename="../src/app/MainWindow.cpp" line="1178"/>
         <source>AI agent: off</source>
         <translation>Agente IA: desactivado</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1110"/>
+        <location filename="../src/app/MainWindow.cpp" line="1178"/>
         <source>AI agent: port %1 busy</source>
         <translation>Agente IA: puerto %1 ocupado</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1116"/>
+        <location filename="../src/app/MainWindow.cpp" line="1184"/>
         <source>ERROR </source>
         <translation>ERROR </translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1138"/>
+        <location filename="../src/app/MainWindow.cpp" line="1206"/>
         <source>Import a mesh first (File → Import mesh).</source>
         <translation>Importa primero una malla (Archivo → Importar malla).</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1155"/>
+        <location filename="../src/app/MainWindow.cpp" line="1223"/>
         <source>Angle: %1°</source>
         <translation>Ángulo: %1°</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1156"/>
+        <location filename="../src/app/MainWindow.cpp" line="1224"/>
         <source>Distance: %1 mm</source>
         <translation>Distancia: %1 mm</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1159"/>
+        <location filename="../src/app/MainWindow.cpp" line="1227"/>
         <source>Axis meets the plane at: %1, %2, %3</source>
         <translation>El eje corta al plano en: %1, %2, %3</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1161"/>
+        <location filename="../src/app/MainWindow.cpp" line="1229"/>
         <source>These two shapes have no simple relation to measure.</source>
         <translation>Estas dos formas no tienen una relación sencilla que medir.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1162"/>
+        <location filename="../src/app/MainWindow.cpp" line="1230"/>
         <source>Measure</source>
         <translation>Medir</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1166"/>
+        <location filename="../src/app/MainWindow.cpp" line="1234"/>
         <source>Mesh analysis</source>
         <translation>Análisis de la malla</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1176"/>
+        <location filename="../src/app/MainWindow.cpp" line="1244"/>
         <source>Import mesh</source>
         <translation>Importar malla</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1176"/>
+        <location filename="../src/app/MainWindow.cpp" line="1244"/>
         <source>Meshes and points (*.stl *.obj *.ply *.3mf *.e57 *.xyz *.pts);;All files (*)</source>
         <translation>Mallas y puntos (*.stl *.obj *.ply *.3mf *.e57 *.xyz *.pts);;Todos los archivos (*)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1195"/>
-        <location filename="../src/app/MainWindow.cpp" line="1208"/>
+        <location filename="../src/app/MainWindow.cpp" line="1263"/>
+        <location filename="../src/app/MainWindow.cpp" line="1276"/>
         <source>Select a body to export.</source>
         <translation>Selecciona un cuerpo para exportarlo.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1199"/>
+        <location filename="../src/app/MainWindow.cpp" line="1267"/>
         <source>Export mesh</source>
         <translation>Exportar malla</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1199"/>
+        <location filename="../src/app/MainWindow.cpp" line="1267"/>
         <source>STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf);;XYZ points (*.xyz)</source>
         <translation>STL (*.stl);;OBJ (*.obj);;PLY (*.ply);;3MF (*.3mf);;Puntos XYZ (*.xyz)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1212"/>
+        <location filename="../src/app/MainWindow.cpp" line="1280"/>
         <source>Export T-Spline</source>
         <translation>Exportar T-Spline</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1212"/>
+        <location filename="../src/app/MainWindow.cpp" line="1280"/>
         <source>T-Spline (*.tsm)</source>
         <translation>T-Spline (*.tsm)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1221"/>
+        <location filename="../src/app/MainWindow.cpp" line="1289"/>
         <source>Open project</source>
         <translation>Abrir proyecto</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1221"/>
-        <location filename="../src/app/MainWindow.cpp" line="1231"/>
+        <location filename="../src/app/MainWindow.cpp" line="1289"/>
+        <location filename="../src/app/MainWindow.cpp" line="1299"/>
         <source>OpenRevers project (*.orvp)</source>
         <translation>Proyecto de OpenRevers (*.orvp)</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1231"/>
+        <location filename="../src/app/MainWindow.cpp" line="1299"/>
         <source>Save project</source>
         <translation>Guardar proyecto</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1241"/>
+        <location filename="../src/app/MainWindow.cpp" line="1309"/>
         <source>Unsaved changes</source>
         <translation>Cambios sin guardar</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1241"/>
+        <location filename="../src/app/MainWindow.cpp" line="1309"/>
         <source>The project has unsaved changes. Save them first?</source>
         <translation>El proyecto tiene cambios sin guardar. ¿Quieres guardarlos antes?</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1290"/>
+        <location filename="../src/app/MainWindow.cpp" line="1358"/>
         <source>Copied</source>
         <translation>Copiado</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1291"/>
+        <location filename="../src/app/MainWindow.cpp" line="1359"/>
         <source>Paste this command in a terminal:
 
 %1</source>
@@ -1091,7 +1116,7 @@
 %1</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1292"/>
+        <location filename="../src/app/MainWindow.cpp" line="1360"/>
         <source>In Claude Desktop: Settings → Developer → Edit Config, paste the &quot;openrevers&quot; entry inside &quot;mcpServers&quot;, then quit Claude Desktop completely and open it again.
 
 %1</source>
@@ -1100,29 +1125,92 @@
 %1</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1299"/>
+        <location filename="../src/app/MainWindow.cpp" line="1367"/>
         <source>Language</source>
         <translation>Idioma</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1299"/>
+        <location filename="../src/app/MainWindow.cpp" line="1367"/>
         <source>The new language is used the next time OpenRevers starts.</source>
         <translation>El nuevo idioma se aplicará la próxima vez que abras OpenRevers.</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1306"/>
+        <location filename="../src/app/MainWindow.cpp" line="1374"/>
         <source>OpenRevers guide</source>
         <translation>Guía de OpenRevers</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1313"/>
+        <location filename="../src/app/MainWindow.cpp" line="1381"/>
         <source>About OpenRevers</source>
         <translation>Acerca de OpenRevers</translation>
     </message>
     <message>
-        <location filename="../src/app/MainWindow.cpp" line="1314"/>
+        <location filename="../src/app/MainWindow.cpp" line="1382"/>
         <source>&lt;h3&gt;OpenRevers %1&lt;/h3&gt;&lt;p&gt;Reverse engineering of scanned meshes into parametric solids, entirely on this computer.&lt;/p&gt;&lt;p&gt;© 2026 MakerManiac3d. Free software under the GNU General Public License, version 3 or later.&lt;/p&gt;&lt;p&gt;Built on Qt, PMP Library, Eigen and nlohmann/json; see THIRD_PARTY.md.&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;%2&quot;&gt;%2&lt;/a&gt;&lt;/p&gt;</source>
         <translation>&lt;h3&gt;OpenRevers %1&lt;/h3&gt;&lt;p&gt;Ingeniería inversa de mallas escaneadas a sólidos paramétricos, completamente en este equipo.&lt;/p&gt;&lt;p&gt;© 2026 MakerManiac3d. Software libre bajo la Licencia Pública General de GNU, versión 3 o posterior.&lt;/p&gt;&lt;p&gt;Hecho con Qt, PMP Library, Eigen y nlohmann/json; consulta THIRD_PARTY.md.&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;%2&quot;&gt;%2&lt;/a&gt;&lt;/p&gt;</translation>
+    </message>
+</context>
+<context>
+    <name>orv::PairAlignDialog</name>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="17"/>
+        <source>Align by pairs of points</source>
+        <translation>Alinear por pares de puntos</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="20"/>
+        <source>Click the same detail (a corner, the centre of a hole, a mark) on the scan to move and on the reference, in the same order: at least three pairs, spread out. Then Align: the pairs place it and the best fit finishes it.</source>
+        <translation>Haz clic en el mismo detalle (una esquina, el centro de un taladro, una marca) en el escaneo que se mueve y en el de referencia, en el mismo orden: tres pares al menos, separados entre sí. Después, Alinear: los pares lo colocan y el mejor ajuste lo termina.</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="29"/>
+        <source>Scan to move (orange)</source>
+        <translation>Escaneo que se mueve (naranja)</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="30"/>
+        <source>Reference (cyan)</source>
+        <translation>Referencia (cian)</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="37"/>
+        <source>Remove last</source>
+        <translation>Quitar el último</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="38"/>
+        <source>Clear</source>
+        <translation>Vaciar</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="39"/>
+        <source>Refine with best fit</source>
+        <translation>Afinar con el mejor ajuste</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="49"/>
+        <source>Align</source>
+        <translation>Alinear</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="126"/>
+        <source>Choose two different bodies.</source>
+        <translation>Elige dos cuerpos distintos.</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="127"/>
+        <source>Each point needs its pair: %1 on the scan, %2 on the reference.</source>
+        <translation>Cada punto necesita su pareja: %1 en el escaneo, %2 en la referencia.</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="128"/>
+        <source>%1 pairs; at least three are needed.</source>
+        <translation>%1 pares; hacen falta tres al menos.</translation>
+    </message>
+    <message>
+        <location filename="../src/app/PairAlignDialog.cpp" line="129"/>
+        <source>%1 pairs: ready.</source>
+        <translation>%1 pares: listo.</translation>
     </message>
 </context>
 <context>
@@ -1446,12 +1534,12 @@
 <context>
     <name>orv::Viewport</name>
     <message>
-        <location filename="../src/app/Viewport.cpp" line="131"/>
+        <location filename="../src/app/Viewport.cpp" line="135"/>
         <source>The 3D view needs OpenGL 3.3, and this computer offers %1.%2. Update the graphics driver; on a computer without a graphics card, start OpenRevers with QT_OPENGL=software.</source>
         <translation>La vista 3D necesita OpenGL 3.3 y este equipo ofrece el %1.%2. Actualiza el controlador de la tarjeta gráfica; en un equipo sin tarjeta gráfica, abre OpenRevers con QT_OPENGL=software.</translation>
     </message>
     <message>
-        <location filename="../src/app/Viewport.cpp" line="595"/>
+        <location filename="../src/app/Viewport.cpp" line="610"/>
         <source>mm, scan − part</source>
         <translation>mm, escaneo − pieza</translation>
     </message>

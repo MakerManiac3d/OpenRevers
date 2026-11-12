@@ -5,11 +5,11 @@ namespace orv {
 
 namespace {
 
-const char* kWorkflowEn = R"(## Workflow (version 0.7: scanning, mesh preparation, shapes, alignment, parametric parts, free-form surfaces and editing by hand)
+const char* kWorkflowEn = R"(## Workflow (version 0.8: scanning, cleaning and joining scans, mesh preparation, shapes, alignment, parametric parts, free-form surfaces and editing by hand)
 1. `session_state` — what is open. Never discard someone's unsaved work: save it first.
 2. `mesh_import` with the full path of the scan. Units are millimetres. Or scan straight in (Windows, CrealityScan installed, scanner plugged in): `scan_status` (is the library there?), `scan_connect` (mode object_small/medium/big, material), `scan_preview`, `scan_start` (the person moves the scanner; points show live in the view), `scan_stop`, then `scan_export_to_body` (as points, or as mesh for the scanner's own mesh). Ask the person before starting: they hold the scanner.
 3. `mesh_analyze` — read holes, pieces, non-manifold edges, flipped faces and the mean edge length before changing anything. Tell the person what you found.
-4. `mesh_repair` — weld, clean and orient in one step. Then `mesh_analyze` again.
+4. `mesh_repair` — weld, clean and orient in one step. Then `mesh_analyze` again. A raw scan first: `mesh_remove_plane` (the table it stood on), `mesh_remove_outliers` (stray points), `mesh_crop` (keep a region), `mesh_remove_pieces`. Several scans of one part: `align_global` puts each onto the first by shape alone (report its overlap; below about 60 % look at it), or `align_point_pairs` with three or more points the person names on both; `align_best_fit` refines; then `mesh_merge` (asPoints true, then `points_to_mesh`, for one watertight mesh).
 5. `mesh_fill_holes` with `maxEdges` a little above the size of the holes you mean to close; the scan's outer rim is usually the longest loop: leave it open unless the part is closed.
 6. Optional: `mesh_smooth` (little: it rounds sharp edges), `mesh_remesh` (even triangles, needed later for surfacing), `mesh_decimate` (lighter mesh for CAD) with `maxError` to stay close to the scan.
 7. `view_capture` (desktop app) to look at the result; `mesh_export` or `project_save` to hand it over.
@@ -21,11 +21,11 @@ Free-form shapes (phase 4): an organic outline: `part_sketch_from_section` with 
 Every changing step is one undo step: `history_undo` takes it back. Report numbers, not impressions.
 )";
 
-const char* kWorkflowEs = R"(## Flujo de trabajo (versión 0.7: escaneo, preparación de mallas, formas, alineación, pieza paramétrica, superficies libres y edición a mano)
+const char* kWorkflowEs = R"(## Flujo de trabajo (versión 0.8: escaneo, limpieza y unión de escaneos, preparación de mallas, formas, alineación, pieza paramétrica, superficies libres y edición a mano)
 1. `session_state`: qué hay abierto. Nunca descartes trabajo sin guardar de otra persona: guárdalo antes.
 2. `mesh_import` con la ruta completa del escaneo. Las unidades son milímetros. O escanea directamente (Windows, con CrealityScan instalado y el escáner conectado): `scan_status` (¿está la biblioteca?), `scan_connect` (modo object_small/medium/big, material), `scan_preview`, `scan_start` (la persona mueve el escáner; los puntos se ven en vivo), `scan_stop` y después `scan_export_to_body` (como puntos, o como malla para la malla del propio escáner). Pregunta a la persona antes de empezar: es quien sostiene el escáner.
 3. `mesh_analyze`: lee agujeros, piezas, aristas no manifold, caras invertidas y la longitud media de arista antes de cambiar nada. Cuéntale a la persona lo que has encontrado.
-4. `mesh_repair`: une, limpia y orienta en un paso. Después, `mesh_analyze` otra vez.
+4. `mesh_repair`: une, limpia y orienta en un paso. Después, `mesh_analyze` otra vez. Antes, con un escaneo en bruto: `mesh_remove_plane` (la mesa sobre la que estaba), `mesh_remove_outliers` (puntos sueltos), `mesh_crop` (quedarse con una zona), `mesh_remove_pieces`. Varios escaneos de una pieza: `align_global` coloca cada uno sobre el primero solo por su forma (da su solape; por debajo de un 60 %, míralo), o `align_point_pairs` con tres puntos o más que la persona indique en los dos; `align_best_fit` afina; después `mesh_merge` (asPoints a true y luego `points_to_mesh`, para una sola malla cerrada).
 5. `mesh_fill_holes` con `maxEdges` algo mayor que el tamaño de los agujeros que quieres cerrar; el borde exterior del escaneo suele ser el lazo más largo: déjalo abierto salvo que la pieza sea cerrada.
 6. Opcional: `mesh_smooth` (poco: redondea aristas vivas), `mesh_remesh` (triángulos regulares, necesarios después para superficies), `mesh_decimate` (malla más ligera para CAD) con `maxError` para no alejarse del escaneo.
 7. `view_capture` (aplicación de escritorio) para ver el resultado; `mesh_export` o `project_save` para entregarlo.

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app/Viewport.h"
 
+#include <QPolygonF>
+
 #include "core/mesh/EdgeMap.h"
 
 #include <unordered_set>
@@ -122,6 +124,8 @@ Viewport::~Viewport() {
     makeCurrent();
     gpu_.clear();
     liveGpu_.reset();
+    selVbo_.destroy();
+    selVao_.destroy();
     doneCurrent();
 }
 
@@ -282,6 +286,17 @@ void Viewport::uploadOpenEdges(GpuMesh& g) {
 void Viewport::setBodies(const std::vector<Body>& bodies) {
     const bool wasEmpty = bodies_.empty();
     bodies_ = bodies;
+    // A selection refers to faces of one mesh: gone when that mesh changes.
+    if (selBody_) {
+        bool same = false;
+        for (const auto& b : bodies_) same |= b.id == selBody_ && b.mesh.get() == selMesh_;
+        if (!same) {
+            selBody_ = 0;
+            selFaces_.clear();
+            selMesh_ = nullptr;
+            selCount_ = 0;
+        }
+    }
     if (!ready_) return;
     makeCurrent();
     std::map<std::uint64_t, std::unique_ptr<GpuMesh>> next;
@@ -855,6 +870,7 @@ void Viewport::paintGL() {
         markerVao_.release();
     }
     drawTriad();
+    drawOverlay(mvp);
     drawLegend();
 }
 
@@ -975,10 +991,156 @@ QImage Viewport::capture(int w, int h) {
     return img;
 }
 
+void Viewport::setLassoMode(bool on) {
+    lassoMode_ = on;
+    setCursor(on ? Qt::CrossCursor : Qt::ArrowCursor);
+    update();
+}
+
+void Viewport::setSelection(std::uint64_t body, std::vector<std::uint32_t> faces) {
+    selBody_ = faces.empty() ? 0 : body;
+    selFaces_ = std::move(faces);
+    selMesh_ = nullptr;
+    for (const auto& b : bodies_)
+        if (b.id == selBody_) selMesh_ = b.mesh.get();
+    selDirty_ = true;
+    update();
+}
+
+void Viewport::setPairMarks(std::vector<Vec3d> moving, std::vector<Vec3d> reference) {
+    pairMoving_ = std::move(moving);
+    pairReference_ = std::move(reference);
+    update();
+}
+
+void Viewport::lassoSelect(bool add) {
+    // The scan to select on: the selected body if it is a scan, else the first visible scan.
+    const Body* target = nullptr;
+    for (const auto& b : bodies_)
+        if (b.id == selected_ && b.visible && !b.isPart()) target = &b;
+    for (const auto& b : bodies_)
+        if (!target && b.visible && !b.isPart()) target = &b;
+    if (!target) return;
+    const TriMesh& m = *target->mesh;
+    const QPolygonF poly(lassoPath_);
+    const QMatrix4x4 mvp = projMatrix() * viewMatrix();
+    const QVector3D e3 = eye();
+    const Vec3d eyeP(e3.x(), e3.y(), e3.z());
+    const qreal sx = static_cast<qreal>(width()), sy = static_cast<qreal>(height());
+    auto inside = [&](const Vec3d& p) {
+        const QVector4D c = mvp * QVector4D(static_cast<float>(p.x()), static_cast<float>(p.y()), static_cast<float>(p.z()), 1.f);
+        if (c.w() <= 0) return false;
+        const QPointF q((c.x() / c.w() * 0.5 + 0.5) * sx, (0.5 - c.y() / c.w() * 0.5) * sy);
+        return poly.containsPoint(q, Qt::OddEvenFill);
+    };
+    std::vector<std::uint32_t> out;
+    if (m.isPointCloud()) {
+        const bool hn = m.hasNormals();
+        for (std::size_t i = 0; i < m.vertices.size(); ++i) {
+            const Vec3d p = m.vertices[i].cast<double>();
+            if (hn && m.normals[i].cast<double>().dot(eyeP - p) < 0) continue;
+            if (inside(p)) out.push_back(static_cast<std::uint32_t>(i));
+        }
+    } else {
+        for (std::size_t f = 0; f < m.faces.size(); ++f) {
+            const Tri& t = m.faces[f];
+            const Vec3d a = m.vertices[t[0]].cast<double>(), b = m.vertices[t[1]].cast<double>(), c = m.vertices[t[2]].cast<double>();
+            const Vec3d ctr = (a + b + c) / 3.0;
+            if ((b - a).cross(c - a).dot(eyeP - ctr) <= 0) continue;  // facing away: not seen
+            if (inside(ctr)) out.push_back(static_cast<std::uint32_t>(f));
+        }
+    }
+    emit lassoSelected(target->id, std::move(out), add);
+}
+
+void Viewport::drawOverlay(const QMatrix4x4& mvp) {
+    // The selection, in red over the scan.
+    const Body* sb = nullptr;
+    for (const auto& b : bodies_)
+        if (b.id == selBody_ && b.visible) sb = &b;
+    if (sb && selDirty_) {
+        selDirty_ = false;
+        const TriMesh& m = *sb->mesh;
+        std::vector<float> buf;
+        selPoints_ = m.isPointCloud();
+        auto put = [&](const Vec3f& v) { buf.insert(buf.end(), {v.x(), v.y(), v.z(), 0.95f, 0.15f, 0.12f}); };
+        for (auto f : selFaces_) {
+            if (selPoints_) {
+                if (f < m.vertices.size()) put(m.vertices[f]);
+            } else if (f < m.faces.size()) {
+                for (auto i : m.faces[f]) put(m.vertices[i]);
+            }
+        }
+        if (!selVao_.isCreated()) selVao_.create();
+        selVao_.bind();
+        if (!selVbo_.isCreated()) selVbo_.create();
+        selVbo_.bind();
+        selVbo_.allocate(buf.data(), static_cast<int>(buf.size() * sizeof(float)));
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, nullptr);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, reinterpret_cast<void*>(12));
+        selVao_.release();
+        selCount_ = static_cast<int>(buf.size() / 6);
+    }
+    if (sb && selCount_ > 0) {
+        lineProg_.bind();
+        lineProg_.setUniformValue("uMvp", mvp);
+        lineProg_.setUniformValue("uTint", QVector4D(0, 0, 0, 0));
+        glDepthFunc(GL_LEQUAL);
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(-1.f, -1.f);
+        selVao_.bind();
+        if (selPoints_) {
+            glPointSize(4.f);
+            glDrawArrays(GL_POINTS, 0, selCount_);
+        } else {
+            glDrawArrays(GL_TRIANGLES, 0, selCount_);
+        }
+        selVao_.release();
+        glDisable(GL_POLYGON_OFFSET_FILL);
+        glDepthFunc(GL_LESS);
+    }
+    // Pair marks and the lasso being drawn: on top, in screen space.
+    if (lassoPath_.isEmpty() && pairMoving_.empty() && pairReference_.empty()) return;
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    const qreal sx = static_cast<qreal>(width()), sy = static_cast<qreal>(height());
+    auto screen = [&](const Vec3d& v, bool& ok) {
+        const QVector4D c = mvp * QVector4D(static_cast<float>(v.x()), static_cast<float>(v.y()), static_cast<float>(v.z()), 1.f);
+        ok = c.w() > 0;
+        return QPointF((c.x() / c.w() * 0.5 + 0.5) * sx, (0.5 - c.y() / c.w() * 0.5) * sy);
+    };
+    auto marks = [&](const std::vector<Vec3d>& pts, const QColor& col) {
+        for (std::size_t i = 0; i < pts.size(); ++i) {
+            bool ok = false;
+            const QPointF q = screen(pts[i], ok);
+            if (!ok) continue;
+            p.setPen(QPen(Qt::black, 1.5));
+            p.setBrush(col);
+            p.drawEllipse(q, 9, 9);
+            p.setPen(Qt::black);
+            p.drawText(QRectF(q.x() - 9, q.y() - 9, 18, 18), Qt::AlignCenter, QString::number(i + 1));
+        }
+    };
+    marks(pairMoving_, QColor(255, 150, 40));
+    marks(pairReference_, QColor(60, 200, 230));
+    if (lassoPath_.size() >= 2) {
+        p.setPen(QPen(QColor(230, 40, 30), 1.5, Qt::DashLine));
+        p.setBrush(Qt::NoBrush);
+        p.drawPolyline(QPolygonF(lassoPath_));
+    }
+}
+
 void Viewport::mousePressEvent(QMouseEvent* e) {
     lastPos_ = e->position().toPoint();
     dragButton_ = e->button();
     dragged_ = false;
+    lassoing_ = lassoMode_ && e->button() == Qt::LeftButton && !(e->modifiers() & Qt::AltModifier);
+    if (lassoing_) {
+        lassoPath_.clear();
+        lassoPath_.push_back(e->position());
+    }
 }
 
 void Viewport::mouseMoveEvent(QMouseEvent* e) {
@@ -986,6 +1148,11 @@ void Viewport::mouseMoveEvent(QMouseEvent* e) {
     const QPoint d = p - lastPos_;
     lastPos_ = p;
     if (d.manhattanLength() > 0) dragged_ = true;
+    if (lassoing_) {
+        lassoPath_.push_back(e->position());
+        update();
+        return;
+    }
     const bool orbit = dragButton_ == Qt::LeftButton && !(e->modifiers() & Qt::ShiftModifier);
     const bool pan = dragButton_ == Qt::MiddleButton || dragButton_ == Qt::RightButton || (dragButton_ == Qt::LeftButton && (e->modifiers() & Qt::ShiftModifier));
     if (orbit) {
@@ -1003,6 +1170,17 @@ void Viewport::mouseMoveEvent(QMouseEvent* e) {
 }
 
 void Viewport::mouseReleaseEvent(QMouseEvent* e) {
+    if (lassoing_) {
+        lassoing_ = false;
+        dragButton_ = Qt::NoButton;
+        if (dragged_ && lassoPath_.size() >= 3) {
+            lassoSelect((e->modifiers() & Qt::ControlModifier) != 0);
+            lassoPath_.clear();
+            update();
+            return;
+        }
+        lassoPath_.clear();
+    }
     if (!dragged_ && e->button() == Qt::LeftButton) {
         const Pick p = pickAt(e->position().toPoint());
         emit picked(p, (e->modifiers() & Qt::ControlModifier) != 0);

@@ -3,7 +3,9 @@
 // own (views, pictures) in src/app/AppCommands.cpp.
 #include "commands/Command.h"
 #include "commands/Guide.h"
+#include "core/fit/Register.h"
 #include "core/mesh/MeshAnalysis.h"
+#include "core/mesh/MeshClean.h"
 #include "core/mesh/MeshIO.h"
 #include "core/mesh/MeshQuad.h"
 #include "core/mesh/MeshRepair.h"
@@ -18,6 +20,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <functional>
 
 namespace orv {
 namespace fs = std::filesystem;
@@ -99,6 +102,17 @@ Body cloudBody(CommandContext& ctx, const json& ref) {
         throw CommandError("invalid_input", ctx.say(b.name + " is a mesh, not a point cloud.", b.name + " es una malla, no una nube de puntos."));
     return b;
 }
+
+/// A scan to clean: a mesh or a point cloud, not a part.
+Body scanBody(CommandContext& ctx, const json& ref) {
+    Body b = ctx.doc.body(ref);
+    if (b.isPart())
+        throw CommandError("invalid_input", ctx.say(b.name + " is a parametric part: its triangles only show its solid. Change it with the part commands.",
+                                                    b.name + " es una pieza paramétrica: sus triángulos solo muestran su sólido. Se cambia con los comandos de pieza."));
+    return b;
+}
+
+Vec3d vec3(const json& j) { return {j.at(0).get<double>(), j.at(1).get<double>(), j.at(2).get<double>()}; }
 
 json changeSummary(const Body& b, const TriMesh& before, const TriMesh& after, json extra) {
     extra["body"] = b.ref();
@@ -318,6 +332,165 @@ void registerCoreCommands(CommandRegistry& R) {
                });
                json out = changeSummary(b, *before, *after, {{"facesRemoved", removed}});
                out["summary"] = ctx.say(std::to_string(removed) + " faces removed.", std::to_string(removed) + " caras eliminadas.");
+               return out;
+           }});
+
+
+    // --------------------------------------------------------- cleaning --
+    R.add({"mesh.remove_plane", "mesh", {"Remove the table", "Quitar la mesa"},
+           {"Remove the plane a scan stood on (a table, a turntable): found as the plane holding most points, or the one through point with normal. What lies within distance of it goes and, with beyond, everything on its far side too. Works on meshes and point clouds.",
+            "Quita el plano sobre el que se escaneó la pieza (una mesa, una base giratoria): el plano con más puntos, o el que pasa por point con normal. Se va lo que esté a menos de distance de él y, con beyond, todo lo que quede al otro lado. Sirve para mallas y nubes de puntos."},
+           object({{"body", body(kBody)},
+                   {"distance", number({"Thickness of the band removed on each side of the plane", "Grosor de la franja que se quita a cada lado del plano"}, 0.5, 0.001, 100.0, "mm")},
+                   {"beyond", boolean({"Also remove all on the far side of the plane", "Quitar también todo lo que quede al otro lado del plano"}, true)},
+                   {"point", point({"A point of the plane (default: found)", "Un punto del plano (por defecto, se busca)"})},
+                   {"normal", point({"The plane's normal, towards the part (with point)", "La normal del plano, hacia la pieza (con point)"}, nullptr)}},
+                  {"body"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = scanBody(ctx, in["body"]);
+               const double dist = in["distance"].get<double>();
+               PlaneFound pl;
+               if (in.contains("point") && in.contains("normal")) {
+                   pl.point = vec3(in["point"]);
+                   pl.normal = vec3(in["normal"]);
+                   if (pl.normal.norm() < 1e-12) throw CommandError("invalid_input", ctx.say("The normal cannot be zero.", "La normal no puede ser cero."));
+                   pl.normal.normalize();
+               } else {
+                   const auto f = findLargestPlane(*b.mesh, dist);
+                   if (!f) throw CommandError("failed", ctx.say("No plane holds enough of the scan; give point and normal.", "Ningún plano reúne bastante del escaneo; indica point y normal."));
+                   pl = *f;
+               }
+               std::size_t removed = 0;
+               auto before = b.mesh;
+               auto after = editMesh(ctx, b, [&](TriMesh& m) { removed = removePlane(m, pl, dist, in["beyond"].get<bool>()); });
+               json out = changeSummary(b, *before, *after, {{"verticesRemoved", removed}, {"planePoint", {round4(pl.point.x()), round4(pl.point.y()), round4(pl.point.z())}},
+                                                              {"planeNormal", {round4(pl.normal.x()), round4(pl.normal.y()), round4(pl.normal.z())}}});
+               out["summary"] = ctx.say(std::to_string(removed) + " vertices of the plane removed.", std::to_string(removed) + " vértices del plano eliminados.");
+               return out;
+           }});
+
+    R.add({"mesh.remove_outliers", "mesh", {"Remove stray points", "Quitar puntos sueltos"},
+           {"Remove points far from their neighbours (statistical outlier removal): a point whose mean distance to its nearest neighbours is more than ratio standard deviations above the average goes, with the faces using it. Lower ratio removes more.",
+            "Quita los puntos alejados de sus vecinos (eliminación estadística de atípicos): se va el punto cuya distancia media a sus vecinos más cercanos supera la media en más de ratio desviaciones típicas, con las caras que lo usan. Un ratio menor quita más."},
+           object({{"body", body(kBody)},
+                   {"neighbours", integer({"Neighbours compared", "Vecinos comparados"}, 16, 3, 200)},
+                   {"ratio", number({"Standard deviations allowed", "Desviaciones típicas permitidas"}, 2.5, 0.1, 20.0)}},
+                  {"body"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = scanBody(ctx, in["body"]);
+               std::size_t removed = 0;
+               auto before = b.mesh;
+               auto after = editMesh(ctx, b, [&](TriMesh& m) { removed = removeOutliers(m, in["neighbours"].get<int>(), in["ratio"].get<double>()); });
+               json out = changeSummary(b, *before, *after, {{"verticesRemoved", removed}});
+               out["summary"] = ctx.say(std::to_string(removed) + " stray points removed.", std::to_string(removed) + " puntos sueltos eliminados.");
+               return out;
+           }});
+
+    R.add({"mesh.crop", "mesh", {"Crop", "Recortar"},
+           {"Keep only what lies inside (or outside) a region: a sphere (centre, radius), a box (min, max) or a half-space (origin, normal: keeps the side the normal points to). Faces touching a removed point go too.",
+            "Conserva solo lo que queda dentro (o fuera) de una región: una esfera (centre, radius), una caja (min, max) o un semiespacio (origin, normal: conserva el lado hacia el que apunta la normal). También se van las caras que tocan un punto quitado."},
+           object({{"body", body(kBody)},
+                   {"shape", choice({"Region", "Región"}, {"sphere", "box", "plane"}, "sphere")},
+                   {"keep", choice({"Keep what is inside or outside", "Conservar lo de dentro o lo de fuera"}, {"inside", "outside"}, "inside")},
+                   {"centre", point({"Sphere centre", "Centro de la esfera"})},
+                   {"radius", number({"Sphere radius", "Radio de la esfera"}, 10.0, 0.0, 1e6, "mm")},
+                   {"min", point({"Box corner (smallest x, y, z)", "Esquina de la caja (x, y, z menores)"})},
+                   {"max", point({"Box corner (largest x, y, z)", "Esquina de la caja (x, y, z mayores)"})},
+                   {"origin", point({"A point of the plane", "Un punto del plano"})},
+                   {"normal", point({"The plane's normal (towards what is inside)", "La normal del plano (hacia lo de dentro)"}, nullptr)}},
+                  {"body", "shape"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = scanBody(ctx, in["body"]);
+               const std::string shape = in["shape"];
+               std::function<bool(const Vec3d&)> inside;
+               auto need = [&](std::initializer_list<const char*> keys) {
+                   for (const char* k : keys)
+                       if (!in.contains(k)) throw CommandError("invalid_input", ctx.say(std::string("A ") + shape + " needs " + k + ".", std::string("Falta ") + k + " para la región " + shape + "."));
+               };
+               if (shape == "sphere") {
+                   need({"centre"});
+                   const Vec3d c = vec3(in["centre"]);
+                   const double r = in["radius"].get<double>();
+                   inside = [c, r](const Vec3d& p) { return (p - c).norm() <= r; };
+               } else if (shape == "box") {
+                   need({"min", "max"});
+                   const Vec3d lo = vec3(in["min"]), hi = vec3(in["max"]);
+                   inside = [lo, hi](const Vec3d& p) { return (p.array() >= lo.array()).all() && (p.array() <= hi.array()).all(); };
+               } else {
+                   need({"origin", "normal"});
+                   const Vec3d o = vec3(in["origin"]), n = vec3(in["normal"]).normalized();
+                   inside = [o, n](const Vec3d& p) { return (p - o).dot(n) >= 0; };
+               }
+               const bool keepInside = in["keep"] == "inside";
+               std::size_t removed = 0;
+               auto before = b.mesh;
+               auto after = editMesh(ctx, b, [&](TriMesh& m) {
+                   removed = removeVertices(m, [&](const Vec3f& v) { return inside(v.cast<double>()) != keepInside; });
+               });
+               json out = changeSummary(b, *before, *after, {{"verticesRemoved", removed}});
+               out["summary"] = ctx.say(std::to_string(removed) + " vertices cropped away.", std::to_string(removed) + " vértices recortados.");
+               return out;
+           }});
+
+    R.add({"mesh.delete_faces", "mesh", {"Delete faces", "Borrar caras"},
+           {"Delete faces of a mesh by index (or points of a cloud): what was selected with the lasso in the view. The vertices left unused go too.",
+            "Borra caras de una malla por su índice (o puntos de una nube): lo seleccionado con el lazo en la vista. También se van los vértices que queden sin usar."},
+           object({{"body", body(kBody)},
+                   {"faces", json{{"type", "array"}, {"items", {{"type", "integer"}, {"minimum", 0}}}, {"description", "Face (or point) indices"}}}},
+                  {"body", "faces"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = scanBody(ctx, in["body"]);
+               std::vector<std::uint32_t> f;
+               for (const auto& v : in["faces"]) f.push_back(v.get<std::uint32_t>());
+               if (f.empty()) throw CommandError("invalid_input", ctx.say("Nothing to delete.", "No hay nada que borrar."));
+               std::size_t removed = 0;
+               auto before = b.mesh;
+               auto after = editMesh(ctx, b, [&](TriMesh& m) { removed = removeFaces(m, f); });
+               json out = changeSummary(b, *before, *after, {{"removed", removed}});
+               out["summary"] = ctx.say(std::to_string(removed) + " deleted.", std::to_string(removed) + " borrados.");
+               return out;
+           }});
+
+    R.add({"mesh.merge", "mesh", {"Join scans", "Unir escaneos"},
+           {"Join two or more aligned scans into one new body (meshes with meshes, clouds with clouds). The originals are hidden, not deleted. For a single watertight mesh from overlapping meshes, join them as clouds (points.to_mesh) or repair after.",
+            "Une dos o más escaneos alineados en un cuerpo nuevo (mallas con mallas, nubes con nubes). Los originales se ocultan, no se borran. Para una sola malla cerrada a partir de mallas que se solapan, únelas como nubes (points.to_mesh) o repara después."},
+           object({{"bodies", json{{"type", "array"}, {"items", {{"type", "string"}}}, {"minItems", 2}, {"description", "The bodies to join (refs or names)"}}},
+                   {"name", string({"Name of the new body", "Nombre del cuerpo nuevo"})},
+                   {"asPoints", boolean({"Join only their points (a cloud, with normals): for points.to_mesh", "Unir solo sus puntos (una nube, con normales): para points.to_mesh"}, false)}},
+                  {"bodies"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               std::vector<Body> bs;
+               for (const auto& r : in["bodies"]) bs.push_back(scanBody(ctx, r));
+               std::vector<TriMesh> pts;
+               std::vector<const TriMesh*> ms;
+               if (in["asPoints"].get<bool>()) {
+                   pts.reserve(bs.size());
+                   for (const auto& b : bs) {
+                       TriMesh c;
+                       c.vertices = b.mesh->vertices;
+                       c.normals = b.mesh->isPointCloud() ? b.mesh->normals : b.mesh->vertexNormals();
+                       pts.push_back(std::move(c));
+                   }
+                   for (const auto& c : pts) ms.push_back(&c);
+               } else {
+                   for (const auto& b : bs) ms.push_back(b.mesh.get());
+               }
+               std::shared_ptr<TriMesh> m;
+               try {
+                   m = std::make_shared<TriMesh>(mergeMeshes(ms));
+               } catch (const std::invalid_argument& e) {
+                   throw CommandError("invalid_input", e.what());
+               }
+               const std::string name = in.contains("name") ? in["name"].get<std::string>() : ctx.say("Joined scan", "Escaneo unido");
+               const Body nb = ctx.doc.addBody(name, m);
+               for (const auto& b : bs) ctx.doc.setVisible(b.id, false);
+               json out = bodyJson(nb);
+               out["summary"] = ctx.say("Joined " + std::to_string(bs.size()) + " scans into " + nb.ref() + ".", std::to_string(bs.size()) + " escaneos unidos en " + nb.ref() + ".");
                return out;
            }});
 

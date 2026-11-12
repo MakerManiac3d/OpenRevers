@@ -1,4 +1,4 @@
-# OpenRevers manual (version 0.7)
+# OpenRevers manual (version 0.8)
 
 OpenRevers prepares scanned meshes for reverse engineering. This version
 covers **phase 1**: open the scan, see what is wrong with it, repair it and
@@ -256,6 +256,40 @@ made by sections and a loft instead.
 Everything you do by hand is visible to the AI agent (`view_selection` tells
 it which parameter, sketch or operation, which faces and which edges you
 picked), so you can point at something and ask it to carry on from there.
+
+## Cleaning and aligning scans
+
+**Cleaning** (*Mesh* menu; works on meshes and point clouds):
+
+- **Remove the table:** finds the plane with most points (the table or
+  turntable) and removes a band of `distance` on each side and, with
+  *beyond*, everything below it. The plane can also be given (a point and
+  its normal towards the part).
+- **Remove stray points:** removes points far from their neighbours (noise,
+  reflections). A lower *ratio* removes more.
+- **Crop:** keeps what lies inside (or outside) a sphere, a box or a
+  half-space.
+- **Select with a lasso** (key L): drag with the left button round what to
+  remove; it turns red.
+  - Ctrl adds to the selection; Alt+drag turns the view.
+  - Only faces facing you are taken, so what is behind is not touched.
+  - **Delete** removes it (and can be undone).
+- **Remove loose pieces** (already there) for the islands left afterwards.
+
+**Aligning several scans** (*Align* menu):
+
+- **Automatic alignment:** puts one scan onto another from their shape
+  alone, however far apart and turned. They must overlap (a third or more).
+  Gives the overlap and the deviation left.
+- **Align by pairs of points:** a window opens beside the view.
+  1. Click the same detail (a corner, a hole, a mark) on the scan to move
+     (orange marks) and on the reference (cyan marks), in the same order.
+  2. With three pairs or more, *Align*. Clicking near is enough: the best
+     fit finishes it.
+- **Best-fit alignment** (already there) to refine two scans already close.
+- **Join scans:** puts aligned scans into one new body and hides the
+  originals. With *asPoints*, as a point cloud to rebuild one mesh with
+  *Points → Mesh from points*.
 
 ## Scanning from OpenRevers (phase 6)
 
