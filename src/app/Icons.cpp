@@ -437,6 +437,25 @@ QHash<QString, Glyph> glyphs() {
         p.drawPolyline(QPolygonF({QPointF(20, 58), QPointF(6, 58), QPointF(6, 44)}));
         box(p, 18, 16, 28, kLine);
     };
+    g["agent_chat"] = [](QPainter& p) {
+        p.setPen(pen(kLine));
+        p.setBrush(Qt::NoBrush);
+        p.drawRoundedRect(QRectF(6, 8, 52, 36), 10, 10);
+        QPainterPath tail;
+        tail.moveTo(18, 44);
+        tail.lineTo(14, 56);
+        tail.lineTo(28, 44);
+        p.drawPath(tail);
+        p.setPen(Qt::NoPen);
+        p.setBrush(kAccent);
+        for (int x : {20, 32, 44}) p.drawEllipse(QPointF(x, 26), 4, 4);
+    };
+    g["keep_selection"] = [](QPainter& p) {
+        p.setPen(pen(kAccent, 4, Qt::DashLine));
+        p.drawRect(QRectF(8, 8, 36, 36));
+        p.setPen(pen(kLine, 4));
+        p.drawPolyline(QPolygonF({QPointF(32, 30), QPointF(32, 58), QPointF(42, 50), QPointF(52, 58), QPointF(52, 30), QPointF(32, 30)}));
+    };
     g["part.import_step"] = g["import"];
     g["part.export_step"] = [](QPainter& p) {
         p.setPen(pen(kLine));

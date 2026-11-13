@@ -1,5 +1,26 @@
 # Cambios · Changelog
 
+## 0.11.2 — 13 de noviembre de 2026 (pasos 3 y 4: selección y chat con el agente)
+
+- `view.selection` incluye la **zona de malla marcada con el lazo**
+  (`meshRegion`: caras, área, centro, normal media y caja) y un resumen en
+  palabras.
+- **Guardar selección** (barra de estado, o `view.save_selection`): guarda lo
+  elegido con un nombre (`sel1`, `sel2`…) para decirle al agente «redondea
+  las aristas de sel1» o «borra sel2». `view.selection` con `name` la
+  devuelve.
+- La barra de estado dice siempre qué está elegido y qué selecciones hay
+  guardadas.
+- La guía del agente explica cómo leer la selección.
+- **Chat con el agente dentro de OpenRevers** (pestaña *Agente IA* →
+  *Hablar con el agente*, o Ctrl+J): se escribe, o se dicta con Win+H, sin
+  salir del programa. Usa el Claude Code instalado en el equipo, tal cual y
+  con la cuenta de Claude de cada persona (se inicia sesión una vez con
+  `claude` en una terminal); OpenRevers no ve ni guarda credenciales. Solo
+  se conecta al servidor MCP de OpenRevers y sin herramientas de consola ni
+  de archivos. Con *Incluir la selección*, el mensaje dice qué está elegido.
+  No se conecta a nada hasta que se envía el primer mensaje.
+
 ## 0.11.1 — 13 de noviembre de 2026 (paso 2: línea de tiempo y cubo de vista)
 
 - **Línea de tiempo** bajo la vista, a todo el ancho: los pasos de la pieza

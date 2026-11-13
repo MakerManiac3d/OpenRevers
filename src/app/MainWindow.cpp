@@ -3,6 +3,7 @@
 #include "app/Icons.h"
 #include "app/Ribbon.h"
 #include "app/Timeline.h"
+#include "app/AgentChat.h"
 #include "app/MainWindow.h"
 
 #include "scan/ScanBackend.h"
@@ -46,6 +47,7 @@
 #include <QTableWidget>
 #include <QTextBrowser>
 #include <QToolBar>
+#include <QToolButton>
 #include <QScrollArea>
 #include <QTime>
 #include <QDialog>
@@ -112,6 +114,76 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
         }
         return j;
     };
+    // The mesh region marked with the lasso, and the selections kept by name.
+    access.selection = [this, base = access.selection]() {
+        json j = base();
+        const auto& faces = viewport_->selection();
+        if (auto b = faces.empty() ? std::optional<Body>() : doc_.findBody("b" + std::to_string(viewport_->selectionBody())); b && b->mesh) {
+            const TriMesh& m = *b->mesh;
+            double area = 0;
+            Vec3d c(0, 0, 0), n(0, 0, 0), lo(1e300, 1e300, 1e300), hi(-1e300, -1e300, -1e300);
+            for (auto f : faces) {
+                if (m.isPointCloud()) {
+                    if (f >= m.vertices.size()) continue;
+                    const Vec3d p = m.vertices[f].cast<double>();
+                    c += p;
+                    area += 1;
+                    lo = lo.cwiseMin(p);
+                    hi = hi.cwiseMax(p);
+                    continue;
+                }
+                if (f >= m.faces.size()) continue;
+                const Vec3d a = m.vertices[m.faces[f][0]].cast<double>(), bb = m.vertices[m.faces[f][1]].cast<double>(), d = m.vertices[m.faces[f][2]].cast<double>();
+                const Vec3d cr = (bb - a).cross(d - a);
+                const double ar = 0.5 * cr.norm();
+                area += ar;
+                c += ar * (a + bb + d) / 3.0;
+                n += cr;
+                for (const Vec3d& p : {a, bb, d}) {
+                    lo = lo.cwiseMin(p);
+                    hi = hi.cwiseMax(p);
+                }
+            }
+            if (area > 0) {
+                c /= area;
+                json r{{"body", b->ref()}, {"count", faces.size()}, {"centre", {c.x(), c.y(), c.z()}}, {"min", {lo.x(), lo.y(), lo.z()}}, {"max", {hi.x(), hi.y(), hi.z()}}};
+                if (m.isPointCloud()) r["points"] = true;
+                else {
+                    r["area"] = area;
+                    if (n.norm() > 0) n.normalize();
+                    r["normal"] = {n.x(), n.y(), n.z()};
+                }
+                constexpr std::size_t kMax = 50000;
+                json list = json::array();
+                for (std::size_t i = 0; i < faces.size() && i < kMax; ++i) list.push_back(faces[i]);
+                r["faces"] = list;
+                if (faces.size() > kMax) r["truncated"] = true;
+                j["meshRegion"] = r;
+            }
+        }
+        json names = json::array();
+        for (const auto& [k, v] : savedSelections_) names.push_back(k);
+        j["saved"] = names;
+        j["summary"] = selectionSummary(j).toStdString();
+        return j;
+    };
+    access.save = [this, selection = access.selection](const std::string& asked) {
+        std::string name = asked;
+        for (int i = 1; name.empty(); ++i)
+            if (!savedSelections_.count("sel" + std::to_string(i))) name = "sel" + std::to_string(i);
+        json j = selection();
+        j.erase("saved");
+        savedSelections_[name] = j;
+        QMetaObject::invokeMethod(this, [this]() { refreshSelectionSummary(); }, Qt::QueuedConnection);
+        return json{{"name", name}, {"selection", j}, {"summary", name + ": " + j.value("summary", "")}};
+    };
+    access.saved = [this](const std::string& name) {
+        auto it = savedSelections_.find(name);
+        if (it == savedSelections_.end()) throw CommandError("not_found", "No selection named " + name);
+        json j = it->second;
+        j["name"] = name;
+        return j;
+    };
     access.pick = [this, selection = access.selection](double x, double y, bool add) {
         const QPoint pos(static_cast<int>(x * viewport_->width()), static_cast<int>(y * viewport_->height()));
         onPicked(viewport_->pickAt(pos), add);
@@ -141,6 +213,17 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
     busy_->setMaximumWidth(140);
     busy_->setVisible(false);
     statusBar()->addWidget(status_, 1);
+    // What is picked, in words, and a button to keep it under a name that
+    // the agent can be told ("round the edges of sel1").
+    selectionLabel_ = new QLabel();
+    selectionLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    statusBar()->addPermanentWidget(selectionLabel_);
+    auto* keep = new QToolButton();
+    keep->setText(tr("Keep selection"));
+    keep->setToolTip(tr("Keep what is picked under a name (sel1, sel2...) to refer to it later, also when talking to the AI agent"));
+    keep->setAutoRaise(true);
+    connect(keep, &QToolButton::clicked, this, [this]() { run("view.save_selection", json::object()); });
+    statusBar()->addPermanentWidget(keep);
     statusBar()->addPermanentWidget(busy_);
     statusBar()->addPermanentWidget(agentStatus_);
 
@@ -159,6 +242,7 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
     });
     connect(agent_, &AgentServer::statusChanged, this, &MainWindow::refreshAgentStatus);
     connect(viewport_, &Viewport::picked, this, &MainWindow::onPicked);
+    connect(viewport_, &Viewport::picked, this, [this]() { refreshSelectionSummary(); });
     connect(viewport_, &Viewport::lassoSelected, this, [this](std::uint64_t body, std::vector<std::uint32_t> faces, bool addTo) {
         if (addTo && body == viewport_->selectionBody()) {
             std::vector<std::uint32_t> all = viewport_->selection();
@@ -170,6 +254,7 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
         const std::size_t n = faces.size();
         viewport_->setSelection(body, std::move(faces));
         status_->setText(tr("%1 selected. Delete removes them.").arg(n));
+        refreshSelectionSummary();
     });
     connect(viewport_, &Viewport::contextRequested, this, &MainWindow::showContextMenu);
 
@@ -404,6 +489,26 @@ void MainWindow::buildRibbon() {
     r->addGroup(inspect, tr("Compare"), group({"part.compare", "body.clear_deviation", "mesh.section"}));
     r->addGroup(inspect, tr("View"), group({"fit_all"}));
     const int agent = r->addTab(tr("AI agent"));
+    {
+        auto* talk = new QAction(tr("Talk to the agent"), this);
+        talk->setObjectName("agent_chat");
+        talk->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_J));
+        talk->setToolTip(tr("Write or dictate to the AI agent here, without leaving OpenRevers (uses your Claude Code)"));
+        connect(talk, &QAction::triggered, this, [this]() {
+            if (!chatDock_) return;
+            chatDock_->show();
+            chatDock_->raise();
+            chat_->focusInput();
+        });
+        addAction(talk);
+        talk->setIcon(toolIcon("agent_chat"));
+        auto* keepSel = new QAction(tr("Keep selection"), this);
+        keepSel->setObjectName("keep_selection");
+        keepSel->setIcon(toolIcon("keep_selection"));
+        connect(keepSel, &QAction::triggered, this, [this]() { run("view.save_selection", json::object()); });
+        r->addGroup(agent, tr("Talk"), {talk});
+        r->addGroup(agent, tr("Selection"), {keepSel});
+    }
     r->addGroup(agent, tr("Find"), group({"palette", "guide"}));
     ribbon_ = r;
 
@@ -449,6 +554,7 @@ void MainWindow::buildDocks() {
         refreshProperties();
         refreshShapes();
         refreshTimeline();
+        refreshSelectionSummary();
     });
     connect(tree_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int col) {
         if (updatingTree_ || col != 0 || item->parent()) return;  // a part's history rows have no visibility
@@ -560,6 +666,15 @@ void MainWindow::buildDocks() {
     scroll->setWidgetResizable(true);
     scroll->setMinimumWidth(340);
     panelDock_ = dock(tr("Command"), "CommandDock", scroll, Qt::RightDockWidgetArea);
+
+    // The chat with the agent, beside the command panel.
+    chat_ = new AgentChat();
+    chat_->setSelectionSource([this]() {
+        QString s = selectionLabel_ ? selectionLabel_->text() : QString();
+        return s == tr("Nothing picked") ? QString() : s;
+    });
+    chatDock_ = dock(tr("AI agent"), "AgentChatDock", chat_, Qt::RightDockWidgetArea);
+    tabifyDockWidget(panelDock_, chatDock_);
     panelDock_->hide();
     panel_->setSelectionSource([this]() { return std::make_pair(viewport_->selectionBody(), viewport_->selection()); });
     connect(panel_, &CommandPanel::closeRequested, panelDock_, &QDockWidget::hide);
@@ -902,6 +1017,7 @@ void MainWindow::refresh() {
     refreshTitle();
     if (auto* u = findChild<QAction*>("undo")) u->setEnabled(doc_.canUndo());
     if (auto* r = findChild<QAction*>("redo")) r->setEnabled(doc_.canRedo());
+    refreshSelectionSummary();
 }
 
 void MainWindow::refreshTree() {
@@ -944,6 +1060,49 @@ void MainWindow::refreshTree() {
     updatingTree_ = false;
     refreshPartHighlight();
     refreshTimeline();
+}
+
+QString MainWindow::selectionSummary(const json& j) const {
+    QStringList parts;
+    auto nameOf = [this](const std::string& ref) {
+        auto b = doc_.findBody(ref);
+        return b ? QString::fromStdString(b->name) : QString::fromStdString(ref);
+    };
+    if (j.contains("meshRegion")) {
+        const auto& r = j["meshRegion"];
+        const auto n = r.value("count", 0);
+        parts << (r.value("points", false) ? tr("%1 points of %2") : tr("%1 faces of %2")).arg(n).arg(nameOf(r.value("body", "")));
+    }
+    if (j.contains("faces") && !j["faces"].empty()) parts << tr("%1 faces").arg(j["faces"].size());
+    if (j.contains("edges") && !j["edges"].empty()) parts << tr("%1 edges").arg(j["edges"].size());
+    if (j.contains("shapes") && !j["shapes"].empty()) {
+        QStringList refs;
+        for (const auto& s : j["shapes"]) refs << QString::fromStdString(s.value("name", s.value("ref", "")));
+        parts << tr("shapes %1").arg(refs.join(", "));
+    }
+    if (j.contains("partItem")) {
+        const auto& it = j["partItem"];
+        parts << QString::fromStdString(it.contains("parameter") ? it["parameter"].get<std::string>() : it.value("ref", ""));
+    }
+    if (parts.isEmpty() && j.contains("body") && j["body"].is_string()) parts << nameOf(j["body"].get<std::string>());
+    if (parts.isEmpty() && selected_) parts << nameOf("b" + std::to_string(selected_));
+    return parts.isEmpty() ? tr("Nothing picked") : parts.join(" · ");
+}
+
+void MainWindow::refreshSelectionSummary() {
+    if (!selectionLabel_ || !registry_.find("view.selection")) return;
+    try {
+        CommandContext ctx{doc_, PathPolicy::unrestricted(), lang_.toStdString(), "ui", nullptr};
+        const json j = registry_.find("view.selection")->run(ctx, json{{"name", ""}});
+        QString text = QString::fromStdString(j.value("summary", ""));
+        if (!savedSelections_.empty()) {
+            QStringList names;
+            for (const auto& [k, v] : savedSelections_) names << QString::fromStdString(k);
+            text += "   " + tr("Kept: %1").arg(names.join(", "));
+        }
+        selectionLabel_->setText(text);
+    } catch (...) {
+    }
 }
 
 void MainWindow::refreshTimeline() {

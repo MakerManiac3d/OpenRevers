@@ -31,6 +31,30 @@ Los paneles se mueven, se cierran y se recuperan en el menú **Ver**.
 
 El eje Z es el vertical, como en la mayoría de programas de CAD.
 
+## Hablar con el agente sin salir de OpenRevers (0.11.2)
+
+*Agente IA → Hablar con el agente* (Ctrl+J) abre un chat junto al panel de
+comandos. Escribe lo que quieres, o díctalo con **Win+H** (el dictado de
+Windows). El agente trabaja sobre el proyecto abierto y ves cada cambio.
+
+- Usa **Claude Code** instalado en tu equipo, con **tu cuenta de Claude**.
+  La primera vez, abre una terminal, ejecuta `claude` e inicia sesión.
+  OpenRevers no ve ni guarda tus credenciales.
+- Solo puede usar las herramientas de OpenRevers: ni consola ni archivos.
+- Con *Incluir la selección* marcado, el mensaje dice qué tienes elegido,
+  así que «redondea estas aristas» se refiere a las que has elegido.
+- *Detener* corta lo que está haciendo; el siguiente mensaje sigue la misma
+  conversación. *Nueva conversación* empieza de cero.
+- No se conecta a nada hasta que envías el primer mensaje.
+
+## Señalar al agente lo que quieres (0.11.2)
+
+Abajo a la derecha se ve siempre qué está elegido: un cuerpo, caras o
+aristas de una pieza, formas, o la zona de una malla marcada con el lazo.
+**Guardar selección** le pone un nombre (`sel1`, `sel2`…). Luego puedes
+pedirle al agente «redondea a 2 mm las aristas de sel1» o «borra sel2»: el
+agente lee exactamente esa selección.
+
 ## Línea de tiempo y cubo de vista (0.11.1)
 
 - **Línea de tiempo** (abajo): los pasos de la pieza en orden. Clic para

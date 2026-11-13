@@ -8,6 +8,7 @@ qt_add_executable(OpenRevers WIN32 MACOSX_BUNDLE
   Icons.cpp Icons.h
   Ribbon.cpp Ribbon.h
   Timeline.cpp Timeline.h
+  AgentChat.cpp AgentChat.h
   AgentServer.cpp AgentServer.h
   AppCommands.cpp AppCommands.h
   SettingsDialog.cpp SettingsDialog.h

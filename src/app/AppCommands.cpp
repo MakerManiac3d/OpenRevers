@@ -13,10 +13,19 @@ void registerAppCommands(CommandRegistry& R, Viewport& vp, SelectionAccess sel) 
     Viewport* v = &vp;
 
     R.add({"view.selection", "view", {"What is picked", "Qué está seleccionado"},
-           {"The point the person last clicked on a surface, its body, and the shapes they picked (in order). On a part: the parameter, sketch or operation picked in the Model panel (partItem), and the faces and edges of its solid they picked (type, size, axis; an edge's middle is the point for part.fillet). Use it to act on \"this hole\" or \"these edges\" as they point at them.",
+           {"What the person is pointing at: the point they last clicked on a surface, its body, the shapes they picked (in order), and the mesh region they marked with the lasso (meshRegion: its faces, area, centre, mean normal and box; pass faces to mesh.delete_faces). On a part: the parameter, sketch or operation picked in the Model panel (partItem), and the faces and edges of its solid they picked (type, size, axis; an edge's middle is the point for part.fillet). Use it to act on \"this hole\" or \"these edges\" as they point at them.",
             "El último punto en que la persona hizo clic sobre una superficie, su cuerpo y las formas que ha elegido (en orden). En una pieza: el parámetro, boceto u operación elegido en el panel Modelo (partItem) y las caras y aristas de su sólido que ha elegido (tipo, medida, eje; el middle de una arista es el punto para part.fillet). Sirve para actuar sobre \"este taladro\" o \"estas aristas\" cuando las señala."},
-           object({}), false, true,
-           [sel](CommandContext&, const json&) { return sel.selection(); }});
+           object({{"name", string({"A selection kept under this name (sel1...); empty: what is picked now", "Una selección guardada con este nombre (sel1...); vacío: lo elegido ahora"}, "")}}), false, true,
+           [sel](CommandContext&, const json& in) {
+               const std::string name = in.value("name", "");
+               return name.empty() ? sel.selection() : sel.saved(name);
+           }});
+
+    R.add({"view.save_selection", "view", {"Keep the selection", "Guardar la selección"},
+           {"Keeps what is picked now (body, faces, edges, shapes, the mesh region marked with the lasso) under a name, so the person and the agent can refer to it later (\"sel2\"). view.selection with name gives it back.",
+            "Guarda lo elegido ahora (cuerpo, caras, aristas, formas, la zona de malla marcada con el lazo) con un nombre, para que la persona y el agente se refieran a ello después («sel2»). view.selection con name lo devuelve."},
+           object({{"name", string({"Name (empty: sel1, sel2...)", "Nombre (vacío: sel1, sel2...)"}, "")}}), false, true,
+           [sel](CommandContext&, const json& in) { return sel.save(in.value("name", "")); }});
 
     R.add({"view.pick", "view", {"Pick in the view", "Seleccionar en la vista"},
            {"Click on the view as the person would: x and y from 0 to 1 across and down the view. With add, the shape under it is added to the picked ones.",

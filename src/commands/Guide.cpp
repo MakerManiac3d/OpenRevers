@@ -61,6 +61,7 @@ const char* kSafetyEn = R"(## Safety
 - OpenRevers makes no connection to the internet. What you read from it goes to your model provider: say so if the person seems unaware.
 - Any tool that changes the document takes `dryRun: true`: it is worked out on a copy and answers with its result and `preview` {changed, added, removed}, with nothing changed and nothing in the history. Use it to check a risky step (a crop, a plane removal, a cut) before doing it.
 - If a tool you expect is missing, your client may keep an older list: `command_list` shows every command and `command_run` runs any of them.
+- When the person says "this", "these faces" or "sel1", read `view_selection` (with `name` for a kept one): it has the picked body, faces and edges of a part, shapes, and the mesh region marked with the lasso (`meshRegion`, with its faces for `mesh_delete_faces`).
 )";
 
 const char* kSafetyEs = R"(## Seguridad
@@ -69,6 +70,7 @@ const char* kSafetyEs = R"(## Seguridad
 - OpenRevers no se conecta a internet. Lo que leas de él va al proveedor de tu modelo: dilo si la persona no parece saberlo.
 - Toda herramienta que cambia el documento admite `dryRun: true`: se calcula sobre una copia y responde con su resultado y `preview` {changed, added, removed}, sin cambiar nada ni entrar en el historial. Úsalo para comprobar un paso arriesgado (un recorte, quitar un plano, un corte) antes de darlo.
 - Si falta una herramienta que esperas, puede que tu cliente guarde una lista antigua: `command_list` muestra todos los comandos y `command_run` ejecuta cualquiera.
+- Cuando la persona diga «esto», «estas caras» o «sel1», lee `view_selection` (con `name` para una guardada): trae el cuerpo elegido, las caras y aristas de una pieza, las formas y la zona de malla marcada con el lazo (`meshRegion`, con sus caras para `mesh_delete_faces`).
 )";
 
 }  // namespace

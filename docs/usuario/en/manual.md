@@ -31,6 +31,28 @@ Panels can be moved, closed and brought back from the **View** menu.
 
 Z is up, as in most CAD programs.
 
+## Talking to the agent without leaving OpenRevers (0.11.2)
+
+*AI agent → Talk to the agent* (Ctrl+J) opens a chat beside the command
+panel. Type, or dictate with **Win+H** (Windows dictation). The agent works on
+the open project and you see every change.
+
+- It uses **Claude Code** installed on your computer, with **your own Claude
+  account**: the first time, open a terminal, run `claude` and sign in.
+  OpenRevers never sees or stores your credentials.
+- It can only use OpenRevers' tools: no shell, no files.
+- With *Include the selection* ticked, the message says what is picked.
+- *Stop* ends the current turn; the next message continues the same
+  conversation. *New conversation* starts afresh.
+- Nothing connects until you send the first message.
+
+## Pointing the agent at what you mean (0.11.2)
+
+The bottom right always says what is picked: a body, faces or edges of a
+part, shapes, or a mesh region marked with the lasso. **Keep selection**
+names it (`sel1`, `sel2`...). Then ask the agent "round the edges of sel1 to
+2 mm" or "delete sel2": it reads exactly that selection.
+
 ## Timeline and view cube (0.11.1)
 
 - **Timeline** (bottom): the part's steps in order. Click to pick,
