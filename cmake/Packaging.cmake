@@ -56,6 +56,11 @@ if(WIN32)
   set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
   set(CPACK_NSIS_EXECUTABLES_DIRECTORY bin)
   set(CPACK_NSIS_MODIFY_PATH OFF)
+  # Close what holds our DLLs (MCP servers, the app) before files are replaced.
+  # Single quotes: NSIS takes them, and they need no escaping through CPack.
+  set(_orv_close "!include '${CMAKE_SOURCE_DIR}/packaging/close-running.nsh'\n!insertmacro OrvCloseRunning")
+  set(CPACK_NSIS_EXTRA_PREINSTALL_COMMANDS "${_orv_close}")
+  set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "${_orv_close}")
 else()
   set(CPACK_GENERATOR "TGZ")
 endif()

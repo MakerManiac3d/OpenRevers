@@ -200,3 +200,13 @@ Every tool that changes the document takes `"dryRun": true`: it runs on a
 copy and answers with its usual result plus `dryRun` and `preview`
 {changed, added, removed}; the document and history stay as they were. It is
 what the panel's *See it live* checkbox uses.
+
+## Comandos nuevos en un chat ya abierto · New commands in an open chat
+
+Algunos clientes leen la lista de herramientas una sola vez por sesión. Para
+que un chat abierto con una versión anterior llegue a los comandos nuevos hay
+dos herramientas fijas: `command_list` (todos los comandos; con `command`, su
+esquema) y `command_run` (`{"command": "scan.status", "arguments": {...}}`).
+
+Some clients read the tool list once per session. `command_list` and
+`command_run` reach every command, including ones added after that.

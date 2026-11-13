@@ -292,6 +292,29 @@ TEST(Mcp, HandshakeListAndCall) {
     EXPECT_NE(s.handleLine("{not json")->find("-32700"), std::string::npos);
 }
 
+TEST(Mcp, CommandListAndRunReachEveryCommand) {
+    // A client that cached an old tool list still reaches new commands.
+    CommandRegistry reg;
+    registerCoreCommands(reg);
+    Document doc;
+    LocalBackend backend(reg, doc, PathPolicy::unrestricted(), "es", "headless", false);
+    McpServer s(backend, "es");
+    auto call = [&](const std::string& name, json args) {
+        return (*s.handle({{"jsonrpc", "2.0"}, {"id", 1}, {"method", "tools/call"}, {"params", {{"name", name}, {"arguments", args}}}}))["result"];
+    };
+    auto list = call("command_list", json::object());
+    ASSERT_FALSE(list["isError"].get<bool>());
+    bool scan = false;
+    for (const auto& c : list["structuredContent"]["commands"]) scan = scan || c["name"] == "scan.status";
+    EXPECT_TRUE(scan);
+    auto one = call("command_list", {{"command", "mesh_crop"}});
+    EXPECT_TRUE(one["structuredContent"]["schema"]["properties"].contains("dryRun"));
+    auto run = call("command_run", {{"command", "scan_status"}});
+    EXPECT_FALSE(run["isError"].get<bool>());
+    auto bad = call("command_run", {{"command", "nope.nada"}});
+    EXPECT_TRUE(bad["isError"].get<bool>());
+}
+
 TEST(Commands, HolesFittedOnASpotAndTheirPitch) {
     // Two Ø2.75 bores 4 mm apart through a 10 mm plate, the second one fitted
     // 3° off (as a fitted axis always is a little); a ring of the plate's

@@ -60,6 +60,7 @@ const char* kSafetyEn = R"(## Safety
 - Files are never overwritten unless `overwrite: true` is passed; a project with unsaved changes is never replaced unless `discard: true` is passed. Ask the person before passing either.
 - OpenRevers makes no connection to the internet. What you read from it goes to your model provider: say so if the person seems unaware.
 - Any tool that changes the document takes `dryRun: true`: it is worked out on a copy and answers with its result and `preview` {changed, added, removed}, with nothing changed and nothing in the history. Use it to check a risky step (a crop, a plane removal, a cut) before doing it.
+- If a tool you expect is missing, your client may keep an older list: `command_list` shows every command and `command_run` runs any of them.
 )";
 
 const char* kSafetyEs = R"(## Seguridad
@@ -67,6 +68,7 @@ const char* kSafetyEs = R"(## Seguridad
 - Nunca se sobrescribe un archivo sin `overwrite: true`, ni se reemplaza un proyecto con cambios sin guardar sin `discard: true`. Pregunta a la persona antes de usar cualquiera de los dos.
 - OpenRevers no se conecta a internet. Lo que leas de él va al proveedor de tu modelo: dilo si la persona no parece saberlo.
 - Toda herramienta que cambia el documento admite `dryRun: true`: se calcula sobre una copia y responde con su resultado y `preview` {changed, added, removed}, sin cambiar nada ni entrar en el historial. Úsalo para comprobar un paso arriesgado (un recorte, quitar un plano, un corte) antes de darlo.
+- Si falta una herramienta que esperas, puede que tu cliente guarde una lista antigua: `command_list` muestra todos los comandos y `command_run` ejecuta cualquiera.
 )";
 
 }  // namespace

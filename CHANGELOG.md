@@ -1,5 +1,17 @@
 # Cambios · Changelog
 
+## 0.10.1 — 13 de noviembre de 2026
+
+- MCP: dos herramientas fijas, `command_list` y `command_run`, que llegan a
+  cualquier comando, también a los que se añadan en versiones futuras. Así un
+  cliente que guarda la lista de herramientas de una versión anterior (como
+  un chat ya abierto) puede usar los comandos nuevos sin abrir otro chat.
+- Instalador de Windows: antes de copiar los archivos cierra los servidores
+  MCP de OpenRevers (`openrevers-cli.exe`) que dejan abiertos los clientes de
+  IA, y si la aplicación está abierta pide cerrarla (Reintentar/Cancelar).
+  Ya no hace falta terminarlos a mano para que la instalación no falle por
+  DLL ocupadas. El desinstalador hace lo mismo.
+
 ## 0.10.0 — 12 de noviembre de 2026 (vista previa y tiradores)
 
 - **Ver en vivo** en el panel de comandos: el resultado se calcula sobre una

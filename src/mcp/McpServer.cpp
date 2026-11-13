@@ -134,6 +134,22 @@ json McpServer::listTools() {
                                    {"openWorldHint", false}}}};
         tools.push_back(t);
     }
+    // Two fixed tools that reach every command, also those added after the
+    // client cached this list (some clients only read it once per session).
+    tools.push_back({{"name", "command_list"},
+                     {"title", es ? "Comandos disponibles" : "Available commands"},
+                     {"description", es ? "Todos los comandos de esta versión de OpenRevers (nombre, título y si cambian el documento). Con 'command', su esquema completo. Úsalo si una herramienta que esperas no aparece en tu lista: puede que tu cliente guarde una lista antigua; llámala con command_run."
+                                         : "Every command of this OpenRevers version (name, title, whether it changes the document). With 'command', its full schema. Use it when a tool you expect is missing from your list: your client may keep an old list; call it with command_run."},
+                     {"inputSchema", {{"type", "object"}, {"properties", {{"command", {{"type", "string"}, {"description", "e.g. scan.status"}}}}}}},
+                     {"annotations", {{"readOnlyHint", true}, {"openWorldHint", false}}}});
+    tools.push_back({{"name", "command_run"},
+                     {"title", es ? "Ejecutar un comando" : "Run a command"},
+                     {"description", es ? "Ejecuta cualquier comando de OpenRevers por su nombre (scan.status o scan_status) con sus argumentos, igual que su propia herramienta. Admite dryRun en los que cambian el documento."
+                                         : "Runs any OpenRevers command by name (scan.status or scan_status) with its arguments, just like its own tool. Commands that change the document take dryRun."},
+                     {"inputSchema", {{"type", "object"},
+                                      {"properties", {{"command", {{"type", "string"}}}, {"arguments", {{"type", "object"}}}}},
+                                      {"required", {"command"}}}},
+                     {"annotations", {{"readOnlyHint", false}, {"destructiveHint", true}, {"openWorldHint", false}}}});
     return {{"tools", tools}};
 }
 
@@ -141,7 +157,34 @@ json McpServer::callTool(const json& params) {
     const std::string name = params.value("name", "");
     const json args = params.value("arguments", json::object());
     try {
-        json result = backend_.call(name, args);
+        json result;
+        if (name == "command_list") {
+            const std::string want = args.value("command", "");
+            const bool es = lang_ == "es";
+            json list = json::array();
+            for (const auto& c : backend_.listCommands()) {
+                const std::string n = c["name"].get<std::string>();
+                if (!want.empty()) {
+                    if (n != want && toolName(n) != want) continue;
+                    result = c;
+                    result["schema"] = withDryRun(cleanSchema(c["schema"]), c.value("mutates", false), es);
+                    break;
+                }
+                list.push_back({{"name", n},
+                                {"title", es ? c["title"].value("es", c["title"].value("en", "")) : c["title"].value("en", "")},
+                                {"mutates", c.value("mutates", false)}});
+            }
+            if (!want.empty() && result.is_null()) throw CommandError("not_found", "No command \"" + want + "\"");
+            if (want.empty()) result = {{"commands", list}};
+        } else if (name == "command_run") {
+            const std::string cmd = args.value("command", "");
+            std::string dotted = cmd;
+            for (const auto& c : backend_.listCommands())
+                if (toolName(c["name"].get<std::string>()) == cmd) dotted = c["name"].get<std::string>();
+            result = backend_.call(dotted, args.value("arguments", json::object()));
+        } else {
+            result = backend_.call(name, args);
+        }
         json content = json::array();
         if (result.is_object() && result.contains("image") && result["image"].is_string()) {
             content.push_back({{"type", "image"}, {"data", result["image"]}, {"mimeType", result.value("mimeType", "image/png")}});
