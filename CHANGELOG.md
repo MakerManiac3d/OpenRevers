@@ -1,5 +1,18 @@
 # Cambios · Changelog
 
+## 0.10.4 — 13 de noviembre de 2026
+
+- Escáner: OpenRevers se cerraba al conectar con un modo que el escáner no
+  admite (por ejemplo, láser azul con los valores por defecto). Se cerraba al
+  destruir la sesión de la biblioteca justo después de crearla. Ahora:
+  - la sesión y el contexto se mantienen abiertos hasta cerrar el programa;
+    *Desconectar* solo detiene y suelta el escaneo, y el siguiente
+    *Conectar* crea otro en la misma sesión;
+  - al conectar se prueban las combinaciones de fusión, tipo de escaneo y
+    líneas láser hasta que el escáner acepta una, conservando la luz, el
+    modo, la precisión y el material elegidos. `scan.status` dice cuál se
+    usa (`configuration`).
+
 ## 0.10.3 — 13 de noviembre de 2026
 
 - Escáner: la vista previa fallaba (`data listener not found in preview`).

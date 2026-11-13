@@ -48,6 +48,7 @@ struct ScanStatus {
     std::string deviceMessage; // the library's last device message, by name
     std::string processMessage;// the library's last scanning-process message
     std::size_t frames{0};     // frames received while previewing or scanning
+    std::string configuration; // the light, fusion and scan type in use
 };
 
 class ScanBackend {

@@ -179,7 +179,9 @@ public:
     explicit ObScanBackend(fs::path dir) : dir_(std::move(dir)) {}
     ~ObScanBackend() override {
         try { disconnect(); } catch (...) {}
-        if (lib_) FreeLibrary(lib_);
+        // With a context open the library's threads are still running: it
+        // stays loaded (Windows frees it when the program ends).
+        if (lib_ && !context_) FreeLibrary(lib_);
     }
 
     ScanStatus status() override {
@@ -197,6 +199,7 @@ public:
         s.deviceMessage = deviceMessageName(g_deviceMessage);
         s.processMessage = processMessageName(g_processMessage);
         s.frames = static_cast<std::size_t>(g_frames.load());
+        s.configuration = configuration_;
         return s;
     }
 
@@ -230,7 +233,7 @@ public:
 
     void connect(int device, const ScanSettings& st) override {
         ensureContext();
-        if (session_) throw ScanError("refused", "already connected; disconnect first");
+        if (scan_) throw ScanError("refused", "already connected; disconnect first");
         std::int32_t n = 0;
         check(api_.deviceNum(devices_, &n), "get_device_num");
         if (n <= 0) throw ScanError("not_found", "no scanner is connected (plug it in and wait a few seconds)");
@@ -240,12 +243,18 @@ public:
         api_.activeIdx(devices_, &active);
         device_ = active;
 
-        workDir_ = fs::temp_directory_path() / "OpenRevers" / "scan" /
-                   std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-        fs::create_directories(workDir_);
-        const std::string out = workDir_.string(), name = "openrevers";
-        const ob::SessionConfig sc{out.c_str(), name.c_str(), 0};
-        check(api_.createSession(context_, &sc, &session_), "create_session");
+        // A session is kept until disconnecting, also when the settings are
+        // refused: destroying it right after creating it (its thread still
+        // starting) closed the program. The next connect reuses it.
+        static const std::string name = "openrevers";
+        if (!session_) {
+            workDir_ = fs::temp_directory_path() / "OpenRevers" / "scan" /
+                       std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+            fs::create_directories(workDir_);
+            sessionDir_ = workDir_.string();
+            const ob::SessionConfig sc{sessionDir_.c_str(), name.c_str(), 0};
+            check(api_.createSession(context_, &sc, &session_), "create_session");
+        }
 
         ob::ScanConfig cfg{};
         api_.modeConfigInit(&cfg.mode_config);
@@ -259,11 +268,39 @@ public:
         m.projection = st.light == "blue_laser" ? ob::kBlueLineLaser : ob::kInfrared;
         if (st.voxelSize > 0) m.voxel_size = st.voxelSize / unitScale_;
         cfg.name = name.c_str();
-        const ob::Status sup = api_.checkSupported(session_, &cfg);
-        if (sup != ob::kSuccess) {
-            closeSession();
-            throw ScanError("refused", std::string("the scanner does not support these settings (") + ob::statusName(sup) + ")");
+        // The library's defaults (fusion by geometry, a fused cloud) do not
+        // suit every light: blue lasers need another scan type and fusion.
+        // Try the combinations the library knows until the scanner accepts
+        // one, keeping what was asked (light, mode, accuracy, material).
+        const bool laser = m.projection == ob::kBlueLineLaser;
+        const std::vector<std::int32_t> scanTypes = laser ? std::vector<std::int32_t>{1, 0, 2} : std::vector<std::int32_t>{m.scan_type, 0};
+        const std::vector<std::int32_t> fuses = laser ? std::vector<std::int32_t>{2, 0, 3, 1} : std::vector<std::int32_t>{m.fuse_mode, 0, 3, 1, 2};
+        const std::vector<std::int32_t> lights = laser ? std::vector<std::int32_t>{0, 1, 2} : std::vector<std::int32_t>{m.light_type};
+        ob::Status sup = api_.checkSupported(session_, &cfg);
+        for (auto st2 : scanTypes) {
+            for (auto fu : fuses) {
+                for (auto li : lights) {
+                    if (sup == ob::kSuccess) break;
+                    m.scan_type = st2;
+                    m.fuse_mode = fu;
+                    m.light_type = li;
+                    sup = api_.checkSupported(session_, &cfg);
+                }
+                if (sup == ob::kSuccess) break;
+            }
+            if (sup == ob::kSuccess) break;
         }
+        if (sup != ob::kSuccess) {
+            configuration_.clear();
+            throw ScanError("refused", std::string("the scanner does not support this light and mode in any combination (") + ob::statusName(sup) +
+                                           "); try another mode or the infrared light");
+        }
+        static const char* kFuse[] = {"geometry", "rgbd", "marker", "markerless"};
+        static const char* kType[] = {"cloud_fused", "laser_detailed", "marker_framework"};
+        static const char* kLight[] = {"parallel", "cross", "single"};
+        auto pick = [](const char* const* names, int n, std::int32_t v) { return v >= 0 && v < n ? names[v] : "?"; };
+        configuration_ = std::string(laser ? "blue_laser" : "infrared") + ", fuse " + pick(kFuse, 4, m.fuse_mode) + ", type " +
+                         pick(kType, 3, m.scan_type) + (laser ? std::string(", lines ") + pick(kLight, 3, m.light_type) : std::string());
         check(api_.createScan(session_, &cfg, &scan_), "create_scan");
         state_ = ScanState::Connected;
         points_ = 0;
@@ -348,14 +385,12 @@ public:
     void disconnect() override {
         if (scan_ && (state_ == ScanState::Scanning || state_ == ScanState::Paused || state_ == ScanState::Previewing))
             api_.stop(scan_, onProgress, onStatus, 1);
-        closeSession();
-        if (context_) {
-            api_.removeDataListener(context_, &g_dataListener);
-            api_.removeProcessListener(context_, &g_processListener);
-        }
-        if (devices_) api_.removeDeviceListener(devices_, &g_deviceListener);
-        if (context_) api_.contextDestroy(context_);
-        context_ = devices_ = nullptr;
+        // The session and the context stay open until the program ends:
+        // obscan_session_destroy closed OpenRevers in the first tests with the
+        // Raptor. A session holds several scans, so the next connect makes
+        // another scan in it.
+        scan_ = nullptr;
+        configuration_.clear();
         state_ = ScanState::Disconnected;
         device_ = -1;
         points_ = 0;
@@ -442,11 +477,6 @@ private:
         check(api_.addProcessListener(context_, &g_processListener), "add_process_msg_listener");
     }
 
-    void closeSession() {
-        if (session_) api_.sessionDestroy(session_);
-        session_ = scan_ = nullptr;
-    }
-
     /// The library may give metres: a model smaller than 5 units across with
     /// many points is taken as metres. Decided once per connection.
     void decideUnit(const ob::CloudBbox& b, std::size_t n) {
@@ -471,6 +501,7 @@ private:
     HMODULE lib_{nullptr};
     Api api_;
     std::string error_, version_;
+    std::string sessionDir_, configuration_;
     void* context_{nullptr};
     void* devices_{nullptr};
     void* session_{nullptr};

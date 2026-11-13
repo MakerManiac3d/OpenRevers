@@ -146,6 +146,21 @@ solo se confirman con el Raptor conectado:
     - de control: `0x14700200…`.
   - El primero de cada lista vale 0.
 
+## Tercera prueba (0.10.4)
+
+- La vista previa funciona (unos 30 fotogramas por segundo). El escaneo
+  arranca (`change to start success!`), pero con luz infrarroja y sin
+  probar con una pieza delante, los fotogramas no se registran (`frame 0`,
+  `r f: g f and n nullptr`). Pendiente de repetir con una pieza.
+- Con luz azul (`BLUE_LINE_LASER`) y los valores por defecto de
+  `obscan_mode_config_init` (fusión por geometría, `CLOUD_FUSED`), el escáner
+  responde `device 1704 does not declare support for the requested scan
+  configuration`.
+- Cada registro termina en `obscan_session_destroy`: destruir la sesión
+  (también al desconectar) cerraba OpenRevers. Hasta saber cómo hacerlo bien
+  (quizá hay que esperar a su hilo o borrar antes el escaneo), no se destruye
+  ni la sesión ni el contexto.
+
 ## Privacidad
 
 OpenRevers promete que nada sale del equipo. Lo comprobado:
