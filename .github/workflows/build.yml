@@ -112,9 +112,12 @@ jobs:
             Get-ChildItem -Recurse -Filter NSISOutput.log _CPack_Packages | ForEach-Object { Get-Content $_.FullName -Tail 60 }
             exit 1
           }
+      - name: Version for the artifact name
+        shell: bash
+        run: echo "ORV_VERSION=$(sed -nE 's/^ *VERSION ([0-9][0-9.]*).*/\1/p' CMakeLists.txt | head -1)" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v7
         with:
-          name: OpenRevers-Windows
+          name: OpenRevers-${{ env.ORV_VERSION }}-Windows
           path: |
             build/OpenRevers-*.exe
             build/OpenRevers-*.zip
