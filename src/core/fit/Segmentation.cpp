@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/fit/Segmentation.h"
+#include "core/util/Cancel.h"
 
 #include "core/mesh/EdgeMap.h"
 
@@ -410,6 +411,7 @@ Segmentation segment(const TriMesh& m, const SegmentOptions& o) {
         }
         std::size_t nextRefit = region.size() * 2;
         while (!front.empty()) {
+            checkCancel();
             std::vector<std::uint32_t> next;
             for (auto f : front)
                 for (auto g : d.nbr[f])
@@ -469,6 +471,7 @@ Segmentation segment(const TriMesh& m, const SegmentOptions& o) {
         std::vector<char> alive(R, 1);
         bool again = true;
         while (again) {
+            checkCancel();
             again = false;
             for (std::size_t i = 0; i < R; ++i) {
                 if (!alive[i]) continue;

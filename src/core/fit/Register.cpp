@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/fit/Register.h"
+#include "core/util/Cancel.h"
 
 #include <Eigen/Dense>
 #include <nanoflann.hpp>
@@ -250,6 +251,7 @@ GlobalRegResult globalRegistration(const TriMesh& moving, const TriMesh& referen
     Transform best = Transform::Identity();
     std::size_t bestCount = 0;
     for (int it = 0; it < o.maxIterations; ++it) {
+        if ((it & 63) == 0) checkCancel();
         if ((it & 255) == 0 && std::chrono::steady_clock::now() > deadline) break;
         std::size_t s[3] = {pick(rng), pick(rng), pick(rng)};
         if (s[0] == s[1] || s[1] == s[2] || s[0] == s[2]) continue;

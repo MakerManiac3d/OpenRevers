@@ -212,6 +212,14 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
     busy_->setRange(0, 0);
     busy_->setMaximumWidth(140);
     busy_->setVisible(false);
+    cancelButton_ = new QToolButton();
+    cancelButton_->setText(tr("Cancel"));
+    cancelButton_->setToolTip(tr("Stop the running command at its next step; the model stays as it was"));
+    cancelButton_->setVisible(false);
+    connect(cancelButton_, &QToolButton::clicked, this, [this]() {
+        runner_->cancel();
+        status_->setText(tr("Cancelling %1…").arg(runner_->current()));
+    });
     statusBar()->addWidget(status_, 1);
     // What is picked, in words, and a button to keep it under a name that
     // the agent can be told ("round the edges of sel1").
@@ -224,10 +232,12 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
     keep->setAutoRaise(true);
     connect(keep, &QToolButton::clicked, this, [this]() { run("view.save_selection", json::object()); });
     statusBar()->addPermanentWidget(keep);
+    statusBar()->addPermanentWidget(cancelButton_);
     statusBar()->addPermanentWidget(busy_);
     statusBar()->addPermanentWidget(agentStatus_);
 
     connect(runner_, &CommandRunner::busyChanged, busy_, &QWidget::setVisible);
+    connect(runner_, &CommandRunner::busyChanged, cancelButton_, &QWidget::setVisible);
     connect(runner_, &CommandRunner::completed, this,
             [this](const QString&, const QString& title, const QString& caller, bool ok, const json& params, const json& result, const QString& message) {
                 addResult(title, caller, ok, params, result, message);
@@ -675,6 +685,9 @@ void MainWindow::buildDocks() {
     });
     chatDock_ = dock(tr("AI agent"), "AgentChatDock", chat_, Qt::RightDockWidgetArea);
     tabifyDockWidget(panelDock_, chatDock_);
+    connect(chat_, &AgentChat::stopRequested, this, [this]() {
+        if (runner_->busy()) runner_->cancel();
+    });
     panelDock_->hide();
     panel_->setSelectionSource([this]() { return std::make_pair(viewport_->selectionBody(), viewport_->selection()); });
     connect(panel_, &CommandPanel::closeRequested, panelDock_, &QDockWidget::hide);

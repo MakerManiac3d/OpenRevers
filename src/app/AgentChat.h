@@ -35,6 +35,10 @@ public:
     /// Puts the cursor in the message box.
     void focusInput();
 
+signals:
+    /// Stop was pressed: the command the agent started should stop too.
+    void stopRequested();
+
 public slots:
     void send();
     void stop();

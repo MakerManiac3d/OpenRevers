@@ -2,6 +2,7 @@
 // OpenRevers — commands on the shapes of a body: segmentation, fitting a
 // shape on a spot, listing, measuring between shapes, renaming, deleting.
 #include "commands/Command.h"
+#include "core/util/Cancel.h"
 #include "commands/FeatureCommands.h"
 
 #include "core/fit/Align.h"
@@ -254,6 +255,8 @@ void registerFeatureCommands(CommandRegistry& R) {
                GlobalRegResult r;
                try {
                    r = globalRegistration(*b.mesh, *ref.mesh, o);
+               } catch (const Cancelled&) {
+                   throw;
                } catch (const std::exception& e) {
                    throw CommandError("failed", ctx.say("Automatic alignment failed: " + std::string(e.what()) + ". Try align.point_pairs (three points picked on each).",
                                                         "La alineación automática ha fallado: " + std::string(e.what()) + ". Prueba con align.point_pairs (tres puntos elegidos en cada uno)."));

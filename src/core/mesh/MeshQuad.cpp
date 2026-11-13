@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/mesh/MeshQuad.h"
+#include "core/util/Cancel.h"
 
 #include "core/mesh/MeshAnalysis.h"
 
@@ -35,6 +36,7 @@ QuadRemeshResult remeshQuads(TriMesh& mesh, const QuadRemeshOptions& o) {
     f.flag_minimum_cost_flow = o.minimumCostFlow ? 1 : 0;
     f.hierarchy.rng_seed = o.seed;
 
+    checkCancel();
     f.NormalizeMesh();
     f.Initialize(static_cast<int>(std::max<std::size_t>(o.targetFaces, 6)));
 
@@ -57,14 +59,19 @@ QuadRemeshResult remeshQuads(TriMesh& mesh, const QuadRemeshOptions& o) {
         h.propagateConstraints();
     }
 
+    checkCancel();
     qflow::Optimizer::optimize_orientations(f.hierarchy);
+    checkCancel();
     f.ComputeOrientationSingularities();
     if (f.flag_adaptive_scale == 1) f.EstimateSlope();
     qflow::Optimizer::optimize_scale(f.hierarchy, f.rho, f.flag_adaptive_scale);
+    checkCancel();
     f.flag_adaptive_scale = 1;
     qflow::Optimizer::optimize_positions(f.hierarchy, f.flag_adaptive_scale);
+    checkCancel();
     f.ComputePositionSingularities();
     f.ComputeIndexMap();
+    checkCancel();
 
     TriMesh out;
     out.vertices.reserve(f.O_compact.size());

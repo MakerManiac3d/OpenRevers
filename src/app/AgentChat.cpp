@@ -198,6 +198,7 @@ void AgentChat::stop() {
     proc_->waitForFinished(2000);
     proc_->deleteLater();
     proc_ = nullptr;
+    emit stopRequested();
     append("<p style='color:#8796a3'>" + tr("Stopped.") + "</p>");
     setBusy(false);
 }

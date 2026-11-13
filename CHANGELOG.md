@@ -1,5 +1,17 @@
 # Cambios · Changelog
 
+## 0.11.3 — 13 de noviembre de 2026
+
+- **Cancelar un comando largo:** botón *Cancelar* junto a la barra de
+  progreso, y *Detener* en el chat del agente también lo cancela. Los
+  algoritmos largos (remallado en quads, alineación, segmentación en formas)
+  paran en su siguiente etapa y el modelo queda como estaba. Las órdenes que
+  el mismo autor tenía en cola después se descartan.
+- **Las consultas responden siempre:** lo que no cambia el modelo
+  (`session_state`, `view_selection`, `part_list`, la guía…) se responde al
+  momento aunque haya un comando largo en marcha, en lugar de esperar en la
+  cola. Antes, un remallado largo dejaba sin respuesta al agente.
+
 ## 0.11.2 — 13 de noviembre de 2026 (pasos 3 y 4: selección y chat con el agente)
 
 - `view.selection` incluye la **zona de malla marcada con el lazo**

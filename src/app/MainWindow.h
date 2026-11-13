@@ -16,6 +16,7 @@
 #include <QMainWindow>
 
 class QLabel;
+class QToolButton;
 class QTimer;
 class QListWidget;
 class QPlainTextEdit;
@@ -143,6 +144,7 @@ private:
     QDockWidget* chatDock_{nullptr};
     std::map<std::string, nlohmann::json> savedSelections_;  // kept with view.save_selection
     QLabel* selectionLabel_{nullptr};
+    QToolButton* cancelButton_{nullptr};
     QDockWidget* timelineDock_{nullptr};
     bool scanEnabled_{false};  // Settings → Experimental → direct scanning
     bool scanShown_{false};

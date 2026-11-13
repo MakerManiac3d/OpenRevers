@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "commands/Command.h"
+
+#include "core/util/Cancel.h"
 #include <set>
 #include <map>
 
@@ -160,6 +162,8 @@ json CommandRegistry::run(const std::string& name, const json& params, CommandCo
     if (!c->mutates) {
         try {
             return c->run(ctx, input);
+        } catch (const Cancelled&) {
+            throw;
         } catch (const CommandError&) {
             throw;
         } catch (const std::invalid_argument& e) {
@@ -173,6 +177,9 @@ json CommandRegistry::run(const std::string& name, const json& params, CommandCo
         json result = c->run(ctx, input);
         ctx.doc.endChange();
         return result;
+    } catch (const Cancelled&) {
+        ctx.doc.abortChange();
+        throw;
     } catch (const CommandError&) {
         ctx.doc.abortChange();
         throw;

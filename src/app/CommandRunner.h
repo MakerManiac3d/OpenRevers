@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QString>
 
+#include <atomic>
 #include <deque>
 #include <functional>
 
@@ -23,6 +24,11 @@ public:
     /// Queue a command. `done` is called on the interface thread.
     void submit(const QString& name, const json& params, const QString& caller, const PathPolicy& paths, const QString& lang, Done done = {});
     bool busy() const { return running_; }
+    /// Asks the running command to stop at its next checkpoint; the queued
+    /// ones from the same caller are dropped. The document is left as it was.
+    void cancel();
+    /// The command running now (empty when idle).
+    QString current() const { return current_; }
     CommandRegistry& registry() { return registry_; }
 
 signals:
@@ -41,12 +47,15 @@ private:
         Done done;
     };
     void next();
+    void runNow(Job job);  // a read-only query, beside the queue
     void complete(const Job& job, bool ok, const json& result, const QString& code, const QString& message);
 
     CommandRegistry& registry_;
     Document& doc_;
     std::deque<Job> queue_;
     bool running_{false};
+    std::atomic<bool> cancel_{false};
+    QString current_, currentCaller_;
 };
 
 }  // namespace orv

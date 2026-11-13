@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/fit/Align.h"
+#include "core/util/Cancel.h"
 
 #include <Eigen/Dense>
 #include <nanoflann.hpp>
@@ -244,6 +245,7 @@ BestFitResult bestFit(const TriMesh& moving, const TriMesh& reference, const Bes
     const double floorCut = 2 * spacing;
     std::vector<double> dist;
     for (int it = 0; it < o.maxIterations; ++it) {
+        checkCancel();
         Eigen::Matrix<double, 6, 6> A = Eigen::Matrix<double, 6, 6>::Zero();
         Eigen::Matrix<double, 6, 1> b = Eigen::Matrix<double, 6, 1>::Zero();
         dist.clear();

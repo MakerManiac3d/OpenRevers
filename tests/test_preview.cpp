@@ -65,3 +65,25 @@ TEST(Preview, ReadOnlyCommandIgnoresDryRun) {
     const json out = f.run("body.list", {{"dryRun", true}});
     EXPECT_FALSE(out.contains("preview"));
 }
+
+#include "core/util/Cancel.h"
+
+TEST(Cancel, StopsALongCommandAndLeavesTheDocument) {
+    Fixture f;
+    f.run("mesh.remesh", {{"body", "b1"}, {"edgeLength", 2.0}});
+    const auto mesh = f.doc.body("b1").mesh;
+    const auto history = f.doc.undoList().size();
+    std::atomic<bool> stop{true};  // asked to stop before it starts
+    CancelScope scope(&stop);
+    EXPECT_THROW(f.run("mesh.remesh_quads", {{"body", "b1"}}), Cancelled);
+    EXPECT_EQ(f.doc.body("b1").mesh, mesh);
+    EXPECT_EQ(f.doc.undoList().size(), history);
+}
+
+TEST(Cancel, NothingHappensWithoutTheFlag) {
+    std::atomic<bool> stop{false};
+    CancelScope scope(&stop);
+    EXPECT_NO_THROW(checkCancel());
+    stop = true;
+    EXPECT_THROW(checkCancel(), Cancelled);
+}
