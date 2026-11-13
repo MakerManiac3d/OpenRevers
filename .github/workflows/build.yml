@@ -106,7 +106,12 @@ jobs:
           echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
       - name: Installer
         working-directory: build
-        run: cpack -C Release
+        run: |
+          cpack -C Release
+          if ($LASTEXITCODE -ne 0) {
+            Get-ChildItem -Recurse -Filter NSISOutput.log _CPack_Packages | ForEach-Object { Get-Content $_.FullName -Tail 60 }
+            exit 1
+          }
       - uses: actions/upload-artifact@v7
         with:
           name: OpenRevers-Windows
