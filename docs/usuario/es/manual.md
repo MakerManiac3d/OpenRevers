@@ -31,6 +31,15 @@ Los paneles se mueven, se cierran y se recuperan en el menú **Ver**.
 
 El eje Z es el vertical, como en la mayoría de programas de CAD.
 
+## La cinta de pestañas (0.11)
+
+Bajo la barra rápida (guardar, importar, exportar, deshacer, rehacer) está la
+**cinta**, como en Fusion: una pestaña por tarea (*Sólido*, *Boceto*,
+*Superficie*, *Malla*, *Alinear*, *Inspeccionar*, *Agente IA*) y, en cada
+una, grupos de herramientas. Cada botón hace lo mismo que su entrada de menú
+y abre el mismo panel. Si una pestaña no cabe en la ventana, se desplaza de
+lado. Ctrl+K sigue buscando cualquier comando por su nombre.
+
 ## Trabajar a mano: panel de comandos, paleta y resultados
 
 Todo lo que hace el agente de IA lo puedes hacer tú con los mismos comandos y

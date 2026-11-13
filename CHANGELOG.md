@@ -1,5 +1,15 @@
 # Cambios · Changelog
 
+## 0.11.0 — 13 de noviembre de 2026 (paso 1 hacia la 1.0: la cinta)
+
+- **Cinta de pestañas al estilo Fusion** bajo la barra rápida: *Sólido*,
+  *Boceto*, *Superficie*, *Malla*, *Alinear*, *Inspeccionar* y *Agente IA*,
+  cada una con sus grupos (Crear, Modificar, Preparar, Limpiar…). Los
+  botones son las mismas acciones que los menús, con iconos propios dibujados
+  en el programa. Recuerda la última pestaña abierta.
+- La barra rápida se queda con guardar, importar, exportar, deshacer y
+  rehacer; las herramientas de malla pasan a su pestaña.
+
 ## 0.10.5 — 13 de noviembre de 2026
 
 - El escaneo directo con la biblioteca de CrealityScan queda oculto: no hay

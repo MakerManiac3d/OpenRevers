@@ -31,6 +31,14 @@ Panels can be moved, closed and brought back from the **View** menu.
 
 Z is up, as in most CAD programs.
 
+## The ribbon (0.11)
+
+Under the quick bar (save, import, export, undo, redo) is the **ribbon**, as
+in Fusion: one tab per task (*Solid*, *Sketch*, *Surface*, *Mesh*, *Align*,
+*Inspect*, *AI agent*), each with groups of tools. Every button does what its
+menu entry does and opens the same panel. A tab wider than the window
+scrolls sideways. Ctrl+K still finds any command by name.
+
 ## Working by hand: command panel, palette and results
 
 Everything the AI agent does, you can do with the same commands and the same

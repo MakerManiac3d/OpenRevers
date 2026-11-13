@@ -24,6 +24,8 @@ class QTreeWidgetItem;
 
 namespace orv {
 
+class Ribbon;
+
 class Viewport;
 
 class MainWindow : public QMainWindow {
@@ -42,6 +44,7 @@ protected:
 
 private:
     void buildActions();
+    void buildRibbon();
     void buildDocks();
     void refresh();
     void refreshTree();
@@ -126,6 +129,7 @@ private:
     void showPairAlign();
     void deleteSelection();
     QTimer* scanTimer_{nullptr};
+    Ribbon* ribbon_{nullptr};
     bool scanEnabled_{false};  // Settings → Experimental → direct scanning
     bool scanShown_{false};
     QListWidget* history_{nullptr};

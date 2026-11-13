@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/util/Config.h"
+#include "app/Icons.h"
+#include "app/Ribbon.h"
 #include "app/MainWindow.h"
 
 #include "scan/ScanBackend.h"
@@ -128,6 +130,7 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
     });
 
     buildActions();
+    buildRibbon();
     buildDocks();
 
     status_ = new QLabel();
@@ -242,11 +245,11 @@ void MainWindow::buildActions() {
     add(fileMenu, tr("&Save project"), [this]() { saveProject(false); }, QKeySequence::Save, QStyle::SP_DialogSaveButton, true);
     add(fileMenu, tr("Save project &as…"), [this]() { saveProject(true); }, QKeySequence::SaveAs);
     fileMenu->addSeparator();
-    add(fileMenu, tr("&Import mesh…"), &MainWindow::importMesh, QKeySequence(Qt::CTRL | Qt::Key_I), QStyle::SP_ArrowDown, true);
+    add(fileMenu, tr("&Import mesh…"), &MainWindow::importMesh, QKeySequence(Qt::CTRL | Qt::Key_I), QStyle::SP_ArrowDown, true)->setObjectName("import");
     add(fileMenu, tr("&Export mesh…"), &MainWindow::exportMesh, QKeySequence(Qt::CTRL | Qt::Key_E), QStyle::SP_ArrowUp, true);
     add(fileMenu, tr("Export &T-Spline for Fusion (.tsm)…"), &MainWindow::exportTsm);
-    add(fileMenu, cmdText("part.import_step") + "…", [this]() { runFromUi("part.import_step"); });
-    add(fileMenu, cmdText("part.export_step") + "…", [this]() { runFromUi("part.export_step"); });
+    add(fileMenu, cmdText("part.import_step") + "…", [this]() { runFromUi("part.import_step"); })->setObjectName("part.import_step");
+    add(fileMenu, cmdText("part.export_step") + "…", [this]() { runFromUi("part.export_step"); })->setObjectName("part.export_step");
     fileMenu->addSeparator();
     add(fileMenu, tr("&Quit"), &QWidget::close, QKeySequence::Quit);
     tb->addSeparator();
@@ -259,12 +262,15 @@ void MainWindow::buildActions() {
 
     for (const char* name : {"mesh.analyze", "mesh.repair", "mesh.fill_holes", "mesh.remove_pieces", "mesh.flip_normals", "mesh.smooth", "mesh.decimate", "mesh.remesh", "mesh.remesh_quads"}) {
         const bool onTb = std::string(name) != "mesh.flip_normals" && std::string(name) != "mesh.remove_pieces";
-        auto* a = add(meshMenu, cmdText(name), [this, name]() { runFromUi(name); }, {}, QStyle::SP_CustomBase, onTb);
+        auto* a = add(meshMenu, cmdText(name), [this, name]() { runFromUi(name); }, {}, QStyle::SP_CustomBase, false);
+        (void)onTb;
+        a->setObjectName(name);
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
     meshMenu->addSeparator();
     for (const char* name : {"mesh.remove_plane", "mesh.remove_outliers", "mesh.crop", "mesh.merge"}) {
         auto* a = add(meshMenu, cmdText(name), [this, name]() { runFromUi(name); });
+        a->setObjectName(name);
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
     {
@@ -275,19 +281,22 @@ void MainWindow::buildActions() {
         lasso->setToolTip(tr("Drag round what to delete (Ctrl adds to the selection; Alt+drag turns the view). Only faces facing you are taken."));
         connect(lasso, &QAction::toggled, this, [this](bool on) { viewport_->setLassoMode(on); });
         meshMenu->addAction(lasso);
-        add(meshMenu, tr("Delete the selection"), &MainWindow::deleteSelection, QKeySequence(Qt::Key_Delete));
+        add(meshMenu, tr("Delete the selection"), &MainWindow::deleteSelection, QKeySequence(Qt::Key_Delete))->setObjectName("delete_selection");
     }
     for (const char* name : {"features.segment", "features.fit", "features.refit", "features.measure", "features.rename", "features.delete"}) {
         auto* a = add(shapesMenu, cmdText(name), [this, name]() { runFromUi(name); });
+        a->setObjectName(name);
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
     for (const char* name : {"align.principal", "align.datums", "align.best_fit", "align.global", "align.move"}) {
         auto* a = add(alignMenu, cmdText(name), [this, name]() { runFromUi(name); });
+        a->setObjectName(name);
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
-    add(alignMenu, cmdText("align.point_pairs") + "…", &MainWindow::showPairAlign);
+    add(alignMenu, cmdText("align.point_pairs") + "…", &MainWindow::showPairAlign)->setObjectName("align.point_pairs");
     for (const char* name : {"points.thin", "points.estimate_normals", "points.to_mesh"}) {
         auto* a = add(pointsMenu, cmdText(name), [this, name]() { runFromUi(name); });
+        a->setObjectName(name);
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
     }
     for (const char* name : {"scan.status", "scan.connect", "scan.preview", "scan.start", "scan.pause", "scan.stop", "scan.export_to_body",
@@ -301,22 +310,24 @@ void MainWindow::buildActions() {
                              "part.surface_from_scan", "part.cut_by_surface", "part.thicken", "part.parameter", "part.edit", "part.move", "part.delete", "part.list",
                              "part.compare", "mesh.section"}) {
         auto* a = add(partMenu, cmdText(name), [this, name]() { runFromUi(name); });
+        a->setObjectName(name);
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
         if (std::string(name) == "part.sketch") {
-            add(partMenu, tr("Edit the picked sketch…"), [this]() {
+            auto* editSk = add(partMenu, tr("Edit the picked sketch…"), [this]() {
                 if (partItem_.startsWith('s')) editSketch(selected_, partItem_.mid(1).toULongLong());
                 else QMessageBox::information(this, tr("OpenRevers"), tr("Pick a sketch in the Model panel first."));
             });
-            add(partMenu, tr("New sketch on the picked face…"), &MainWindow::newSketchOnFace);
+            editSk->setObjectName("edit_sketch");
+            add(partMenu, tr("New sketch on the picked face…"), &MainWindow::newSketchOnFace)->setObjectName("sketch_on_face");
         }
         if (std::string(name) == "part.fillet") {
-            add(partMenu, tr("Round the picked edges…"), &MainWindow::filletPickedEdges);
+            add(partMenu, tr("Round the picked edges…"), &MainWindow::filletPickedEdges)->setObjectName("fillet_edges");
             partMenu->addSeparator();
         }
         if (std::string(name) == "part.thicken") partMenu->addSeparator();
         if (std::string(name) == "part.list") partMenu->addSeparator();
     }
-    for (const char* name : {"body.set_opacity", "body.clear_deviation"}) add(bodyMenu, cmdText(name), [this, name]() { runFromUi(name); });
+    for (const char* name : {"body.set_opacity", "body.clear_deviation"}) add(bodyMenu, cmdText(name), [this, name]() { runFromUi(name); })->setObjectName(name);
     for (const char* name : {"body.rename", "body.duplicate", "body.delete"}) add(bodyMenu, cmdText(name), [this, name]() { runFromUi(name); });
 
     for (auto [text, view] : std::initializer_list<std::pair<QString, const char*>>{{tr("Isometric"), "iso"}, {tr("Front"), "front"}, {tr("Back"), "back"},
@@ -324,7 +335,7 @@ void MainWindow::buildActions() {
         const QString v = view;
         add(viewMenu, text, [this, v]() { viewport_->setView(Viewport::viewFromName(v, nullptr)); });
     }
-    add(viewMenu, tr("&Fit all"), [this]() { viewport_->fitAll(); }, QKeySequence(Qt::Key_F));
+    add(viewMenu, tr("&Fit all"), [this]() { viewport_->fitAll(); }, QKeySequence(Qt::Key_F))->setObjectName("fit_all");
     viewMenu->addSeparator();
     auto toggle = [&](const QString& text, bool on, auto setter) {
         auto* a = new QAction(text, this);
@@ -347,11 +358,63 @@ void MainWindow::buildActions() {
     agentMenu->addSeparator();
     add(agentMenu, tr("&Settings…"), &MainWindow::showSettings);
 
-    add(helpMenu, tr("Find a command…"), &MainWindow::showPalette, QKeySequence(Qt::CTRL | Qt::Key_K));
-    add(helpMenu, tr("&Guide"), &MainWindow::showGuide, QKeySequence::HelpContents);
+    add(helpMenu, tr("Find a command…"), &MainWindow::showPalette, QKeySequence(Qt::CTRL | Qt::Key_K))->setObjectName("palette");
+    add(helpMenu, tr("&Guide"), &MainWindow::showGuide, QKeySequence::HelpContents)->setObjectName("guide");
     add(helpMenu, tr("Source code (GitHub)"), []() { QDesktopServices::openUrl(QUrl(kHomepage)); });
     add(helpMenu, tr("&About OpenRevers"), &MainWindow::showAbout);
     add(fileMenu, tr("Se&ttings…"), &MainWindow::showSettings);
+}
+
+void MainWindow::buildRibbon() {
+    // Every button is a menu's action (named after its command), with its icon.
+    auto act = [this](const char* name) -> QAction* {
+        auto* a = findChild<QAction*>(QString::fromLatin1(name));
+        if (a) a->setIcon(toolIcon(QString::fromLatin1(name)));
+        return a;
+    };
+    auto group = [&](std::initializer_list<const char*> names) {
+        QList<QAction*> list;
+        for (const char* n : names) list << act(n);
+        return list;
+    };
+    auto* r = new Ribbon();
+    const int solid = r->addTab(tr("Solid"));
+    r->addGroup(solid, tr("Insert"), group({"import", "part.import_step"}));
+    r->addGroup(solid, tr("Create"), group({"part.new", "part.sketch", "sketch_on_face", "part.extrude", "part.revolve", "part.loft"}));
+    r->addGroup(solid, tr("Modify"), group({"part.fillet", "fillet_edges", "part.pattern", "part.move", "part.edit", "part.parameter", "part.delete"}));
+    r->addGroup(solid, tr("Export"), group({"part.export_step"}));
+    const int sketch = r->addTab(tr("Sketch"));
+    r->addGroup(sketch, tr("Create"), group({"part.sketch", "sketch_on_face", "part.sketch_from_section"}));
+    r->addGroup(sketch, tr("Edit"), group({"edit_sketch"}));
+    r->addGroup(sketch, tr("From the scan"), group({"mesh.section"}));
+    const int surface = r->addTab(tr("Surface"));
+    r->addGroup(surface, tr("Create"), group({"part.surface_from_scan"}));
+    r->addGroup(surface, tr("Use"), group({"part.cut_by_surface", "part.thicken"}));
+    const int mesh = r->addTab(tr("Mesh"));
+    r->addGroup(mesh, tr("Prepare"), group({"mesh.analyze", "mesh.repair", "mesh.fill_holes", "mesh.remove_pieces", "mesh.flip_normals", "mesh.smooth"}));
+    r->addGroup(mesh, tr("Resolution"), group({"mesh.decimate", "mesh.remesh", "mesh.remesh_quads"}));
+    r->addGroup(mesh, tr("Clean"), group({"mesh.remove_plane", "mesh.remove_outliers", "mesh.crop", "lasso", "delete_selection", "mesh.merge"}));
+    r->addGroup(mesh, tr("Points"), group({"points.thin", "points.estimate_normals", "points.to_mesh"}));
+    const int align = r->addTab(tr("Align"));
+    r->addGroup(align, tr("Automatic"), group({"align.principal", "align.best_fit", "align.global"}));
+    r->addGroup(align, tr("By hand"), group({"align.datums", "align.point_pairs", "align.move"}));
+    const int inspect = r->addTab(tr("Inspect"));
+    r->addGroup(inspect, tr("Shapes"), group({"features.segment", "features.fit", "features.refit", "features.measure"}));
+    r->addGroup(inspect, tr("Compare"), group({"part.compare", "body.clear_deviation", "mesh.section"}));
+    r->addGroup(inspect, tr("View"), group({"fit_all"}));
+    const int agent = r->addTab(tr("AI agent"));
+    r->addGroup(agent, tr("Find"), group({"palette", "guide"}));
+    ribbon_ = r;
+
+    auto* bar = new QToolBar(tr("Ribbon"));
+    bar->setObjectName("RibbonBar");
+    bar->setMovable(false);
+    bar->setFloatable(false);
+    bar->addWidget(r);
+    addToolBarBreak(Qt::TopToolBarArea);
+    addToolBar(Qt::TopToolBarArea, bar);
+    QSettings settings;
+    r->setCurrentTab(settings.value("ribbon/tab", solid).toInt());
 }
 
 void MainWindow::buildDocks() {
@@ -1683,6 +1746,7 @@ void MainWindow::closeEvent(QCloseEvent* e) {
     }
     QSettings s;
     s.setValue("window/geometry", saveGeometry());
+    if (ribbon_) s.setValue("ribbon/tab", ribbon_->currentTab());
     s.setValue("window/state", saveState());
     e->accept();
 }
