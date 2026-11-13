@@ -64,7 +64,28 @@ std::atomic<float> g_progress{0};
 std::atomic<ob::Status> g_status{ob::kSuccess};
 std::atomic<int> g_finished{0};
 
+std::atomic<int> g_deviceMessage{-1};
+std::atomic<int> g_deviceMessages{0};
+
 void onProgress(float f) { g_progress = f; }
+void onDeviceMessage(ob::DeviceMessage m) {
+    g_deviceMessage = m.msg_id;
+    ++g_deviceMessages;
+}
+ob::DeviceMessageListener g_deviceListener{&onDeviceMessage};
+
+const char* deviceMessageName(int id) {
+    switch (id) {
+    case -1: return "";
+    case ob::kDeviceConnect: return "DEVICE_CONNECT";
+    case ob::kDeviceDisconnect: return "DEVICE_DISCONNECT";
+    case ob::kDeviceConnectNeedCalibration: return "DEVICE_CONNECT_NEED_CALIBRATION";
+    case ob::kDeviceConnectWithProblem: return "DEVICE_CONNECT_WITH_PROBLEM";
+    case ob::kDeviceConnectReadParamsFailed: return "DEVICE_CONNECT_READ_PARAMS_FAILED";
+    case ob::kDeviceConnectCrcCheckFailed: return "DEVICE_CONNECT_CRC_CHECK_FAILED";
+    default: return "DEVICE_MESSAGE";
+    }
+}
 void onStatus(ob::Status s) {
     g_status = s;
     ++g_finished;
@@ -80,6 +101,8 @@ struct Api {
     ob::FnDeviceGetActiveIdx activeIdx{};
     ob::FnDeviceSelectActive selectActive{};
     ob::FnDeviceGetInfo deviceInfo{};
+    ob::FnDeviceMsgListener addDeviceListener{};
+    ob::FnDeviceMsgListener removeDeviceListener{};
     ob::FnContextCreateSession createSession{};
     ob::FnSessionDestroy sessionDestroy{};
     ob::FnSessionCheckSupported checkSupported{};
@@ -132,6 +155,7 @@ public:
         s.points = points_;
         s.progress = g_progress;
         s.lastStatus = ob::statusName(g_status);
+        s.deviceMessage = deviceMessageName(g_deviceMessage);
         return s;
     }
 
@@ -139,6 +163,12 @@ public:
         ensureContext();
         std::int32_t n = 0;
         check(api_.deviceNum(devices_, &n), "get_device_num");
+        // The list fills from the device thread after the listener is added:
+        // give a scanner already plugged in a few seconds to be announced.
+        for (int i = 0; n == 0 && i < 40; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            check(api_.deviceNum(devices_, &n), "get_device_num");
+        }
         std::vector<ScanDevice> out;
         for (std::int32_t i = 0; i < n; ++i) {
             std::vector<unsigned char> buf(4096, 0);
@@ -278,6 +308,7 @@ public:
         if (scan_ && (state_ == ScanState::Scanning || state_ == ScanState::Paused || state_ == ScanState::Previewing))
             api_.stop(scan_, onProgress, onStatus, 1);
         closeSession();
+        if (devices_) api_.removeDeviceListener(devices_, &g_deviceListener);
         if (context_) api_.contextDestroy(context_);
         context_ = devices_ = nullptr;
         state_ = ScanState::Disconnected;
@@ -315,6 +346,8 @@ private:
         get(api_.activeIdx, "obscan_device_management_get_active_idx");
         get(api_.selectActive, "obscan_device_management_select_active_device");
         get(api_.deviceInfo, "obscan_device_management_get_device_info");
+        get(api_.addDeviceListener, "obscan_device_management_add_device_msg_listener");
+        get(api_.removeDeviceListener, "obscan_device_management_remove_device_msg_listener");
         get(api_.createSession, "obscan_context_create_session");
         get(api_.sessionDestroy, "obscan_session_destroy");
         get(api_.checkSupported, "obscan_session_check_supported");
@@ -351,6 +384,7 @@ private:
         const ob::ContextConfig cc{algo.c_str(), l.c_str(), l.c_str(), l.c_str(), l.c_str()};
         check(api_.contextCreate(&context_, &cc), "context_create");
         check(api_.deviceManagement(context_, &devices_), "get_device_management");
+        check(api_.addDeviceListener(devices_, &g_deviceListener), "add_device_msg_listener");
     }
 
     void closeSession() {

@@ -1,5 +1,14 @@
 # Cambios · Changelog
 
+## 0.10.2 — 13 de noviembre de 2026
+
+- Escáner: OpenRevers no veía el Raptor aunque estuviera conectado. La
+  biblioteca de CrealityScan solo llena su lista de escáneres cuando hay un
+  oyente de mensajes de dispositivo; ahora se registra al abrir el contexto,
+  y *Dispositivos* espera unos segundos a que aparezca el escáner.
+  `scan.status` dice el último mensaje (conectado, desconectado, necesita
+  calibración…).
+
 ## 0.10.1 — 13 de noviembre de 2026
 
 - MCP: dos herramientas fijas, `command_list` y `command_run`, que llegan a

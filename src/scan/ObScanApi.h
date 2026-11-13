@@ -109,6 +109,26 @@ struct OptimizationConfig {  // passed by value
     std::int32_t export_format;
 };
 
+// Device messages (OBScanDeviceMessageID, in the metadata's order). The
+// library only fills its scanner list once a device listener is registered:
+// without one it logs "device callback is nullptr" and the list stays empty.
+enum DeviceMessageId : std::int32_t {
+    kDeviceConnect = 0,
+    kDeviceDisconnect = 1,
+    kDeviceConnectNeedCalibration = 6,
+    kDeviceConnectWithProblem = 8,
+    kDeviceConnectReadParamsFailed = 9,
+    kDeviceConnectCrcCheckFailed = 10,
+};
+struct DeviceMessage {  // passed by value (16 bytes: by address on x64)
+    std::int32_t msg_id;
+    void* data;
+};
+using DeviceMessageCallback = void (*)(DeviceMessage message);
+struct DeviceMessageListener {  // the library keeps its address
+    DeviceMessageCallback onMessage;
+};
+
 using ProgressCallback = void (*)(float fraction);
 using StatusCallback = void (*)(Status status);
 
@@ -124,6 +144,7 @@ using FnDeviceGetNum = Status (*)(void* devices, std::int32_t* count);
 using FnDeviceGetActiveIdx = Status (*)(void* devices, std::int32_t* index);
 using FnDeviceSelectActive = Status (*)(void* devices, std::int32_t index);
 using FnDeviceGetInfo = Status (*)(void* devices, std::int32_t index, void* info);
+using FnDeviceMsgListener = Status (*)(void* devices, DeviceMessageListener* listener);
 using FnContextCreateSession = Status (*)(void* context, const SessionConfig* config, void** session);
 using FnSessionDestroy = Status (*)(void* session);
 using FnSessionCheckSupported = Status (*)(void* session, const ScanConfig* config);
@@ -149,6 +170,8 @@ inline constexpr const char* kResolvedFunctions[] = {
     "obscan_device_management_get_active_idx",
     "obscan_device_management_select_active_device",
     "obscan_device_management_get_device_info",
+    "obscan_device_management_add_device_msg_listener",
+    "obscan_device_management_remove_device_msg_listener",
     "obscan_context_create_session",
     "obscan_session_destroy",
     "obscan_session_check_supported",

@@ -45,6 +45,7 @@ struct ScanStatus {
     std::size_t points{0};     // in the model so far
     float progress{0};         // of the last long task (0..1)
     std::string lastStatus;    // the library's last status, by name
+    std::string deviceMessage; // the library's last device message, by name
 };
 
 class ScanBackend {

@@ -92,6 +92,34 @@ solo se confirman con el Raptor conectado:
 - **Fotogramas:** no se registran oyentes de mensajes (`FRAME_READY`). Hay
   que confirmar que la biblioteca no acumula fotogramas sin liberar.
 
+## Lo aprendido en la primera prueba con el Raptor (0.10.2)
+
+- La biblioteca (`SDK version 3.5.4`) carga bien desde la carpeta de
+  CrealityScan y Orbbec SDK ve el escáner por USB 3.0 (`CR-Scan Raptor`,
+  PID `0x06A8`).
+- Pero `obscan_device_management_get_device_num` daba 0: **la lista de la
+  biblioteca solo se llena si hay un oyente de mensajes de dispositivo**. Sin
+  él registra `device callback is nullptr` al conectar el escáner y no lo
+  añade.
+- De los metadatos de CrealityScan:
+  - `obscan_device_management_add_device_msg_listener(device_handle,
+    listener)` y su `remove_…`, los dos con punteros.
+  - `OBScanDeviceMessageListener { onMessage }`, cuya dirección guarda la
+    biblioteca.
+  - `onMessage(OBScanDeviceMessage msg)` con `{ int32 msg_id; IntPtr data }`
+    (16 bytes por valor).
+  - Mensajes en orden: `DEVICE_CONNECT` = 0, `DEVICE_DISCONNECT` = 1, …,
+    `DEVICE_CONNECT_NEED_CALIBRATION` = 6.
+- OpenRevers registra el oyente al crear el contexto y, si la lista está
+  vacía, espera hasta 4 s a que la biblioteca anuncie el escáner.
+  `scan.status` da el último mensaje (`deviceMessage`).
+- `OBScanDeviceInfo` tiene `camera_pid`, `camera_name`,
+  `camera_serial_number`, `camera_connection_type`,
+  `camera_firmware_version`, campos Wi-Fi y `device_calibration_timestamp`;
+  los textos son de tamaño fijo, aún desconocido.
+- El registro avisa `the device config file path is nullptr`. No está en
+  `OBScanContextConfig` (5 rutas, confirmado), así que de momento se deja.
+
 ## Privacidad
 
 OpenRevers promete que nada sale del equipo. Lo comprobado:
@@ -106,6 +134,12 @@ OpenRevers promete que nada sale del equipo. Lo comprobado:
     (`ob_enable_network_server`). En esa versión, los dos vienen apagados por
     defecto.
   - No es tráfico a internet.
+  - **Visto en la primera prueba real (13/11/2026):** la búsqueda de cámaras
+    Ethernet sí está activa en la copia de CrealityScan. Su registro
+    (`ScannerStreamSDK.log`) muestra un cliente GVCP que se ata a la IP
+    local del equipo y a 127.0.0.1 e intenta difundir cada segundo; todos los
+    envíos fallan (`sendto` error 10038), así que en la práctica no sale
+    nada. Queda por ver si se puede apagar desde OpenRevers.
 - La única referencia a internet en los metadatos es
   `OB_SCAN_ERROR_MODEL_GENERATION_FAILED_WITH_NETWORK_EXCEPTION`, de la
   generación por IA. OpenRevers no la resuelve nunca.
