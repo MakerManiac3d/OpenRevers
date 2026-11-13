@@ -34,6 +34,10 @@ TEST(ScanApi, NeverResolvesNetworkFirmwareOrAiFunctions) {
     }
     EXPECT_STREQ(obscan::statusName(0), "SUCCESS");
     EXPECT_STREQ(obscan::statusName(-5), "UNKNOWN");
+    // Errors are coded 0x326201xx, not 1, 2, 3... (constants in the metadata).
+    EXPECT_STREQ(obscan::statusName(0x32620109), "LISTENER_NOT_FOUND");
+    EXPECT_STREQ(obscan::statusName(0x32620123), "DEVICE_BUSY");
+    EXPECT_STREQ(obscan::statusName(1), "UNKNOWN");
 }
 
 TEST(ScanApi, StructureLayoutsMatchTheMetadata) {

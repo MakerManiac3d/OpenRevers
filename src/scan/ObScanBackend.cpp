@@ -66,13 +66,46 @@ std::atomic<int> g_finished{0};
 
 std::atomic<int> g_deviceMessage{-1};
 std::atomic<int> g_deviceMessages{0};
+std::atomic<int> g_processMessage{-1};
+std::atomic<long long> g_frames{0};
+// Set once the library is loaded: the data callback hands back what it gets.
+ob::FnRelease g_releaseImage = nullptr;
+ob::FnRelease g_releaseFrame = nullptr;
 
 void onProgress(float f) { g_progress = f; }
-void onDeviceMessage(ob::DeviceMessage m) {
+void onDeviceMessage(ob::Message m) {
     g_deviceMessage = m.msg_id;
     ++g_deviceMessages;
 }
-ob::DeviceMessageListener g_deviceListener{&onDeviceMessage};
+// Images and frames belong to whoever receives them (CrealityScan's wrapper
+// disposes of them). OpenRevers reads the model cloud instead, so they are
+// counted and released straight away.
+void onDataMessage(ob::Message m) {
+    if (!m.data) return;
+    if (m.msg_id == ob::kFrameReady) {
+        ++g_frames;
+        if (g_releaseFrame) g_releaseFrame(m.data);
+    } else if (m.msg_id == ob::kNewRgbImage || m.msg_id == ob::kNewDepthImage || m.msg_id == ob::kNewIrImage) {
+        if (g_releaseImage) g_releaseImage(m.data);
+    }
+}
+void onProcessMessage(ob::Message m) { g_processMessage = m.msg_id; }
+ob::MessageListener g_deviceListener{&onDeviceMessage};
+ob::MessageListener g_dataListener{&onDataMessage};
+ob::MessageListener g_processListener{&onProcessMessage};
+
+const char* processMessageName(int id) {
+    switch (id) {
+    case -1: return "";
+    case ob::kFrameBufferFull: return "FRAME_BUFFER_FULL";
+    case ob::kMaxFramesReached: return "MAX_FRAMES_REACHED";
+    case ob::kDetectFace: return "DETECT_FACE";
+    case ob::kScanningFailed: return "SCANNING_FAILED";
+    case ob::kNeedChangeVoxelSize: return "OPTIMIZATION_TO_MESH_NEED_CHANGE_VOXEL_SIZE";
+    case ob::kMarkersTooRegular: return "PASTED_MARKERS_TOO_REGULAR";
+    default: return "PROCESS_MESSAGE";
+    }
+}
 
 const char* deviceMessageName(int id) {
     switch (id) {
@@ -103,6 +136,12 @@ struct Api {
     ob::FnDeviceGetInfo deviceInfo{};
     ob::FnDeviceMsgListener addDeviceListener{};
     ob::FnDeviceMsgListener removeDeviceListener{};
+    ob::FnContextMsgListener addDataListener{};
+    ob::FnContextMsgListener removeDataListener{};
+    ob::FnContextMsgListener addProcessListener{};
+    ob::FnContextMsgListener removeProcessListener{};
+    ob::FnRelease releaseImage{};
+    ob::FnRelease releaseFrame{};
     ob::FnContextCreateSession createSession{};
     ob::FnSessionDestroy sessionDestroy{};
     ob::FnSessionCheckSupported checkSupported{};
@@ -156,6 +195,8 @@ public:
         s.progress = g_progress;
         s.lastStatus = ob::statusName(g_status);
         s.deviceMessage = deviceMessageName(g_deviceMessage);
+        s.processMessage = processMessageName(g_processMessage);
+        s.frames = static_cast<std::size_t>(g_frames.load());
         return s;
     }
 
@@ -308,6 +349,10 @@ public:
         if (scan_ && (state_ == ScanState::Scanning || state_ == ScanState::Paused || state_ == ScanState::Previewing))
             api_.stop(scan_, onProgress, onStatus, 1);
         closeSession();
+        if (context_) {
+            api_.removeDataListener(context_, &g_dataListener);
+            api_.removeProcessListener(context_, &g_processListener);
+        }
         if (devices_) api_.removeDeviceListener(devices_, &g_deviceListener);
         if (context_) api_.contextDestroy(context_);
         context_ = devices_ = nullptr;
@@ -348,6 +393,12 @@ private:
         get(api_.deviceInfo, "obscan_device_management_get_device_info");
         get(api_.addDeviceListener, "obscan_device_management_add_device_msg_listener");
         get(api_.removeDeviceListener, "obscan_device_management_remove_device_msg_listener");
+        get(api_.addDataListener, "obscan_context_add_data_msg_listener");
+        get(api_.removeDataListener, "obscan_context_remove_data_msg_listener");
+        get(api_.addProcessListener, "obscan_context_add_process_msg_listener");
+        get(api_.removeProcessListener, "obscan_context_remove_process_msg_listener");
+        get(api_.releaseImage, "obscan_image_release");
+        get(api_.releaseFrame, "obscan_frame_release");
         get(api_.createSession, "obscan_context_create_session");
         get(api_.sessionDestroy, "obscan_session_destroy");
         get(api_.checkSupported, "obscan_session_check_supported");
@@ -385,6 +436,10 @@ private:
         check(api_.contextCreate(&context_, &cc), "context_create");
         check(api_.deviceManagement(context_, &devices_), "get_device_management");
         check(api_.addDeviceListener(devices_, &g_deviceListener), "add_device_msg_listener");
+        g_releaseImage = api_.releaseImage;
+        g_releaseFrame = api_.releaseFrame;
+        check(api_.addDataListener(context_, &g_dataListener), "add_data_msg_listener");
+        check(api_.addProcessListener(context_, &g_processListener), "add_process_msg_listener");
     }
 
     void closeSession() {

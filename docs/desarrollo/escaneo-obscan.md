@@ -120,6 +120,32 @@ solo se confirman con el Raptor conectado:
 - El registro avisa `the device config file path is nullptr`. No está en
   `OBScanContextConfig` (5 rutas, confirmado), así que de momento se deja.
 
+## Segunda prueba (0.10.3)
+
+- Con la 0.10.2 el Raptor ya aparece y conecta: la biblioteca envía
+  `DEVICE_CONNECT` y después `DEVICE_CONNECT_NEED_CALIBRATION`, aunque su
+  registro dice `the device calib status: true`.
+- La vista previa fallaba con `data listener not found in preview`: hace falta
+  un oyente de datos (`obscan_context_add_data_msg_listener`, con el mismo
+  formato que el de dispositivo).
+- Los mensajes de datos llevan una imagen (RGB, profundidad, IR) o un
+  fotograma (`FRAME_READY`). El que los recibe los libera
+  (`obscan_image_release` / `obscan_frame_release`; en CrealityScan,
+  `OBScanImage` y `OBScanFrame` tienen `Dispose`). OpenRevers los libera al
+  momento.
+- **Valores de las enumeraciones**, leídos de las constantes de los
+  metadatos (enteros comprimidos con signo):
+  - Las de configuración (modo, precisión, material, proyección…) sí son
+    0, 1, 2…
+  - Las de estado y de mensajes no:
+    - estado: `SUCCESS` = 0 y los errores de `0x32620100` en adelante, con
+      numeración en estilo decimal (`…09` → `…10`);
+    - mensajes de dispositivo: `0x12620100…`;
+    - de datos: `0x13620100…`;
+    - de proceso: `0x14620100…`;
+    - de control: `0x14700200…`.
+  - El primero de cada lista vale 0.
+
 ## Privacidad
 
 OpenRevers promete que nada sale del equipo. Lo comprobado:

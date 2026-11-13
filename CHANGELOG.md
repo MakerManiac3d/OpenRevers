@@ -1,5 +1,17 @@
 # Cambios · Changelog
 
+## 0.10.3 — 13 de noviembre de 2026
+
+- Escáner: la vista previa fallaba (`data listener not found in preview`).
+  La biblioteca necesita también un oyente de datos; ahora se registra, y
+  las imágenes y fotogramas que envía se cuentan (`frames` en
+  `scan.status`) y se le devuelven al momento. También un oyente del proceso
+  de escaneo (`processMessage`: búfer lleno, escaneo fallido…).
+- Los códigos de error y de mensaje de la biblioteca no son 1, 2, 3…: los
+  errores van de 0x32620100 en adelante y los mensajes de dispositivo de
+  0x12620100. Ahora OpenRevers da su nombre real (antes daba un nombre
+  equivocado o «DEVICE_MESSAGE»).
+
 ## 0.10.2 — 13 de noviembre de 2026
 
 - Escáner: OpenRevers no veía el Raptor aunque estuviera conectado. La

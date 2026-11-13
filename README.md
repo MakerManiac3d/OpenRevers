@@ -43,7 +43,7 @@ compatible con MCP) puede manejar paso a paso, delante de ti.
 
 1. Descarga `OpenRevers-<versión>-win64.exe` de la página
    [Releases](https://github.com/MakerManiac3d/OpenRevers/releases), o del
-   último artefacto **OpenRevers-Windows** en
+   último artefacto **OpenRevers-<versión>-Windows** en
    [Actions → Build](https://github.com/MakerManiac3d/OpenRevers/actions/workflows/build.yml).
 2. Ejecútalo y sigue el asistente. Instala el programa y su puente para IA,
    `openrevers-cli.exe`, en la misma carpeta.
@@ -128,7 +128,7 @@ surfaces and inspection follow ([roadmap](docs/hoja-de-ruta.md)).
 
 - **Install (Windows):** run `OpenRevers-<version>-win64.exe` from
   [Releases](https://github.com/MakerManiac3d/OpenRevers/releases) or the
-  latest **OpenRevers-Windows** artifact of the Build workflow.
+  latest **OpenRevers-<version>-Windows** artifact of the Build workflow.
 - **Build from source:** [docs/desarrollo/compilar.md](docs/desarrollo/compilar.md) (bilingual).
 - **Manual:** [docs/usuario/en/manual.md](docs/usuario/en/manual.md).
 - **AI agents:** menu **AI agent → Copy configuration for Claude Desktop**;

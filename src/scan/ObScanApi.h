@@ -18,25 +18,61 @@ namespace orv::obscan {
 using Status = std::int32_t;
 constexpr Status kSuccess = 0;
 
-/// Names of the status values, in the order the metadata lists them (the
-/// values are taken as 0, 1, 2...: to be confirmed on a real scanner).
+/// Names of the status values. Only SUCCESS is 0: the errors are coded
+/// 0x326201xx (read from the constants in CrealityScan's metadata).
 inline const char* statusName(Status s) {
-    static const char* const kNames[] = {
-        "SUCCESS", "INVALID_ARGUMENT", "FATAL", "DEVICE_DISCONNECT", "SESSION_PAUSED", "SESSION_NOT_PAUSED",
-        "UNSUPPORTED_CONFIGURATION", "CAMERA_PERMISSION_NOT_GRANTED", "DEADLINE_EXCEEDED", "CAMERA_STREAMING_RETRY_FAILED",
-        "LISTENER_NOT_FOUND", "MULTI_CALLED", "CAMERA_NOT_REGISTER", "OUT_MEMORY", "FILE_NOT_EXIST", "FILE_READ_FAILED",
-        "FILE_WRITE_FAILED", "GRAPHICS_PROBLEM", "HAVE_NOT_MARKER", "IMPORT_EMPTY_PROJ", "IMPORT_SELF_PROJ",
-        "NO_PLUG_IN_POWER", "INVALID_SCAN", "DEVICE_BUSY", "CANCEL_RUN", "CAMERA_PARAMS_INCONSISTENT",
-        "LASER_MARKER_FRAMEWORK_INVALID_CLOUD_SCAN", "OUT_HARD_DISK", "READ_DEVICE_PARAMS", "IMPORT_NOT_SUPPORT_PROJ",
-        "IMPORT_HIGH_VERSION_PROJ", "RESTORE_FACTORY_CRC_CHECK_FAILED", "RESTORE_FACTORY_DATA_WRITE_FAILED",
-        "AI_HEAD_RESTORATION_NOT_DETECT_FACE", "MESH_NOT_FOUND_HOLE", "PROJ_NOT_WRITE_PERMISSION", "SET_LED_LASER",
-        "LOADING_INTR_LASER_PARAMS", "SET_IR_MODE", "AI_REPLACE_RGB_FEATS_NOT_OBVIOUS", "IMPORTED_MESH_SIZE_NOT_SUPPORT",
-        "MODEL_GENERATION_FAILED_WITH_NETWORK_EXCEPTION", "ALLOCATE_GPU_RESOURCES_FAILED"};
-    constexpr int n = static_cast<int>(sizeof(kNames) / sizeof(kNames[0]));
-    return s >= 0 && s < n ? kNames[s] : "UNKNOWN";
+    struct Entry { Status value; const char* name; };
+    static const Entry kNames[] = {
+        {0, "SUCCESS"},
+        {0x32620100, "INVALID_ARGUMENT"},
+        {0x32620101, "FATAL"},
+        {0x32620102, "DEVICE_DISCONNECT"},
+        {0x32620103, "SESSION_PAUSED"},
+        {0x32620104, "SESSION_NOT_PAUSED"},
+        {0x32620105, "UNSUPPORTED_CONFIGURATION"},
+        {0x32620106, "CAMERA_PERMISSION_NOT_GRANTED"},
+        {0x32620107, "DEADLINE_EXCEEDED"},
+        {0x32620108, "CAMERA_STREAMING_RETRY_FAILED"},
+        {0x32620109, "LISTENER_NOT_FOUND"},
+        {0x32620110, "MULTI_CALLED"},
+        {0x32620111, "CAMERA_NOT_REGISTER"},
+        {0x32620112, "OUT_MEMORY"},
+        {0x32620113, "FILE_NOT_EXIST"},
+        {0x32620114, "FILE_READ_FAILED"},
+        {0x32620115, "FILE_WRITE_FAILED"},
+        {0x32620116, "GRAPHICS_PROBLEM"},
+        {0x32620117, "HAVE_NOT_MARKER"},
+        {0x32620118, "IMPORT_EMPTY_PROJ"},
+        {0x32620119, "IMPORT_SELF_PROJ"},
+        {0x32620121, "NO_PLUG_IN_POWER"},
+        {0x32620122, "INVALID_SCAN"},
+        {0x32620123, "DEVICE_BUSY"},
+        {0x32620124, "CANCEL_RUN"},
+        {0x32620125, "CAMERA_PARAMS_INCONSISTENT"},
+        {0x32620126, "LASER_MARKER_FRAMEWORK_INVALID_CLOUD_SCAN"},
+        {0x32620127, "OUT_HARD_DISK"},
+        {0x32620128, "READ_DEVICE_PARAMS"},
+        {0x32620129, "IMPORT_NOT_SUPPORT_PROJ"},
+        {0x32620130, "IMPORT_HIGH_VERSION_PROJ"},
+        {0x32620131, "RESTORE_FACTORY_CRC_CHECK_FAILED"},
+        {0x32620132, "RESTORE_FACTORY_DATA_WRITE_FAILED"},
+        {0x32620133, "AI_HEAD_RESTORATION_NOT_DETECT_FACE"},
+        {0x32620134, "MESH_NOT_FOUND_HOLE"},
+        {0x32620135, "PROJ_NOT_WRITE_PERMISSION"},
+        {0x32620136, "SET_LED_LASER"},
+        {0x32620137, "LOADING_INTR_LASER_PARAMS"},
+        {0x32620138, "SET_IR_MODE"},
+        {0x32620140, "AI_REPLACE_RGB_FEATS_NOT_OBVIOUS"},
+        {0x32620141, "IMPORTED_MESH_SIZE_NOT_SUPPORT"},
+        {0x32620142, "MODEL_GENERATION_FAILED_WITH_NETWORK_EXCEPTION"},
+        {0x32620143, "ALLOCATE_GPU_RESOURCES_FAILED"},
+    };
+    for (const auto& e : kNames)
+        if (e.value == s) return e.name;
+    return "UNKNOWN";
 }
 
-// Enumerations (32-bit), values in metadata order.
+// Enumerations (32-bit): these ones are 0, 1, 2... (checked in the metadata).
 enum Projection : std::int32_t { kInfrared = 0, kBlueLineLaser = 1 };
 enum ScanMode : std::int32_t { kModeFace = 0, kModeObjectSmall, kModeObjectMedium, kModeObjectBig, kModeHuman };
 enum Accuracy : std::int32_t { kAccuracyFast = 0, kAccuracyHigh = 1 };
@@ -109,25 +145,45 @@ struct OptimizationConfig {  // passed by value
     std::int32_t export_format;
 };
 
-// Device messages (OBScanDeviceMessageID, in the metadata's order). The
-// library only fills its scanner list once a device listener is registered:
-// without one it logs "device callback is nullptr" and the list stays empty.
+// Messages from the library. Every listener is a structure holding one
+// callback that takes the message by value (16 bytes: by address on x64);
+// the library keeps the listener's address. It needs a device listener to
+// fill its scanner list ("device callback is nullptr") and a data listener
+// to preview ("data listener not found in preview"). IDs as coded in the
+// metadata: the first of each list is 0, the rest 0xNN62xxxx.
 enum DeviceMessageId : std::int32_t {
     kDeviceConnect = 0,
-    kDeviceDisconnect = 1,
-    kDeviceConnectNeedCalibration = 6,
-    kDeviceConnectWithProblem = 8,
-    kDeviceConnectReadParamsFailed = 9,
-    kDeviceConnectCrcCheckFailed = 10,
+    kDeviceDisconnect = 0x12620100,
+    kDeviceConnectNeedCalibration = 0x12620114,
+    kDeviceConnectWithProblem = 0x12620116,
+    kDeviceConnectReadParamsFailed = 0x12620117,
+    kDeviceConnectCrcCheckFailed = 0x12620118,
 };
-struct DeviceMessage {  // passed by value (16 bytes: by address on x64)
+enum DataMessageId : std::int32_t {  // data: an image (release it) or a frame (release it)
+    kNewRgbImage = 0,
+    kNewDepthImage = 0x13620100,
+    kNewIrImage = 0x13620101,
+    kFrameReady = 0x13620102,
+};
+enum ProcessMessageId : std::int32_t {
+    kFrameBufferFull = 0x14620100,
+    kMaxFramesReached = 0x14620101,
+    kDetectFace = 0x14620102,
+    kScanningFailed = 0x14620103,
+    kNeedChangeVoxelSize = 0x14620104,
+    kMarkersTooRegular = 0x14620105,
+};
+struct Message {
     std::int32_t msg_id;
     void* data;
 };
-using DeviceMessageCallback = void (*)(DeviceMessage message);
-struct DeviceMessageListener {  // the library keeps its address
-    DeviceMessageCallback onMessage;
+using MessageCallback = void (*)(Message message);
+struct MessageListener {
+    MessageCallback onMessage;
 };
+// Kept for the code that names them so.
+using DeviceMessage = Message;
+using DeviceMessageListener = MessageListener;
 
 using ProgressCallback = void (*)(float fraction);
 using StatusCallback = void (*)(Status status);
@@ -144,7 +200,9 @@ using FnDeviceGetNum = Status (*)(void* devices, std::int32_t* count);
 using FnDeviceGetActiveIdx = Status (*)(void* devices, std::int32_t* index);
 using FnDeviceSelectActive = Status (*)(void* devices, std::int32_t index);
 using FnDeviceGetInfo = Status (*)(void* devices, std::int32_t index, void* info);
-using FnDeviceMsgListener = Status (*)(void* devices, DeviceMessageListener* listener);
+using FnDeviceMsgListener = Status (*)(void* devices, MessageListener* listener);
+using FnContextMsgListener = Status (*)(void* context, MessageListener* listener);
+using FnRelease = Status (*)(void* handle);
 using FnContextCreateSession = Status (*)(void* context, const SessionConfig* config, void** session);
 using FnSessionDestroy = Status (*)(void* session);
 using FnSessionCheckSupported = Status (*)(void* session, const ScanConfig* config);
@@ -172,6 +230,12 @@ inline constexpr const char* kResolvedFunctions[] = {
     "obscan_device_management_get_device_info",
     "obscan_device_management_add_device_msg_listener",
     "obscan_device_management_remove_device_msg_listener",
+    "obscan_context_add_data_msg_listener",
+    "obscan_context_remove_data_msg_listener",
+    "obscan_context_add_process_msg_listener",
+    "obscan_context_remove_process_msg_listener",
+    "obscan_image_release",
+    "obscan_frame_release",
     "obscan_context_create_session",
     "obscan_session_destroy",
     "obscan_session_check_supported",

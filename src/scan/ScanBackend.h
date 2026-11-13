@@ -46,6 +46,8 @@ struct ScanStatus {
     float progress{0};         // of the last long task (0..1)
     std::string lastStatus;    // the library's last status, by name
     std::string deviceMessage; // the library's last device message, by name
+    std::string processMessage;// the library's last scanning-process message
+    std::size_t frames{0};     // frames received while previewing or scanning
 };
 
 class ScanBackend {

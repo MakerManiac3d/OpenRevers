@@ -23,7 +23,7 @@ json statusJson(const ScanStatus& s) {
             {"device", s.device},
             {"points", s.points},
             {"progress", std::round(s.progress * 1000) / 1000},
-            {"lastStatus", s.lastStatus}, {"deviceMessage", s.deviceMessage}};
+            {"lastStatus", s.lastStatus}, {"deviceMessage", s.deviceMessage}, {"processMessage", s.processMessage}, {"frames", s.frames}};
 }
 
 /// Run `f` on the scanner, turning its errors into command errors.
