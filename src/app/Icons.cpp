@@ -227,6 +227,17 @@ QHash<QString, Glyph> glyphs() {
         p.setPen(pen(kAccent, 4));
         p.drawRoundedRect(QRectF(16, 10, 32, 18), 4, 4);
     };
+    g["part.constrain"] = [](QPainter& p) {
+        // A right angle with its square mark and a padlock-like dimension.
+        p.setPen(pen(kLine, 4));
+        p.drawLine(QPointF(12, 10), QPointF(12, 52));
+        p.drawLine(QPointF(12, 52), QPointF(54, 52));
+        p.setPen(pen(kAccent, 4));
+        p.drawRect(QRectF(12, 38, 14, 14));
+        p.drawLine(QPointF(34, 14), QPointF(54, 14));
+        p.drawLine(QPointF(34, 8), QPointF(34, 20));
+        p.drawLine(QPointF(54, 8), QPointF(54, 20));
+    };
     g["part.delete"] = [](QPainter& p) {
         p.setPen(pen(kLine));
         p.drawRect(QRectF(16, 18, 32, 38));

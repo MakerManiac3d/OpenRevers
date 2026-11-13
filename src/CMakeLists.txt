@@ -16,6 +16,23 @@ endif()
 
 # The core: geometry, document, commands and the MCP protocol. No interface,
 # no Qt — used by the app, the command line, the agent bridge and the tests.
+# PlaneGCS (FreeCAD's sketch constraint solver, LGPL-2.1+): its own target,
+# without our warnings (third-party code).
+add_library(orv_planegcs STATIC
+  ${PROJECT_SOURCE_DIR}/thirdparty/planegcs/Constraints.cpp
+  ${PROJECT_SOURCE_DIR}/thirdparty/planegcs/GCS.cpp
+  ${PROJECT_SOURCE_DIR}/thirdparty/planegcs/Geo.cpp
+  ${PROJECT_SOURCE_DIR}/thirdparty/planegcs/SubSystem.cpp
+  ${PROJECT_SOURCE_DIR}/thirdparty/planegcs/qp_eq.cpp)
+target_include_directories(orv_planegcs SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/thirdparty/planegcs ${PROJECT_SOURCE_DIR}/thirdparty/planegcs/shims)
+target_link_libraries(orv_planegcs PUBLIC Eigen3::Eigen)
+set_target_properties(orv_planegcs PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+  target_compile_options(orv_planegcs PRIVATE /W0 /bigobj)
+else()
+  target_compile_options(orv_planegcs PRIVATE -w)
+endif()
+
 add_library(orv_core STATIC
   core/mesh/TriMesh.cpp
   core/mesh/MeshIO.cpp
@@ -34,6 +51,7 @@ add_library(orv_core STATIC
   core/solid/Profile.cpp
   core/solid/Solid.cpp
   core/solid/SketchFit.cpp
+  core/solid/SketchSolve.cpp
   core/mesh/Distance.cpp
   core/points/E57.cpp
   core/util/Xml.cpp
@@ -56,7 +74,7 @@ add_library(orv_core STATIC
 target_include_directories(orv_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(orv_core PUBLIC Eigen3::Eigen nlohmann_json::nlohmann_json PRIVATE pmp quadriflow orv_miniz orv_nanoflann orv_poisson orv_occt)
+target_link_libraries(orv_core PUBLIC Eigen3::Eigen nlohmann_json::nlohmann_json PRIVATE orv_planegcs pmp quadriflow orv_miniz orv_nanoflann orv_poisson orv_occt)
 if(WIN32)
   target_link_libraries(orv_core PRIVATE ws2_32)
 endif()

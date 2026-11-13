@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(OpenRevers
-  VERSION 0.11.3
+  VERSION 0.12.0
   DESCRIPTION "Reverse engineering of scanned meshes into parametric solids"
   HOMEPAGE_URL "https://github.com/MakerManiac3d/OpenRevers"
   LANGUAGES C CXX)

@@ -243,7 +243,7 @@
         <translation>p. ej. 0, 2, 3</translation>
     </message>
     <message>
-        <location filename="../src/app/CommandPanel.cpp" line="720"/>
+        <location filename="../src/app/CommandPanel.cpp" line="721"/>
         <source>Draw in the sketch editor…</source>
         <translation>Dibujar en el editor de bocetos…</translation>
     </message>

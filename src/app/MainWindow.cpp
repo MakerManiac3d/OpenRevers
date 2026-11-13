@@ -402,7 +402,7 @@ void MainWindow::buildActions() {
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
         if (std::string(name) == "scan.connect" || std::string(name) == "scan.export_to_body") scanMenu->addSeparator();
     }
-    for (const char* name : {"part.new", "part.sketch_from_section", "part.sketch", "part.extrude", "part.revolve", "part.loft", "part.pattern", "part.fillet",
+    for (const char* name : {"part.new", "part.sketch_from_section", "part.sketch", "part.constrain", "part.extrude", "part.revolve", "part.loft", "part.pattern", "part.fillet",
                              "part.surface_from_scan", "part.cut_by_surface", "part.thicken", "part.parameter", "part.edit", "part.move", "part.delete", "part.list",
                              "part.compare", "mesh.section"}) {
         auto* a = add(partMenu, cmdText(name), [this, name]() { runFromUi(name); });
@@ -481,7 +481,7 @@ void MainWindow::buildRibbon() {
     r->addGroup(solid, tr("Export"), group({"part.export_step"}));
     const int sketch = r->addTab(tr("Sketch"));
     r->addGroup(sketch, tr("Create"), group({"part.sketch", "sketch_on_face", "part.sketch_from_section"}));
-    r->addGroup(sketch, tr("Edit"), group({"edit_sketch"}));
+    r->addGroup(sketch, tr("Edit"), group({"edit_sketch", "part.constrain"}));
     r->addGroup(sketch, tr("From the scan"), group({"mesh.section"}));
     const int surface = r->addTab(tr("Surface"));
     r->addGroup(surface, tr("Create"), group({"part.surface_from_scan"}));
@@ -719,7 +719,7 @@ void MainWindow::buildDocks() {
     });
     connect(panel_, &CommandPanel::sketchEditorRequested, this, [this](const QString& command, const json& v) {
         const QString body = v.contains("body") ? QString::fromStdString(v["body"].get<std::string>()) : selectedRef();
-        if (command == "part.edit_sketch" && v.contains("sketch")) {
+        if ((command == "part.edit_sketch" || command == "part.constrain") && v.contains("sketch")) {
             auto b = doc_.findBody(body.toStdString());
             const Sketch* sk = b && b->isPart() ? b->model->sketch(v["sketch"].get<std::string>()) : nullptr;
             if (sk) editSketch(b->id, sk->id);

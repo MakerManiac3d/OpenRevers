@@ -118,6 +118,94 @@ BuildResult rebuild(const Model& m) {
     return r;
 }
 
+json constraintToJson(const SketchConstraint& c) {
+    json refs = json::array();
+    for (const auto& r : c.refs) {
+        const char* part = r.part == SketchRef::Part::Start ? "start" : r.part == SketchRef::Part::End ? "end" : r.part == SketchRef::Part::Centre ? "centre" : "edge";
+        refs.push_back({{"loop", r.loop}, {"segment", r.segment}, {"part", part}});
+    }
+    json j{{"kind", constraintKindName(c.kind)}, {"refs", refs}};
+    if (constraintHasValue(c.kind)) j["value"] = c.parameter.empty() ? json(c.value) : json(c.parameter);
+    if (!c.driving) j["driving"] = false;
+    if (!c.name.empty()) j["name"] = c.name;
+    return j;
+}
+
+SketchConstraint constraintFromJson(const json& j) {
+    SketchConstraint c;
+    const std::string kind = j.at("kind").get<std::string>();
+    const auto k = constraintKindFromName(kind);
+    if (!k) throw std::invalid_argument("unknown constraint \"" + kind + "\"");
+    c.kind = *k;
+    for (const auto& jr : j.value("refs", json::array())) {
+        SketchRef r;
+        r.loop = jr.value("loop", 0);
+        r.segment = jr.at("segment").get<int>();
+        const std::string part = jr.value("part", "edge");
+        if (part == "start") r.part = SketchRef::Part::Start;
+        else if (part == "end") r.part = SketchRef::Part::End;
+        else if (part == "centre" || part == "center") r.part = SketchRef::Part::Centre;
+        else if (part == "edge") r.part = SketchRef::Part::Edge;
+        else throw std::invalid_argument("unknown part \"" + part + "\" (edge, start, end or centre)");
+        c.refs.push_back(r);
+    }
+    if (j.contains("value")) {
+        const json& v = j["value"];
+        if (v.is_number()) c.value = v.get<double>();
+        else if (v.is_string()) {
+            const std::string t = v.get<std::string>();
+            try {
+                std::size_t used = 0;
+                c.value = std::stod(t, &used);
+                if (used != t.size()) c.parameter = t;
+            } catch (const std::exception&) {
+                c.parameter = t;
+            }
+        }
+    }
+    c.driving = j.value("driving", true);
+    c.name = j.value("name", "");
+    return c;
+}
+
+std::string solveSketchOf(const Model& m, Sketch& s, SketchSolveResult* result) {
+    std::vector<SketchConstraint> cs = s.constraints;
+    for (auto& c : cs)
+        if (!c.parameter.empty()) {
+            const auto it = m.parameters.find(c.parameter);
+            if (it == m.parameters.end()) return "no parameter named " + c.parameter;
+            c.value = it->second;
+        }
+    Profile p = s.profile;
+    const SketchSolveResult r = solveSketch(p, cs);
+    if (result) *result = r;
+    if (!r.solved) {
+        std::string why = r.message.empty() ? "the constraints cannot all hold" : r.message;
+        if (!r.conflicting.empty()) {
+            why += " (";
+            for (std::size_t i = 0; i < r.conflicting.size(); ++i) {
+                const auto& c = s.constraints[static_cast<std::size_t>(r.conflicting[i])];
+                why += (i ? ", " : "") + (c.name.empty() ? std::string(constraintKindName(c.kind)) + " #" + std::to_string(r.conflicting[i] + 1) : c.name);
+            }
+            why += ")";
+        }
+        return why;
+    }
+    s.profile = std::move(p);
+    s.dof = r.dof;
+    return {};
+}
+
+std::string solveSketchesUsing(Model& m, const std::string& parameter) {
+    for (auto& s : m.sketches) {
+        bool uses = parameter.empty() && !s.constraints.empty();
+        for (const auto& c : s.constraints) uses = uses || (!parameter.empty() && c.parameter == parameter);
+        if (!uses) continue;
+        if (const std::string why = solveSketchOf(m, s); !why.empty()) return s.name + ": " + why;
+    }
+    return {};
+}
+
 const char* opKindName(OpKind k) {
     switch (k) {
         case OpKind::Extrude: return "extrude";
@@ -281,6 +369,12 @@ json modelToJson(const Model& m) {
         json js = profileToJson(s.profile);
         js["id"] = s.id;
         js["name"] = s.name;
+        if (!s.constraints.empty()) {
+            json cs = json::array();
+            for (const auto& c : s.constraints) cs.push_back(constraintToJson(c));
+            js["constraints"] = cs;
+            js["dof"] = s.dof;
+        }
         sk.push_back(js);
     }
     for (const auto& o : m.operations) {
@@ -329,6 +423,8 @@ Model modelFromJson(const json& j) {
         s.id = js.at("id").get<std::uint64_t>();
         s.name = js.value("name", "");
         s.profile = profileFromJson(js);
+        for (const auto& jc : js.value("constraints", json::array())) s.constraints.push_back(constraintFromJson(jc));
+        s.dof = js.value("dof", -1);
         m.sketches.push_back(std::move(s));
     }
     for (const auto& jo : j.value("operations", json::array())) {

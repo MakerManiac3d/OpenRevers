@@ -7,6 +7,7 @@
 #include "core/solid/BSpline.h"
 #include "core/solid/Profile.h"
 #include "core/solid/Solid.h"
+#include "core/solid/SketchSolve.h"
 
 #include <nlohmann/json.hpp>
 
@@ -29,6 +30,10 @@ struct Sketch {
     std::uint64_t id{0};
     std::string name;
     Profile profile;
+    /// Geometric constraints and dimensions (a dimension may take its value
+    /// from a parameter of the part). The profile is kept solved.
+    std::vector<SketchConstraint> constraints;
+    int dof{-1};  // degrees of freedom left after the last solve (-1: no constraints)
     std::string ref() const { return "s" + std::to_string(id); }
 };
 
@@ -101,6 +106,15 @@ struct BuildResult {
     std::string error;
 };
 BuildResult rebuild(const Model& model);
+
+/// Solves a sketch's constraints, with the dimensions that name a parameter
+/// taking its value from the model. Returns an empty string when solved,
+/// else why not (the sketch is then left as it was).
+std::string solveSketchOf(const Model& m, Sketch& s, SketchSolveResult* result = nullptr);
+/// Solves every sketch whose dimensions use `parameter` (all, if empty).
+std::string solveSketchesUsing(Model& m, const std::string& parameter);
+nlohmann::json constraintToJson(const SketchConstraint& c);
+SketchConstraint constraintFromJson(const nlohmann::json& j);
 
 const char* opKindName(OpKind k);
 const char* opModeName(OpMode m);

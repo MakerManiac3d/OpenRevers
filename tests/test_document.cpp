@@ -770,3 +770,43 @@ TEST(SketchFit, LongOrganicSplinesMeetTheTolerance) {
     EXPECT_LE(f.maxDeviation, 0.12);
     EXPECT_TRUE(f.loop.segments.size() >= 1);
 }
+
+TEST(Commands, ConstrainedSketchFollowsItsParameter) {
+    const auto dir = tempDir("constrain");
+    Fixture f;
+    f.run("part.new", {{"name", "Plate"}});
+    f.run("part.parameter", {{"body", "b1"}, {"name", "width"}, {"value", 30.0}});
+    // A rough rectangle, a little off square.
+    json loop = json::array({{{"type", "line"}, {"from", {0, 0}}, {"to", {29, 1}}}, {{"type", "line"}, {"from", {29, 1}}, {"to", {31, 11}}},
+                             {{"type", "line"}, {"from", {31, 11}}, {"to", {-1, 13}}}, {{"type", "line"}, {"from", {-1, 13}}, {"to", {0, 0}}}});
+    f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({loop})}});
+    f.run("part.extrude", {{"body", "b1"}, {"sketch", "s1"}, {"end", 2.0}, {"mode", "new"}});
+    auto e = [](int seg) { return json{{"loop", 0}, {"segment", seg}, {"part", "edge"}}; };
+    const json add = json::array({{{"kind", "horizontal"}, {"refs", {e(0)}}}, {{"kind", "horizontal"}, {"refs", {e(2)}}},
+                                  {{"kind", "vertical"}, {"refs", {e(1)}}}, {{"kind", "vertical"}, {"refs", {e(3)}}},
+                                  {{"kind", "fix"}, {"refs", {{{"segment", 0}, {"part", "start"}}}}},
+                                  {{"kind", "distance"}, {"refs", {e(0)}}, {"value", "width"}, {"name", "Ancho"}},
+                                  {{"kind", "distance"}, {"refs", {e(1)}}, {"value", 12.0}}});
+    const json c = f.run("part.constrain", {{"body", "b1"}, {"sketch", "s1"}, {"add", add}});
+    EXPECT_EQ(c["dof"], 0);
+    EXPECT_NEAR(c["solid"]["volume"].get<double>(), 30 * 12 * 2, 1e-3);
+    EXPECT_NEAR(c["constraints"][5]["measured"].get<double>(), 30.0, 1e-6);
+    // The parameter drives the sketch, and the part follows.
+    const json p = f.run("part.parameter", {{"body", "b1"}, {"name", "width"}, {"value", 40.0}});
+    EXPECT_NEAR(p["solid"]["volume"].get<double>(), 40 * 12 * 2, 1e-3);
+    // A contradiction is refused, naming it, and nothing changes.
+    EXPECT_THROW(f.run("part.constrain", {{"body", "b1"}, {"sketch", "s1"}, {"add", json::array({{{"kind", "distance"}, {"refs", {e(2)}}, {"value", 25.0}}})}}), CommandError);
+    const json l = f.run("part.list", {{"body", "b1"}, {"sketch", "s1"}});
+    EXPECT_EQ(l["sketches"][0]["constraints"], 7);
+    EXPECT_EQ(l["sketches"][0]["constraintList"].size(), 7u);
+    // Removing the width by name frees one degree of freedom.
+    const json r = f.run("part.constrain", {{"body", "b1"}, {"sketch", "s1"}, {"remove", {"Ancho"}}});
+    EXPECT_EQ(r["dof"], 1);
+    // Saved and opened again, the constraints are still there.
+    const auto file = (dir / "c.orvp").string();
+    f.run("project.save", {{"path", file}});
+    f.run("project.open", {{"path", file}});
+    const json again = f.run("part.list", {{"body", "b1"}, {"sketch", "s1"}});
+    EXPECT_EQ(again["sketches"][0]["constraints"], 6);
+    EXPECT_EQ(again["sketches"][0]["dof"], 1);
+}

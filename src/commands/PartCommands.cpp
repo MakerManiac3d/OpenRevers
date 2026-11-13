@@ -54,8 +54,13 @@ json partJson(const Body& b) {
     for (const auto& s : m.sketches) {
         std::size_t segs = 0;
         for (const auto& l : s.profile.loops) segs += l.segments.size();
-        sketches.push_back({{"ref", s.ref()}, {"name", s.name}, {"loops", s.profile.loops.size()}, {"segments", segs},
-                            {"plane", {{"origin", j3(s.profile.plane.origin)}, {"normal", j3(s.profile.plane.normal)}, {"xDir", j3(s.profile.plane.xDir)}}}});
+        json js{{"ref", s.ref()}, {"name", s.name}, {"loops", s.profile.loops.size()}, {"segments", segs},
+                {"plane", {{"origin", j3(s.profile.plane.origin)}, {"normal", j3(s.profile.plane.normal)}, {"xDir", j3(s.profile.plane.xDir)}}}};
+        if (!s.constraints.empty()) {
+            js["constraints"] = s.constraints.size();
+            js["dof"] = s.dof;
+        }
+        sketches.push_back(js);
     }
     for (const auto& o : m.operations) {
         json jo{{"ref", o.ref()}, {"name", o.name}, {"kind", opKindName(o.kind)}, {"mode", opModeName(o.mode)}, {"suppressed", o.suppressed}};
@@ -110,6 +115,27 @@ Body applyModel(CommandContext& ctx, const Body& b, std::shared_ptr<Model> m) {
     return ctx.doc.body(b.ref());
 }
 
+/// Solves the sketches that depend on `parameter` (all with constraints if
+/// empty); refuses with the reason if one cannot be solved.
+void solveOrRefuse(CommandContext& ctx, Model& m, const std::string& parameter) {
+    if (const std::string why = solveSketchesUsing(m, parameter); !why.empty())
+        throw CommandError("conflict", ctx.say("The sketch cannot be solved: " + why + ". Nothing was changed.",
+                                               "El boceto no se puede resolver: " + why + ". No se ha cambiado nada."));
+}
+
+/// A sketch's constraints, each with its index, kind, references, value
+/// (and parameter) and the value measured on the solved geometry.
+json constraintsJson(const Sketch& s) {
+    json a = json::array();
+    for (std::size_t i = 0; i < s.constraints.size(); ++i) {
+        json j = constraintToJson(s.constraints[i]);
+        j["index"] = i;
+        if (const auto v = measureConstraint(s.profile, s.constraints[i])) j["measured"] = r4(*v);
+        a.push_back(j);
+    }
+    return a;
+}
+
 const Sketch& findSketch(CommandContext& ctx, const Model& m, const json& ref) {
     const Sketch* s = m.sketch(ref.get<std::string>());
     if (!s) throw CommandError("not_found", ctx.say("No sketch \"" + ref.get<std::string>() + "\" in the part.", "No hay ningún boceto \"" + ref.get<std::string>() + "\" en la pieza."));
@@ -154,6 +180,13 @@ const Text kLoops{
     "Un lazo dentro de otro es un agujero."};
 const Text kPlane{"The sketch plane: {origin: [x, y, z], normal: [x, y, z], xDir: [x, y, z]} (default: XY at the origin)",
                   "El plano del boceto: {origin: [x, y, z], normal: [x, y, z], xDir: [x, y, z]} (por defecto, XY en el origen)"};
+const Text kConstraints{
+    "Constraints, each {kind, refs: [{loop, segment, part}], value}. kind: coincident, horizontal, vertical, parallel, perpendicular, tangent, equal, distance, "
+    "distance_x, distance_y, radius, diameter, angle (degrees), fix, on_object, symmetric or midpoint. part: edge (the segment), start, end or centre. "
+    "value (only for dimensions): a number, or a parameter's name to drive it from the part.",
+    "Restricciones, cada una {kind, refs: [{loop, segment, part}], value}. kind: coincident, horizontal, vertical, parallel, perpendicular, tangent, equal, distance, "
+    "distance_x, distance_y, radius, diameter, angle (grados), fix, on_object, symmetric o midpoint. part: edge (el segmento), start, end o centre. "
+    "value (solo en las cotas): un número, o el nombre de un parámetro para que la pieza la mande."};
 const Text kMode{"How it combines with the part: new (the first one), join, cut or intersect",
                  "Cómo se combina con la pieza: new (la primera), join (unir), cut (cortar) o intersect (intersecar)"};
 
@@ -294,7 +327,7 @@ void registerPartCommands(CommandRegistry& R) {
            {"Replace a sketch's loops, move its plane or rename it (each optional). The operations that use it are rebuilt; if the part then fails, nothing changes.",
             "Reemplaza los lazos de un boceto, mueve su plano o le cambia el nombre (cada cosa, opcional). Se reconstruyen las operaciones que lo usan; si la pieza falla, no cambia nada."},
            object({{"body", body(kPart)}, {"sketch", kind(string({"The sketch: s1 or its name", "El boceto: s1 o su nombre"}), "sketch")}, {"plane", kind(objectSchema(kPlane), "plane")}, {"loops", kind(listSchema(kLoops), "loops")},
-                   {"name", string({"New name", "Nombre nuevo"})}},
+                   {"constraints", kind(listSchema(kConstraints), "constraints")}, {"name", string({"New name", "Nombre nuevo"})}},
                   {"body", "sketch"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
@@ -316,11 +349,86 @@ void registerPartCommands(CommandRegistry& R) {
                        if (n.empty()) throw CommandError("invalid_input", ctx.say("A sketch needs a name.", "Un boceto necesita nombre."));
                        s.name = n;
                    }
+                   if (in.contains("constraints")) {
+                       s.constraints.clear();
+                       try {
+                           for (const auto& jc : in["constraints"]) s.constraints.push_back(constraintFromJson(jc));
+                       } catch (const std::exception& e) {
+                           throw CommandError("invalid_input", ctx.say(std::string("A constraint is not valid: ") + e.what() + ".", std::string("Una restricción no es válida: ") + e.what() + "."));
+                       }
+                       if (s.constraints.empty()) s.dof = -1;
+                   }
+                   if (!s.constraints.empty() && (in.contains("loops") || in.contains("constraints"))) {
+                       if (const std::string why = solveSketchOf(*m, s); !why.empty())
+                           throw CommandError("conflict", ctx.say("The sketch cannot be solved: " + why + ". Nothing was changed.",
+                                                                  "El boceto no se puede resolver: " + why + ". No se ha cambiado nada."));
+                   }
                }
                bool used = false;
                for (const auto& o : m->operations) used |= (o.kind == OpKind::Extrude || o.kind == OpKind::Revolve) && o.sketch == id;
                json out = partJson(used ? applyModel(ctx, b, m) : (ctx.doc.setPart(b.id, m, b.solid, PartTriangles{b.mesh, b.view}, b.buildError), ctx.doc.body(b.ref())));
                out["summary"] = ctx.say(used ? "Sketch changed and the part rebuilt." : "Sketch changed.", used ? "Boceto cambiado y pieza reconstruida." : "Boceto cambiado.");
+               return out;
+           }});
+
+    R.add({"part.constrain", "part", {"Constrain a sketch", "Restringir un boceto"},
+           {"Add constraints and dimensions to a sketch, or remove them (by index or name), and solve it: the geometry moves to satisfy them, and the operations that use it are rebuilt. "
+            "Refuses, naming them, constraints that contradict each other. Gives the degrees of freedom left (0: fully constrained) and each constraint with its measured value.",
+            "Añade restricciones y cotas a un boceto, o las quita (por índice o nombre), y lo resuelve: la geometría se mueve para cumplirlas y se reconstruyen las operaciones que lo usan. "
+            "Rechaza, nombrándolas, las restricciones que se contradicen. Da los grados de libertad que quedan (0: totalmente restringido) y cada restricción con su valor medido."},
+           object({{"body", body(kPart)}, {"sketch", kind(string({"The sketch: s1 or its name", "El boceto: s1 o su nombre"}), "sketch")},
+                   {"add", kind(listSchema(kConstraints), "constraints")},
+                   {"remove", kind(listSchema({"Indices (0, 1...) or names of the constraints to remove", "Índices (0, 1...) o nombres de las restricciones que quitar"}), "index-list")}},
+                  {"body", "sketch"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               auto m = std::make_shared<Model>(*b.model);
+               const auto id = findSketch(ctx, *m, in["sketch"]).id;
+               Sketch* sk = nullptr;
+               for (auto& s : m->sketches)
+                   if (s.id == id) sk = &s;
+               std::vector<bool> drop(sk->constraints.size(), false);
+               for (const auto& r : in.value("remove", json::array())) {
+                   bool hit = false;
+                   for (std::size_t i = 0; i < sk->constraints.size(); ++i)
+                       if ((r.is_number_integer() && r.get<long long>() == static_cast<long long>(i)) || (r.is_string() && r.get<std::string>() == sk->constraints[i].name)) drop[i] = hit = true;
+                   if (!hit) throw CommandError("not_found", ctx.say("No constraint " + r.dump() + " in the sketch.", "No hay ninguna restricción " + r.dump() + " en el boceto."));
+               }
+               std::vector<SketchConstraint> kept;
+               for (std::size_t i = 0; i < sk->constraints.size(); ++i)
+                   if (!drop[i]) kept.push_back(sk->constraints[i]);
+               try {
+                   for (const auto& jc : in.value("add", json::array())) kept.push_back(constraintFromJson(jc));
+               } catch (const std::exception& e) {
+                   throw CommandError("invalid_input", ctx.say(std::string("A constraint is not valid: ") + e.what() + ".", std::string("Una restricción no es válida: ") + e.what() + "."));
+               }
+               sk->constraints = std::move(kept);
+               SketchSolveResult sr;
+               if (sk->constraints.empty()) sk->dof = -1;
+               else if (const std::string why = solveSketchOf(*m, *sk, &sr); !why.empty())
+                   throw CommandError("conflict", ctx.say("The sketch cannot be solved: " + why + ". Nothing was changed.",
+                                                          "El boceto no se puede resolver: " + why + ". No se ha cambiado nada."));
+               bool used = false;
+               for (const auto& o : m->operations) {
+                   used |= (o.kind == OpKind::Extrude || o.kind == OpKind::Revolve) && o.sketch == id;
+                   for (auto s : o.sections) used |= s == id;
+               }
+               const Sketch solved = *sk;
+               json out = partJson(used ? applyModel(ctx, b, m) : (ctx.doc.setPart(b.id, m, b.solid, PartTriangles{b.mesh, b.view}, b.buildError), ctx.doc.body(b.ref())));
+               out["sketch"] = solved.ref();
+               out["dof"] = solved.dof;
+               out["constraints"] = constraintsJson(solved);
+               if (!sr.redundant.empty()) {
+                   json red = json::array();
+                   for (int i : sr.redundant) red.push_back(i);
+                   out["redundant"] = red;
+               }
+               const std::string n = std::to_string(solved.constraints.size());
+               const std::string d = std::to_string(solved.dof);
+               out["summary"] = solved.constraints.empty() ? ctx.say("The sketch has no constraints now.", "El boceto ya no tiene restricciones.")
+                                : solved.dof == 0 ? ctx.say(n + " constraints; the sketch is fully constrained.", n + " restricciones; el boceto está totalmente restringido.")
+                                                  : ctx.say(n + " constraints; " + d + " degrees of freedom left.", n + " restricciones; quedan " + d + " grados de libertad.");
                return out;
            }});
 
@@ -423,6 +531,7 @@ void registerPartCommands(CommandRegistry& R) {
                if (name.empty() || std::isdigit(static_cast<unsigned char>(name[0])))
                    throw CommandError("invalid_input", ctx.say("A parameter's name must start with a letter.", "El nombre de un parámetro debe empezar por una letra."));
                m->parameters[name] = in["value"].get<double>();
+               solveOrRefuse(ctx, *m, name);
                json out = partJson(m->operations.empty() ? (ctx.doc.setPart(b.id, m, b.solid, PartTriangles{b.mesh, b.view}, b.buildError), ctx.doc.body(b.ref())) : applyModel(ctx, b, m));
                out["summary"] = ctx.say(name + " = " + std::to_string(in["value"].get<double>()) + ".", name + " = " + std::to_string(in["value"].get<double>()) + ".");
                return out;
@@ -750,6 +859,7 @@ void registerPartCommands(CommandRegistry& R) {
                        if (want != "all" && s.ref() != want && s.name != want) continue;
                        found = true;
                        out["sketches"][i]["loopsGeometry"] = profileToJson(s.profile)["loops"];
+                       if (!s.constraints.empty()) out["sketches"][i]["constraintList"] = constraintsJson(s);
                    }
                    if (!found) throw CommandError("not_found", ctx.say("No sketch " + want + " in " + b.name + ".", "No hay ningún boceto " + want + " en " + b.name + "."));
                }

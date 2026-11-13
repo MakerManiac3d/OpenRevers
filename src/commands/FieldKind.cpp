@@ -15,6 +15,7 @@ FieldKind fieldKind(const json& s) {
         {"point", FieldKind::Point},         {"point2", FieldKind::Point2},     {"point-list", FieldKind::PointList},
         {"plane", FieldKind::Plane},         {"mesh-faces", FieldKind::MeshFaces}, {"index-list", FieldKind::IndexList},
         {"loops", FieldKind::Loops},
+        {"constraints", FieldKind::Constraints},
     };
     if (s.contains("x-kind") && s["x-kind"].is_string()) {
         const auto it = byKind.find(s["x-kind"].get<std::string>());
@@ -58,6 +59,7 @@ const char* fieldKindName(FieldKind k) {
         case FieldKind::MeshFaces: return "mesh-faces";
         case FieldKind::IndexList: return "index-list";
         case FieldKind::Loops: return "loops";
+        case FieldKind::Constraints: return "constraints";
         case FieldKind::Unsupported: return "unsupported";
     }
     return "unsupported";

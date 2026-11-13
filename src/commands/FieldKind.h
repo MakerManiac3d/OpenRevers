@@ -37,6 +37,7 @@ enum class FieldKind {
     MeshFaces,    // face (or point) indices: the lasso selection
     IndexList,    // small integers typed as 0, 2, 5
     Loops,        // a sketch's loops: drawn in the sketch editor
+    Constraints,  // a sketch's constraints: set in the sketch editor
     Unsupported,  // raw JSON: not allowed
 };
 

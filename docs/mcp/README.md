@@ -92,6 +92,7 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `part_new` | Pieza paramétrica vacía | Sí |
 | `part_sketch_from_section` | Corta el escaneo con un plano y convierte cada contorno cerrado en rectas y arcos dentro de una tolerancia (círculos enteros, esquinas vivas, arcos tangentes); con `splines`, los tramos libres de un contorno orgánico salen como splines. Devuelve la medida de cada segmento | Sí |
 | `part_sketch` · `part_edit_sketch` | Boceto: lazos cerrados de rectas, arcos, círculos y splines (`{type: spline, poles: [[x, y], ...]}`, del primer polo al último) en un plano (un lazo dentro de otro es un agujero). `part_edit_sketch` cambia los lazos, el plano o el nombre, cada uno por separado | Sí |
+| `part_constrain` | Restricciones y cotas de un boceto (`add`: {kind, refs: [{loop, segment, part}], value}; `remove`: índices o nombres), resueltas con PlaneGCS. Una cota con el nombre de un parámetro sigue a `part_parameter`. Devuelve `dof` y el valor medido de cada una; rechaza las contradictorias | Sí |
 | `part_loft` | Sólido que pasa por varios bocetos en orden (secciones de un álabe, extremos de un conducto), suave o reglado | Sí |
 | `part_pattern` | Copias de lo que hizo otra operación alrededor de un eje (`count` y `angle` pueden ser parámetros) | Sí |
 | `part_surface_from_scan` | Superficie libre (B-spline bicúbica) ajustada a una zona del escaneo: una forma segmentada (`shape`) o una esfera (`centre`, `radius`); devuelve rms y máximo | Sí |

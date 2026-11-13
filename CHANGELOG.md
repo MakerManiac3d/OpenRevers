@@ -1,5 +1,25 @@
 # Cambios · Changelog
 
+## 0.12.0 — 13 de noviembre de 2026 (paso 5: bocetos con restricciones, 1.ª parte)
+
+- **Restricciones y cotas en los bocetos**, resueltas con PlaneGCS, el
+  solucionador de FreeCAD: horizontal, vertical, coincidente, paralela,
+  perpendicular, tangente, igual, fijo, punto sobre objeto, simétrico, punto
+  medio, y las cotas distancia, distancia X/Y, radio, diámetro y ángulo.
+- Nuevo comando **`part.constrain`** (cinta *Boceto → Editar*): añade o quita
+  restricciones y resuelve el boceto. Devuelve los grados de libertad que
+  quedan y el valor medido de cada restricción; las que se contradicen se
+  rechazan nombrándolas y no se cambia nada.
+- **Cotas mandadas por parámetros:** una cota cuyo valor es el nombre de un
+  parámetro sigue a `part.parameter`; el boceto se vuelve a resolver y la
+  pieza se reconstruye.
+- `part.edit_sketch` acepta la lista completa de restricciones; `part.list`
+  da, por boceto, el número de restricciones y los grados de libertad, y con
+  `sketch` la lista completa con los valores medidos.
+- Las restricciones se guardan en el proyecto.
+- Próxima entrega: herramientas de restricción y cotas en el editor de
+  bocetos, con arrastre resuelto en directo.
+
 ## 0.11.3 — 13 de noviembre de 2026
 
 - **Cancelar un comando largo:** botón *Cancelar* junto a la barra de

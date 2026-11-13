@@ -716,7 +716,8 @@ QWidget* CommandPanel::makeField(Field& f, const json& s, bool required) {
             };
             return edit;
         }
-        case FieldKind::Loops: {
+        case FieldKind::Loops:
+        case FieldKind::Constraints: {
             auto* b = new QPushButton(tr("Draw in the sketch editor…"));
             connect(b, &QPushButton::clicked, this, [this]() {
                 if (command_) emit sketchEditorRequested(QString::fromStdString(command_->name), values());
