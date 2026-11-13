@@ -13,9 +13,12 @@
 #include <QOpenGLVertexArrayObject>
 #include <QOpenGLWidget>
 #include <QPoint>
+#include <QPolygonF>
 #include <QVector3D>
 
 #include <map>
+#include <utility>
+#include <vector>
 #include <memory>
 
 namespace orv {
@@ -179,8 +182,12 @@ private:
     void uploadPart(GpuMesh& g, const Body& b);
     void uploadDeviation(GpuMesh& g, const TriMesh& m, const DeviationMap& d);
     void drawLegend();
+    void drawViewCube();
     void requestOpenEdges(GpuMesh& g);
     void uploadOpenEdges(GpuMesh& g);
+    // The view cube's faces as last drawn, for clicks (screen polygon, view).
+    std::vector<std::pair<QPolygonF, View>> cubeFaces_;
+    QRectF cubeArea_;
     QMatrix4x4 viewMatrix() const;
     QMatrix4x4 projMatrix() const;
     QVector3D eye() const;

@@ -1,5 +1,16 @@
 # Cambios · Changelog
 
+## 0.11.1 — 13 de noviembre de 2026 (paso 2: línea de tiempo y cubo de vista)
+
+- **Línea de tiempo** bajo la vista, a todo el ancho: los pasos de la pieza
+  elegida (o de la última) en el orden en que se hicieron, con su icono.
+  Clic para elegir un paso, doble clic para editarlo, botón derecho para
+  suprimirlo, volver a incluirlo o borrarlo. Los suprimidos salen en gris y
+  los que fallan, en rojo.
+- **Cubo de vista** en la esquina de la vista: un clic en una cara mira desde
+  ese lado; un clic junto al cubo da la vista isométrica. La leyenda de
+  desviación baja para dejarle sitio.
+
 ## 0.11.0 — 13 de noviembre de 2026 (paso 1 hacia la 1.0: la cinta)
 
 - **Cinta de pestañas al estilo Fusion** bajo la barra rápida: *Sólido*,

@@ -2,6 +2,7 @@
 #include "core/util/Config.h"
 #include "app/Icons.h"
 #include "app/Ribbon.h"
+#include "app/Timeline.h"
 #include "app/MainWindow.h"
 
 #include "scan/ScanBackend.h"
@@ -447,6 +448,7 @@ void MainWindow::buildDocks() {
         refreshPartHighlight();
         refreshProperties();
         refreshShapes();
+        refreshTimeline();
     });
     connect(tree_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int col) {
         if (updatingTree_ || col != 0 || item->parent()) return;  // a part's history rows have no visibility
@@ -505,10 +507,41 @@ void MainWindow::buildDocks() {
     history_ = new QListWidget();
     dock(tr("History"), "HistoryDock", history_, Qt::RightDockWidgetArea);
 
+    // The part's timeline, under the view and above the log (as in Fusion).
+    timeline_ = new Timeline();
+    timelineDock_ = dock(tr("Timeline"), "TimelineDock", timeline_, Qt::BottomDockWidgetArea);
+    auto itemFor = [this](std::uint64_t body, const QString& ref) -> QTreeWidgetItem* {
+        for (int i = 0; i < tree_->topLevelItemCount(); ++i) {
+            auto* top = tree_->topLevelItem(i);
+            if (top->data(0, Qt::UserRole).toULongLong() != body) continue;
+            for (int k = 0; k < top->childCount(); ++k)
+                if (top->child(k)->data(0, Qt::UserRole + 1).toString() == ref) return top->child(k);
+            return top;
+        }
+        return nullptr;
+    };
+    connect(timeline_, &Timeline::picked, this, [this, itemFor](std::uint64_t body, const QString& ref) {
+        if (auto* it = itemFor(body, ref)) tree_->setCurrentItem(it);
+    });
+    connect(timeline_, &Timeline::editRequested, this, [this, itemFor](std::uint64_t body, const QString& ref) {
+        if (auto* it = itemFor(body, ref)) {
+            tree_->setCurrentItem(it);
+            emit tree_->itemDoubleClicked(it, 0);
+        }
+    });
+    connect(timeline_, &Timeline::suppressRequested, this, [this](std::uint64_t body, const QString& ref, bool on) {
+        run("part.edit", {{"body", "b" + std::to_string(body)}, {"operation", ref.toStdString()}, {"suppressed", on}});
+    });
+    connect(timeline_, &Timeline::deleteRequested, this, [this](std::uint64_t body, const QString& ref) {
+        if (QMessageBox::question(this, tr("OpenRevers"), tr("Delete %1 from the part? Undo brings it back.").arg(ref)) != QMessageBox::Yes) return;
+        run("part.delete", {{"body", "b" + std::to_string(body)}, {"item", ref.toStdString()}});
+    });
+
     log_ = new QPlainTextEdit();
     log_->setReadOnly(true);
     log_->setMaximumBlockCount(5000);
     auto* logDock = dock(tr("Log"), "LogDock", log_, Qt::BottomDockWidgetArea);
+    splitDockWidget(timelineDock_, logDock, Qt::Vertical);
 
     // Every command run, by the person or the agent, with its whole answer.
     results_ = new QTreeWidget();
@@ -517,6 +550,8 @@ void MainWindow::buildDocks() {
     resultsDock_ = dock(tr("Results"), "ResultsDock", results_, Qt::BottomDockWidgetArea);
     tabifyDockWidget(logDock, resultsDock_);
     logDock->raise();
+
+
 
     // The command panel: beside the view, open while you click in it.
     panel_ = new CommandPanel();
@@ -908,6 +943,20 @@ void MainWindow::refreshTree() {
     }
     updatingTree_ = false;
     refreshPartHighlight();
+    refreshTimeline();
+}
+
+void MainWindow::refreshTimeline() {
+    if (!timeline_) return;
+    // The selected part, else the last part made.
+    const auto bodies = doc_.bodies();
+    const Body* part = nullptr;
+    for (const auto& b : bodies)
+        if (b.isPart() && b.id == selected_) part = &b;
+    if (!part)
+        for (auto it = bodies.rbegin(); it != bodies.rend(); ++it)
+            if (it->isPart()) { part = &*it; break; }
+    timeline_->showPart(part, part && part->id == selected_ ? partItem_ : QString());
 }
 
 void MainWindow::refreshProperties() {

@@ -25,6 +25,7 @@ class QTreeWidgetItem;
 namespace orv {
 
 class Ribbon;
+class Timeline;
 
 class Viewport;
 
@@ -45,6 +46,7 @@ protected:
 private:
     void buildActions();
     void buildRibbon();
+    void refreshTimeline();
     void buildDocks();
     void refresh();
     void refreshTree();
@@ -130,6 +132,8 @@ private:
     void deleteSelection();
     QTimer* scanTimer_{nullptr};
     Ribbon* ribbon_{nullptr};
+    Timeline* timeline_{nullptr};
+    QDockWidget* timelineDock_{nullptr};
     bool scanEnabled_{false};  // Settings → Experimental → direct scanning
     bool scanShown_{false};
     QListWidget* history_{nullptr};

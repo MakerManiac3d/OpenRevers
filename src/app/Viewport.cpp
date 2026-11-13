@@ -581,6 +581,56 @@ void Viewport::setPartHighlight(PartHighlight h) {
 
 void Viewport::setShowSketches(bool on) { sketches_ = on; update(); }
 
+void Viewport::drawViewCube() {
+    // A cube in the top right corner turned like the view: a click on a face
+    // looks from that side, a click beside it gives the isometric view.
+    const QMatrix4x4 v = viewMatrix();
+    const QPointF c(width() - 64.0, 64.0);
+    const double s = 26.0;
+    cubeArea_ = QRectF(c.x() - 52, c.y() - 52, 104, 104);
+    struct Face { QVector3D n, u, w; View view; QString label; };
+    const Face faces[] = {
+        {{0, -1, 0}, {1, 0, 0}, {0, 0, 1}, View::Front, tr("Front")},
+        {{0, 1, 0}, {-1, 0, 0}, {0, 0, 1}, View::Back, tr("Back")},
+        {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, View::Right, tr("Right")},
+        {{-1, 0, 0}, {0, -1, 0}, {0, 0, 1}, View::Left, tr("Left")},
+        {{0, 0, 1}, {1, 0, 0}, {0, 1, 0}, View::Top, tr("Top")},
+        {{0, 0, -1}, {1, 0, 0}, {0, -1, 0}, View::Bottom, tr("Bottom")},
+    };
+    auto project = [&](const QVector3D& p3) {
+        const QVector3D q = v.mapVector(p3);
+        return QPointF(c.x() + q.x() * s, c.y() - q.y() * s);
+    };
+    struct Drawn { QPolygonF poly; double depth; const Face* f; double facing; };
+    std::vector<Drawn> drawn;
+    for (const auto& f : faces) {
+        const double facing = v.mapVector(f.n).z();
+        if (facing <= 0.02) continue;
+        QPolygonF poly;
+        for (auto [a, b] : {std::pair{-1.f, -1.f}, {1.f, -1.f}, {1.f, 1.f}, {-1.f, 1.f}}) poly << project(f.n + f.u * a + f.w * b);
+        drawn.push_back({poly, v.mapVector(f.n).z(), &f, facing});
+    }
+    std::sort(drawn.begin(), drawn.end(), [](const Drawn& a, const Drawn& b) { return a.depth < b.depth; });
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    cubeFaces_.clear();
+    QFont font = p.font();
+    font.setPointSizeF(font.pointSizeF() * 0.75);
+    font.setBold(true);
+    p.setFont(font);
+    for (const auto& d : drawn) {
+        const int shade = 200 + static_cast<int>(40 * d.facing);
+        p.setPen(QPen(QColor(70, 100, 130), 1.2));
+        p.setBrush(QColor(shade, shade + 4 > 255 ? 255 : shade + 4, 255, 225));
+        p.drawPolygon(d.poly);
+        if (d.facing > 0.45) {
+            p.setPen(QColor(40, 60, 85));
+            p.drawText(d.poly.boundingRect(), Qt::AlignCenter, d.f->label);
+        }
+        cubeFaces_.emplace_back(d.poly, d.f->view);
+    }
+}
+
 void Viewport::drawLegend() {
     const DeviationMap* d = nullptr;
     for (const auto& b : bodies_)
@@ -588,7 +638,7 @@ void Viewport::drawLegend() {
     if (!d) return;
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    const int w = 18, h = 220, x = width() - w - 70, y = 20;
+    const int w = 18, h = 220, x = width() - w - 70, y = 140;  // under the view cube
     for (int k = 0; k < h; ++k) {
         const float v = d->range * (1.f - 2.f * static_cast<float>(k) / static_cast<float>(h - 1));
         const QVector3D c = deviationColor(v, d->tolerance, d->range);
@@ -915,6 +965,7 @@ void Viewport::paintGL() {
     drawTriad();
     drawOverlay(mvp);
     drawLegend();
+    drawViewCube();
 }
 
 void Viewport::setHighlightedRegions(std::uint64_t body, std::vector<std::int32_t> regions) {
@@ -1215,6 +1266,16 @@ void Viewport::drawOverlay(const QMatrix4x4& mvp) {
 }
 
 void Viewport::mousePressEvent(QMouseEvent* e) {
+    // The view cube: front faces first (they are drawn last).
+    if (e->button() == Qt::LeftButton && cubeArea_.contains(e->position())) {
+        for (auto it = cubeFaces_.rbegin(); it != cubeFaces_.rend(); ++it)
+            if (it->first.containsPoint(e->position(), Qt::OddEvenFill)) {
+                setView(it->second);
+                return;
+            }
+        setView(View::Iso);
+        return;
+    }
     lastPos_ = e->position().toPoint();
     dragButton_ = e->button();
     dragged_ = false;

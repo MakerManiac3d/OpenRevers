@@ -31,6 +31,13 @@ Panels can be moved, closed and brought back from the **View** menu.
 
 Z is up, as in most CAD programs.
 
+## Timeline and view cube (0.11.1)
+
+- **Timeline** (bottom): the part's steps in order. Click to pick,
+  double-click to edit, right-click to suppress, bring back or delete.
+- **View cube** (top right of the view): click a face to look from that
+  side; beside the cube, the isometric view.
+
 ## The ribbon (0.11)
 
 Under the quick bar (save, import, export, undo, redo) is the **ribbon**, as

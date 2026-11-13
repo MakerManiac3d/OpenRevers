@@ -31,6 +31,14 @@ Los paneles se mueven, se cierran y se recuperan en el menú **Ver**.
 
 El eje Z es el vertical, como en la mayoría de programas de CAD.
 
+## Línea de tiempo y cubo de vista (0.11.1)
+
+- **Línea de tiempo** (abajo): los pasos de la pieza en orden. Clic para
+  elegir, doble clic para editar, botón derecho para suprimir, volver a
+  incluir o borrar.
+- **Cubo de vista** (arriba a la derecha de la vista): clic en una cara para
+  mirar desde ese lado; junto al cubo, vista isométrica.
+
 ## La cinta de pestañas (0.11)
 
 Bajo la barra rápida (guardar, importar, exportar, deshacer, rehacer) está la
