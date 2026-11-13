@@ -13,7 +13,12 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
+#include <QSignalBlocker>
+#include <QListWidget>
+#include <QMessageBox>
 #include <QLocale>
 #include <QMouseEvent>
 #include <QPainter>
@@ -120,6 +125,7 @@ SketchCanvas::SketchCanvas(QWidget* parent) : QWidget(parent) {
 void SketchCanvas::setProfile(const Profile& p) {
     prof_ = p;
     pick_ = {};
+    selection_.clear();
     recomputeFit();
     update();
 }
@@ -145,6 +151,8 @@ void SketchCanvas::setTool(Tool t) {
 
 void SketchCanvas::setPick(const SketchPick& p) {
     pick_ = p;
+    selection_.clear();
+    if (p.what != SketchPick::What::None) selection_.push_back(p);
     update();
     emit picked();
 }
@@ -247,12 +255,13 @@ Vec2d SketchCanvas::snapped(const QPointF& at) const {
 }
 
 void SketchCanvas::pushUndo() {
-    undo_.push_back(prof_);
+    undo_.push_back({prof_, cons_});
     if (undo_.size() > 200) undo_.erase(undo_.begin());
     redo_.clear();
 }
 
 void SketchCanvas::edited() {
+    settle();
     recomputeFit();
     update();
     emit changed();
@@ -260,20 +269,28 @@ void SketchCanvas::edited() {
 
 void SketchCanvas::undo() {
     if (undo_.empty()) return;
-    redo_.push_back(prof_);
-    prof_ = undo_.back();
+    redo_.push_back({prof_, cons_});
+    prof_ = undo_.back().profile;
+    cons_ = undo_.back().constraints;
     undo_.pop_back();
+    pickedCons_ = -1;
+    emit constraintsChanged();
     pick_ = {};
+    selection_.clear();
     edited();
     emit picked();
 }
 
 void SketchCanvas::redo() {
     if (redo_.empty()) return;
-    undo_.push_back(prof_);
-    prof_ = redo_.back();
+    undo_.push_back({prof_, cons_});
+    prof_ = redo_.back().profile;
+    cons_ = redo_.back().constraints;
     redo_.pop_back();
+    pickedCons_ = -1;
+    emit constraintsChanged();
     pick_ = {};
+    selection_.clear();
     edited();
     emit picked();
 }
@@ -361,6 +378,7 @@ void SketchCanvas::toSpline() {
     // Five poles along it: the same shape to start with, free to bend.
     const auto pts = s.sample(std::max(1e-3, s.length() / 64));
     s = Segment::spline(fitCurve(std::vector<Vec2d>(pts.begin() + 1, pts.end() - 1), s.a, s.b, 1e-4, 6).poles);
+    dropOnSegment(pick_.loop, pick_.seg);
     pick_.what = SketchPick::What::Segment;
     edited();
     emit picked();
@@ -376,6 +394,7 @@ void SketchCanvas::lineToArc() {
     const double side = prof_.loops[static_cast<std::size_t>(pick_.loop)].area() >= 0 ? -1.0 : 1.0;
     const Vec2d m = 0.5 * (s.a + s.b) + side * 0.15 * Vec2d(-chord.y(), chord.x());
     if (auto a = arcThrough(s.a, m, s.b)) s = *a;
+    dropOnSegment(pick_.loop, pick_.seg);
     edited();
     emit picked();
 }
@@ -386,6 +405,7 @@ void SketchCanvas::arcToLine() {
     if (s.kind != Segment::Kind::Arc && s.kind != Segment::Kind::Spline) return;
     pushUndo();
     s = Segment::line(s.a, s.b);
+    dropOnSegment(pick_.loop, pick_.seg);
     pick_.what = SketchPick::What::Segment;
     edited();
     emit picked();
@@ -415,7 +435,9 @@ void SketchCanvas::split() {
         sg[i] = Segment::arc(s.a, m, s.centre, s.ccw);
         sg.insert(sg.begin() + static_cast<std::ptrdiff_t>(i) + 1, Segment::arc(m, s.b, s.centre, s.ccw));
     }
+    afterSplit(pick_.loop, static_cast<int>(i));
     pick_ = {SketchPick::What::Vertex, pick_.loop, static_cast<int>(i) + 1};
+    selection_ = {pick_};
     edited();
     emit picked();
 }
@@ -429,7 +451,9 @@ void SketchCanvas::deleteVertex() {
     const Segment merged = Segment::line(sg[prev].a, sg[i].b);
     sg[prev] = merged;
     sg.erase(sg.begin() + static_cast<std::ptrdiff_t>(i));
+    dropOnLoop(pick_.loop, false);
     pick_ = {};
+    selection_.clear();
     edited();
     emit picked();
 }
@@ -438,7 +462,9 @@ void SketchCanvas::deleteLoop() {
     if (pick_.loop < 0) return;
     pushUndo();
     prof_.loops.erase(prof_.loops.begin() + pick_.loop);
+    dropOnLoop(pick_.loop, true);
     pick_ = {};
+    selection_.clear();
     edited();
     emit picked();
 }
@@ -479,7 +505,9 @@ void SketchCanvas::finishPolygon() {
         Loop l;
         for (std::size_t k = 0; k < drawing_.size(); ++k) l.segments.push_back(Segment::line(drawing_[k], drawing_[(k + 1) % drawing_.size()]));
         prof_.loops.push_back(l);
+        addAutoConstraints(static_cast<int>(prof_.loops.size()) - 1);
         pick_ = {};
+    selection_.clear();
         edited();
     }
     drawing_.clear();
@@ -526,8 +554,10 @@ void SketchCanvas::paintEvent(QPaintEvent*) {
     for (std::size_t l = 0; l < prof_.loops.size(); ++l)
         for (std::size_t s = 0; s < prof_.loops[l].segments.size(); ++s) {
             const Segment& x = prof_.loops[l].segments[s];
-            const bool picked = pick_.loop == static_cast<int>(l) && pick_.seg == static_cast<int>(s) &&
-                                (pick_.what == SketchPick::What::Segment || pick_.what == SketchPick::What::ArcMiddle || x.kind == Segment::Kind::Circle);
+            bool picked = false;
+            for (const auto& q : selection_)
+                picked = picked || (q.loop == static_cast<int>(l) && q.seg == static_cast<int>(s) &&
+                                    (q.what == SketchPick::What::Segment || q.what == SketchPick::What::ArcMiddle || x.kind == Segment::Kind::Circle));
             const bool hovered = hover_.loop == static_cast<int>(l) && hover_.seg == static_cast<int>(s) && hover_.what == SketchPick::What::Segment;
             p.setPen(QPen(picked ? QColor(255, 150, 20) : colourOf(l, s), picked || hovered ? 3.2 : 2.0));
             QPainterPath path;
@@ -540,7 +570,7 @@ void SketchCanvas::paintEvent(QPaintEvent*) {
     for (std::size_t l = 0; l < prof_.loops.size(); ++l)
         for (std::size_t s = 0; s < prof_.loops[l].segments.size(); ++s) {
             const Segment& x = prof_.loops[l].segments[s];
-            auto isPick = [&](SketchPick::What w) { return pick_.what == w && pick_.loop == static_cast<int>(l) && pick_.seg == static_cast<int>(s); };
+            auto isPick = [&](SketchPick::What w) { return selected({w, static_cast<int>(l), static_cast<int>(s)}); };
             auto isHover = [&](SketchPick::What w) { return hover_.what == w && hover_.loop == static_cast<int>(l) && hover_.seg == static_cast<int>(s); };
             auto box = [&](const Vec2d& at, SketchPick::What w, bool diamond) {
                 const QPointF q = toScreen(at);
@@ -582,6 +612,61 @@ void SketchCanvas::paintEvent(QPaintEvent*) {
         }
     p.setBrush(Qt::NoBrush);
 
+    // Constraints: a tag beside what each holds; the picked one's pieces lit.
+    tagRects_.clear();
+    if (pickedCons_ >= 0 && pickedCons_ < static_cast<int>(cons_.size())) {
+        p.setPen(QPen(QColor(200, 60, 200), 4));
+        for (const auto& r : cons_[static_cast<std::size_t>(pickedCons_)].refs) {
+            if (r.loop < 0 || r.loop >= static_cast<int>(prof_.loops.size())) continue;
+            const auto& sg = prof_.loops[static_cast<std::size_t>(r.loop)].segments;
+            if (r.segment < 0 || r.segment >= static_cast<int>(sg.size())) continue;
+            if (r.part == SketchRef::Part::Edge) {
+                QPainterPath path;
+                const auto pts = sg[static_cast<std::size_t>(r.segment)].sample(std::max(0.005, 2.0 / scale_));
+                for (std::size_t k = 0; k < pts.size(); ++k) k ? path.lineTo(toScreen(pts[k])) : path.moveTo(toScreen(pts[k]));
+                p.drawPath(path);
+            } else {
+                p.drawEllipse(toScreen(anchorOf(r)), 6.0, 6.0);
+            }
+        }
+    }
+    {
+        QFont f = font();
+        f.setPointSizeF(f.pointSizeF() * 0.9);
+        p.setFont(f);
+        const QFontMetricsF fm(f);
+        std::vector<QPointF> used;
+        for (std::size_t i = 0; i < cons_.size(); ++i) {
+            const auto& c = cons_[i];
+            if (c.refs.empty()) continue;
+            bool valid = true;
+            for (const auto& r : c.refs)
+                valid = valid && r.loop >= 0 && r.loop < static_cast<int>(prof_.loops.size()) && r.segment >= 0 &&
+                        r.segment < static_cast<int>(prof_.loops[static_cast<std::size_t>(r.loop)].segments.size());
+            if (!valid) continue;
+            Vec2d at = anchorOf(c.refs.front());
+            if (constraintHasValue(c.kind) && c.refs.size() >= 2) at = 0.5 * (anchorOf(c.refs[0]) + anchorOf(c.refs[1]));
+            QPointF q = toScreen(at) + QPointF(8, -8);
+            // Tags on the same spot stack up.
+            for (const QPointF& u : used)
+                if ((u - q).manhattanLength() < 6) q += QPointF(0, -fm.height() - 2);
+            used.push_back(q);
+            const QString text = labelOf(c);
+            QRectF box(q, QSizeF(fm.horizontalAdvance(text) + 8, fm.height() + 2));
+            box.translate(0, -box.height());
+            const bool lit = static_cast<int>(i) == pickedCons_;
+            const bool dim = constraintHasValue(c.kind);
+            p.setPen(QPen(lit ? QColor(200, 60, 200) : (dim ? QColor(30, 110, 200) : QColor(120, 120, 130)), 1));
+            p.setBrush(dark ? QColor(44, 46, 52, 230) : QColor(255, 255, 255, 230));
+            p.drawRoundedRect(box, 3, 3);
+            p.setPen(lit ? QColor(200, 60, 200) : (dim ? (dark ? QColor(130, 180, 255) : QColor(20, 80, 180)) : palette().color(QPalette::WindowText)));
+            p.drawText(box, Qt::AlignCenter, text);
+            tagRects_.push_back({box, static_cast<int>(i)});
+        }
+        p.setBrush(Qt::NoBrush);
+        p.setFont(font());
+    }
+
     // The shape being drawn.
     if (!drawing_.empty() && cursor_) {
         p.setPen(QPen(QColor(255, 150, 20), 1.6, Qt::DashLine));
@@ -617,9 +702,30 @@ void SketchCanvas::mousePressEvent(QMouseEvent* e) {
     const Vec2d at = snapped(e->position());
     switch (tool_) {
         case Tool::Select: {
+            if (const int c = constraintAt(e->position()); c >= 0) {
+                setPickedConstraint(c);
+                emit constraintPicked(c);
+                return;
+            }
             const SketchPick h = hitTest(e->position());
-            pick_ = h;
+            const bool add = e->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier);
+            if (add) {
+                if (h.what != SketchPick::What::None && !selected(h)) selection_.push_back(h);
+                if (selection_.size() > 3) selection_.erase(selection_.begin());
+            } else {
+                selection_.clear();
+                if (h.what != SketchPick::What::None) selection_.push_back(h);
+            }
+            if (pickedCons_ >= 0) {
+                pickedCons_ = -1;
+                emit constraintPicked(-1);
+            }
+            if (!add || h.what != SketchPick::What::None) pick_ = h;
             emit picked();
+            if (add) {
+                update();
+                return;
+            }
             if (h.what != SketchPick::What::None && h.what != SketchPick::What::Segment) {
                 pushUndo();
                 dragging_ = true;
@@ -639,6 +745,7 @@ void SketchCanvas::mousePressEvent(QMouseEvent* e) {
                     const Vec2d c1(b.x(), a.y()), c3(a.x(), b.y());
                     l.segments = {Segment::line(a, c1), Segment::line(c1, b), Segment::line(b, c3), Segment::line(c3, a)};
                     prof_.loops.push_back(l);
+                    addAutoConstraints(static_cast<int>(prof_.loops.size()) - 1);
                     edited();
                 }
             }
@@ -685,6 +792,7 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* e) {
     cursor_ = at;
     emit cursorMoved(QPointF(at.x(), at.y()));
     if (dragging_ && pick_.loop >= 0) {
+        const Profile before = prof_;
         auto& sg = prof_.loops[static_cast<std::size_t>(pick_.loop)].segments;
         Segment& s = sg[static_cast<std::size_t>(pick_.seg)];
         switch (pick_.what) {
@@ -696,6 +804,31 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* e) {
             case SketchPick::What::Centre: s.centre = at; break;
             case SketchPick::What::Radius: s.radius = std::max(1e-3, (at - s.centre).norm()); break;
             default: break;
+        }
+        if (!cons_.empty()) {
+            // Solved live: the dragged point follows the cursor as far as the
+            // constraints let it; a move they cannot follow is not made.
+            SketchSolveOptions opt;
+            if (pick_.what == SketchPick::What::Vertex) opt.drag.push_back({SketchRef{pick_.loop, pick_.seg, SketchRef::Part::Start}, at});
+            if (pick_.what == SketchPick::What::Centre) opt.drag.push_back({SketchRef{pick_.loop, pick_.seg, SketchRef::Part::Centre}, at});
+            Profile cand = prof_;
+            int dof = -1;
+            bool ok = solveOn(cand, opt, nullptr, &dof);
+            if (!ok && !opt.drag.empty()) {
+                cand = prof_;
+                ok = solveOn(cand, {}, nullptr, &dof);
+            }
+            if (ok) {
+                prof_ = cand;
+                dof_ = dof;
+            } else {
+                prof_ = before;
+            }
+            recomputeFit();
+            update();
+            emit changed();
+            emit picked();
+            return;
         }
         edited();
         emit picked();
@@ -716,7 +849,7 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent*) {
     if (dragging_) {
         // A drag that changed nothing leaves no step to undo.
         if (!undo_.empty()) {
-            const Profile& before = undo_.back();
+            const Profile& before = undo_.back().profile;
             bool same = before.loops.size() == prof_.loops.size();
             for (std::size_t l = 0; same && l < prof_.loops.size(); ++l) {
                 same = before.loops[l].segments.size() == prof_.loops[l].segments.size();
@@ -733,6 +866,10 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent*) {
 }
 
 void SketchCanvas::mouseDoubleClickEvent(QMouseEvent* e) {
+    if (const int c = constraintAt(e->position()); c >= 0 && tool_ == Tool::Select) {
+        emit constraintEditRequested(c);
+        return;
+    }
     if (tool_ == Tool::Polygon) {
         finishPolygon();
         return;
@@ -766,6 +903,10 @@ void SketchCanvas::keyPressEvent(QKeyEvent* e) {
         finishPolygon();
         return;
     }
+    if ((e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace) && pickedCons_ >= 0) {
+        removeConstraint(pickedCons_);
+        return;
+    }
     if (e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace) {
         if (pick_.what == SketchPick::What::Vertex) deleteVertex();
         else if (pick_.what == SketchPick::What::Centre || pick_.what == SketchPick::What::Radius) deleteLoop();
@@ -780,15 +921,311 @@ void SketchCanvas::keyPressEvent(QKeyEvent* e) {
 
 void SketchCanvas::resizeEvent(QResizeEvent*) { update(); }
 
+// ---- constraints ------------------------------------------------------
+
+void SketchCanvas::setConstraints(std::vector<SketchConstraint> c, std::map<std::string, double> parameters) {
+    cons_ = std::move(c);
+    params_ = std::move(parameters);
+    pickedCons_ = -1;
+    settle();
+    recomputeFit();
+    update();
+    emit constraintsChanged();
+}
+
+bool SketchCanvas::solveOn(Profile& p, const SketchSolveOptions& opt, QString* why, int* dof) const {
+    std::vector<SketchConstraint> cs = cons_;
+    for (auto& c : cs)
+        if (!c.parameter.empty()) {
+            const auto it = params_.find(c.parameter);
+            if (it == params_.end()) {
+                if (why) *why = tr("there is no parameter named %1").arg(QString::fromStdString(c.parameter));
+                return false;
+            }
+            c.value = it->second;
+        }
+    const SketchSolveResult r = solveSketch(p, cs, opt);
+    if (dof) *dof = r.dof;
+    if (r.solved) return true;
+    if (why) {
+        QStringList names;
+        for (int i : r.conflicting)
+            if (i >= 0 && i < static_cast<int>(cons_.size())) names << QString("%1 #%2").arg(kindTitle(cons_[static_cast<std::size_t>(i)].kind)).arg(i + 1);
+        *why = r.conflicting.empty() ? QString::fromStdString(r.message) : tr("they contradict each other: %1").arg(names.join(", "));
+        if (why->isEmpty()) *why = tr("the solver found no solution");
+    }
+    return false;
+}
+
+void SketchCanvas::settle() {
+    if (cons_.empty()) {
+        dof_ = -1;
+        solved_ = true;
+        solveMsg_.clear();
+        return;
+    }
+    Profile p = prof_;
+    QString why;
+    int dof = -1;
+    if (solveOn(p, {}, &why, &dof)) {
+        prof_ = p;
+        dof_ = dof;
+        solved_ = true;
+        solveMsg_.clear();
+    } else {
+        solved_ = false;
+        solveMsg_ = why;
+    }
+}
+
+QString SketchCanvas::addConstraint(const SketchConstraint& c) {
+    const auto before = cons_;
+    cons_.push_back(c);
+    Profile p = prof_;
+    QString why;
+    int dof = -1;
+    const bool ok = solveOn(p, {}, &why, &dof);
+    cons_ = before;
+    if (!ok) return why;
+    pushUndo();
+    cons_.push_back(c);
+    prof_ = p;
+    dof_ = dof;
+    solved_ = true;
+    solveMsg_.clear();
+    pickedCons_ = static_cast<int>(cons_.size()) - 1;
+    recomputeFit();
+    update();
+    emit changed();
+    emit constraintsChanged();
+    emit constraintPicked(pickedCons_);
+    return {};
+}
+
+void SketchCanvas::removeConstraint(int index) {
+    if (index < 0 || index >= static_cast<int>(cons_.size())) return;
+    pushUndo();
+    cons_.erase(cons_.begin() + index);
+    pickedCons_ = -1;
+    edited();
+    emit constraintsChanged();
+    emit constraintPicked(-1);
+}
+
+QString SketchCanvas::setConstraintValue(int index, double value, const std::string& parameter) {
+    if (index < 0 || index >= static_cast<int>(cons_.size())) return {};
+    const auto before = cons_;
+    cons_[static_cast<std::size_t>(index)].value = value;
+    cons_[static_cast<std::size_t>(index)].parameter = parameter;
+    Profile p = prof_;
+    QString why;
+    int dof = -1;
+    const bool ok = solveOn(p, {}, &why, &dof);
+    const auto after = cons_;
+    cons_ = before;
+    if (!ok) return why;
+    pushUndo();
+    cons_ = after;
+    prof_ = p;
+    dof_ = dof;
+    solved_ = true;
+    solveMsg_.clear();
+    recomputeFit();
+    update();
+    emit changed();
+    emit constraintsChanged();
+    return {};
+}
+
+void SketchCanvas::setPickedConstraint(int index) {
+    pickedCons_ = index >= 0 && index < static_cast<int>(cons_.size()) ? index : -1;
+    update();
+}
+
+std::optional<double> SketchCanvas::measure(const SketchConstraint& c) const {
+    try {
+        return measureConstraint(prof_, c);
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
+
+std::vector<SketchRef> SketchCanvas::selectionRefs() const {
+    std::vector<SketchRef> out;
+    for (const auto& p : selection_) {
+        if (p.loop < 0 || p.seg < 0) continue;
+        switch (p.what) {
+            case SketchPick::What::Vertex: out.push_back({p.loop, p.seg, SketchRef::Part::Start}); break;
+            case SketchPick::What::Segment:
+            case SketchPick::What::ArcMiddle:
+            case SketchPick::What::Radius: out.push_back({p.loop, p.seg, SketchRef::Part::Edge}); break;
+            case SketchPick::What::Centre: out.push_back({p.loop, p.seg, SketchRef::Part::Centre}); break;
+            default: break;
+        }
+    }
+    return out;
+}
+
+bool SketchCanvas::selected(const SketchPick& p) const {
+    for (const auto& q : selection_)
+        if (q == p) return true;
+    return false;
+}
+
+void SketchCanvas::dropOnSegment(int loop, int seg) {
+    const auto n = cons_.size();
+    std::erase_if(cons_, [&](const SketchConstraint& c) {
+        for (const auto& r : c.refs)
+            if (r.loop == loop && r.segment == seg && (r.part == SketchRef::Part::Edge || r.part == SketchRef::Part::Centre)) return true;
+        return false;
+    });
+    if (cons_.size() != n) {
+        pickedCons_ = -1;
+        emit constraintsChanged();
+    }
+}
+
+void SketchCanvas::dropOnLoop(int loop, bool renumber) {
+    const auto n = cons_.size();
+    std::erase_if(cons_, [&](const SketchConstraint& c) {
+        for (const auto& r : c.refs)
+            if (r.loop == loop) return true;
+        return false;
+    });
+    if (renumber)
+        for (auto& c : cons_)
+            for (auto& r : c.refs)
+                if (r.loop > loop) --r.loop;
+    if (cons_.size() != n || renumber) {
+        pickedCons_ = -1;
+        emit constraintsChanged();
+    }
+}
+
+void SketchCanvas::afterSplit(int loop, int seg) {
+    // Segment `seg` became two: what was on it as a whole no longer fits; its
+    // end is now the second half's end; later segments move up one.
+    dropOnSegment(loop, seg);
+    for (auto& c : cons_)
+        for (auto& r : c.refs) {
+            if (r.loop != loop) continue;
+            if (r.segment > seg) ++r.segment;
+            else if (r.segment == seg && r.part == SketchRef::Part::End) ++r.segment;
+        }
+    emit constraintsChanged();
+}
+
+void SketchCanvas::addAutoConstraints(int loop) {
+    // Lines drawn within a degree of horizontal or vertical stay so.
+    if (!autoCons_ || loop < 0 || loop >= static_cast<int>(prof_.loops.size())) return;
+    const auto& sg = prof_.loops[static_cast<std::size_t>(loop)].segments;
+    const double tol = std::tan(kPi / 180.0);
+    bool any = false;
+    for (int s = 0; s < static_cast<int>(sg.size()); ++s) {
+        const Segment& x = sg[static_cast<std::size_t>(s)];
+        if (x.kind != Segment::Kind::Line) continue;
+        const Vec2d d = x.b - x.a;
+        SketchConstraint c;
+        c.refs = {{loop, s, SketchRef::Part::Edge}};
+        if (std::abs(d.y()) <= tol * std::abs(d.x())) c.kind = ConstraintKind::Horizontal;
+        else if (std::abs(d.x()) <= tol * std::abs(d.y())) c.kind = ConstraintKind::Vertical;
+        else continue;
+        cons_.push_back(c);
+        any = true;
+    }
+    if (any) emit constraintsChanged();
+}
+
+Vec2d SketchCanvas::anchorOf(const SketchRef& r) const {
+    const Segment& s = prof_.loops[static_cast<std::size_t>(r.loop)].segments[static_cast<std::size_t>(r.segment)];
+    switch (r.part) {
+        case SketchRef::Part::Start: return s.kind == Segment::Kind::Circle ? s.centre : s.a;
+        case SketchRef::Part::End: return s.kind == Segment::Kind::Circle ? s.centre : s.b;
+        case SketchRef::Part::Centre: return s.centre;
+        case SketchRef::Part::Edge: break;
+    }
+    switch (s.kind) {
+        case Segment::Kind::Line: return 0.5 * (s.a + s.b);
+        case Segment::Kind::Arc: return arcMiddle(s);
+        case Segment::Kind::Circle: return s.centre + s.radius * Vec2d(std::sqrt(0.5), std::sqrt(0.5));
+        case Segment::Kind::Spline: {
+            const auto pts = s.sample(std::max(1e-3, s.length() / 20));
+            return pts[pts.size() / 2];
+        }
+    }
+    return s.a;
+}
+
+QString SketchCanvas::kindTitle(ConstraintKind k) const {
+    switch (k) {
+        case ConstraintKind::Coincident: return tr("Coincident");
+        case ConstraintKind::Horizontal: return tr("Horizontal");
+        case ConstraintKind::Vertical: return tr("Vertical");
+        case ConstraintKind::Parallel: return tr("Parallel");
+        case ConstraintKind::Perpendicular: return tr("Perpendicular");
+        case ConstraintKind::Tangent: return tr("Tangent");
+        case ConstraintKind::Equal: return tr("Equal");
+        case ConstraintKind::Distance: return tr("Distance");
+        case ConstraintKind::DistanceX: return tr("Horizontal distance");
+        case ConstraintKind::DistanceY: return tr("Vertical distance");
+        case ConstraintKind::Radius: return tr("Radius");
+        case ConstraintKind::Diameter: return tr("Diameter");
+        case ConstraintKind::Angle: return tr("Angle");
+        case ConstraintKind::Fix: return tr("Fixed");
+        case ConstraintKind::OnObject: return tr("Point on object");
+        case ConstraintKind::Symmetric: return tr("Symmetric");
+        case ConstraintKind::Midpoint: return tr("Midpoint");
+    }
+    return {};
+}
+
+QString SketchCanvas::labelOf(const SketchConstraint& c) const {
+    QLocale loc;
+    double v = c.value;
+    if (!c.parameter.empty())
+        if (const auto it = params_.find(c.parameter); it != params_.end()) v = it->second;
+    QString num = loc.toString(v, 'f', 3);
+    while (num.contains(loc.decimalPoint()) && (num.endsWith('0') || num.endsWith(loc.decimalPoint()))) num.chop(1);
+    if (!c.parameter.empty()) num = QString::fromStdString(c.parameter) + " = " + num;
+    switch (c.kind) {
+        case ConstraintKind::Coincident: return QStringLiteral("◉");
+        case ConstraintKind::Horizontal: return QStringLiteral("H");
+        case ConstraintKind::Vertical: return QStringLiteral("V");
+        case ConstraintKind::Parallel: return QStringLiteral("∥");
+        case ConstraintKind::Perpendicular: return QStringLiteral("⊥");
+        case ConstraintKind::Tangent: return QStringLiteral("T");
+        case ConstraintKind::Equal: return QStringLiteral("=");
+        case ConstraintKind::Fix: return QStringLiteral("⚓");
+        case ConstraintKind::OnObject: return QStringLiteral("∈");
+        case ConstraintKind::Symmetric: return QStringLiteral("⇋");
+        case ConstraintKind::Midpoint: return QStringLiteral("M");
+        case ConstraintKind::Distance: return num;
+        case ConstraintKind::DistanceX: return QStringLiteral("↔ ") + num;
+        case ConstraintKind::DistanceY: return QStringLiteral("↕ ") + num;
+        case ConstraintKind::Radius: return QStringLiteral("R ") + num;
+        case ConstraintKind::Diameter: return QStringLiteral("Ø ") + num;
+        case ConstraintKind::Angle: return num + QStringLiteral("°");
+    }
+    return {};
+}
+
+int SketchCanvas::constraintAt(const QPointF& at) const {
+    for (auto it = tagRects_.rbegin(); it != tagRects_.rend(); ++it)
+        if (it->first.contains(at)) return it->second;
+    return -1;
+}
+
 // ============================================================== dialog ==
 
-SketchEditor::SketchEditor(const Profile& profile, const QString& name, const std::vector<Body>& bodies, const QString& lang, QWidget* parent)
+SketchEditor::SketchEditor(const Profile& profile, const QString& name, const std::vector<Body>& bodies, const QString& lang, QWidget* parent,
+                           const std::vector<SketchConstraint>& constraints, const std::map<std::string, double>& parameters)
     : QDialog(parent), bodies_(bodies) {
     (void)lang;
     setWindowTitle(tr("Sketch: %1").arg(name));
     resize(1100, 720);
     canvas_ = new SketchCanvas(this);
     canvas_->setProfile(profile);
+    canvas_->setConstraints(constraints, parameters);
 
     auto* tb = new QToolBar(this);
     tb->setToolButtonStyle(Qt::ToolButtonTextOnly);
@@ -820,6 +1257,31 @@ SketchEditor::SketchEditor(const Profile& profile, const QString& name, const st
     tb->addAction(tr("Undo"), this, [this]() { canvas_->undo(); })->setShortcut(QKeySequence::Undo);
     tb->addAction(tr("Redo"), this, [this]() { canvas_->redo(); })->setShortcut(QKeySequence::Redo);
     tb->addAction(tr("Fit"), this, [this]() { canvas_->fit(); })->setToolTip(tr("Fit the sketch in the window (F)"));
+
+    // Constraints and dimensions, on what is picked (Shift or Ctrl+click picks several).
+    auto* tc = new QToolBar(this);
+    tc->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    auto con = [&](const QString& text, ConstraintKind k) {
+        tc->addAction(text, this, [this, k]() { constrain(k); })->setToolTip(hint(k));
+    };
+    con(tr("Coincident"), ConstraintKind::Coincident);
+    con(tr("Horizontal"), ConstraintKind::Horizontal);
+    con(tr("Vertical"), ConstraintKind::Vertical);
+    con(tr("Parallel"), ConstraintKind::Parallel);
+    con(tr("Perpendicular"), ConstraintKind::Perpendicular);
+    con(tr("Tangent"), ConstraintKind::Tangent);
+    con(tr("Equal"), ConstraintKind::Equal);
+    con(tr("Fix"), ConstraintKind::Fix);
+    con(tr("On object"), ConstraintKind::OnObject);
+    con(tr("Midpoint"), ConstraintKind::Midpoint);
+    con(tr("Symmetric"), ConstraintKind::Symmetric);
+    tc->addSeparator();
+    con(tr("Distance"), ConstraintKind::Distance);
+    con(tr("Horizontal distance"), ConstraintKind::DistanceX);
+    con(tr("Vertical distance"), ConstraintKind::DistanceY);
+    con(tr("Radius"), ConstraintKind::Radius);
+    con(tr("Diameter"), ConstraintKind::Diameter);
+    con(tr("Angle"), ConstraintKind::Angle);
 
     // Side panel: the reference, the tolerance, the picked element's values.
     scan_ = new QComboBox();
@@ -860,7 +1322,24 @@ SketchEditor::SketchEditor(const Profile& profile, const QString& name, const st
     sl->addSpacing(8);
     sl->addWidget(new QLabel(tr("<b>Picked</b>")));
     sl->addWidget(formBox_);
-    sl->addStretch(1);
+    sl->addSpacing(8);
+    sl->addWidget(new QLabel(tr("<b>Constraints</b>")));
+    autoCons_ = new QCheckBox(tr("Horizontal and vertical lines stay so when drawn"));
+    autoCons_->setChecked(true);
+    sl->addWidget(autoCons_);
+    dofLabel_ = new QLabel();
+    dofLabel_->setWordWrap(true);
+    sl->addWidget(dofLabel_);
+    consList_ = new QListWidget();
+    consList_->setMinimumHeight(120);
+    consList_->setToolTip(tr("Double-click a dimension to change its value: a number, or the name of a parameter of the part"));
+    sl->addWidget(consList_, 1);
+    auto* cb = new QHBoxLayout();
+    auto* editV = new QPushButton(tr("Change value…"));
+    auto* removeC = new QPushButton(tr("Remove"));
+    cb->addWidget(editV);
+    cb->addWidget(removeC);
+    sl->addLayout(cb);
     sl->addWidget(status_);
     sl->addWidget(cursor_);
 
@@ -872,6 +1351,7 @@ SketchEditor::SketchEditor(const Profile& profile, const QString& name, const st
     connect(buttons_, &QDialogButtonBox::rejected, this, &QDialog::reject);
     auto* vl = new QVBoxLayout(this);
     vl->addWidget(tb);
+    vl->addWidget(tc);
     vl->addLayout(hl, 1);
     vl->addWidget(buttons_);
 
@@ -884,7 +1364,19 @@ SketchEditor::SketchEditor(const Profile& profile, const QString& name, const st
     connect(canvas_, &SketchCanvas::cursorMoved, this, [this](const QPointF& p) {
         cursor_->setText(QString("x %1  y %2 mm").arg(QLocale().toString(p.x(), 'f', 3), QLocale().toString(p.y(), 'f', 3)));
     });
+    connect(autoCons_, &QCheckBox::toggled, this, [this](bool on) { canvas_->setAutoConstraints(on); });
+    connect(canvas_, &SketchCanvas::constraintsChanged, this, [this]() { updateConstraintList(); updateStatus(); });
+    connect(canvas_, &SketchCanvas::constraintPicked, this, [this](int i) {
+        const QSignalBlocker block(consList_);
+        consList_->setCurrentRow(i);
+    });
+    connect(canvas_, &SketchCanvas::constraintEditRequested, this, [this](int i) { editConstraintValue(i); });
+    connect(consList_, &QListWidget::currentRowChanged, this, [this](int i) { canvas_->setPickedConstraint(i); });
+    connect(consList_, &QListWidget::itemDoubleClicked, this, [this]() { editConstraintValue(consList_->currentRow()); });
+    connect(editV, &QPushButton::clicked, this, [this]() { editConstraintValue(consList_->currentRow()); });
+    connect(removeC, &QPushButton::clicked, this, [this]() { canvas_->removeConstraint(consList_->currentRow()); });
     canvas_->setTolerance(tol_->value());
+    updateConstraintList();
     loadReference();
     updatePanel();
     updateStatus();
@@ -892,6 +1384,147 @@ SketchEditor::SketchEditor(const Profile& profile, const QString& name, const st
 }
 
 Profile SketchEditor::profile() const { return canvas_->profile(); }
+
+std::vector<SketchConstraint> SketchEditor::constraints() const { return canvas_->constraints(); }
+
+QString SketchEditor::hint(ConstraintKind k) const {
+    switch (k) {
+        case ConstraintKind::Coincident: return tr("Two points in the same place");
+        case ConstraintKind::Horizontal: return tr("A line, or two points, horizontal");
+        case ConstraintKind::Vertical: return tr("A line, or two points, vertical");
+        case ConstraintKind::Parallel: return tr("Two lines parallel");
+        case ConstraintKind::Perpendicular: return tr("Two lines at right angles");
+        case ConstraintKind::Tangent: return tr("A line and an arc or circle, or two arcs or circles, touching smoothly");
+        case ConstraintKind::Equal: return tr("Two lines of the same length, or two arcs or circles of the same radius");
+        case ConstraintKind::Fix: return tr("A point (or a circle's centre) stays where it is");
+        case ConstraintKind::OnObject: return tr("A point on a line, arc or circle");
+        case ConstraintKind::Midpoint: return tr("A point at the middle of a line");
+        case ConstraintKind::Symmetric: return tr("Two points symmetric about a line or a point");
+        case ConstraintKind::Distance: return tr("A line's length, or the distance between two points or from a point to a line");
+        case ConstraintKind::DistanceX: return tr("Along x: a line, or two points");
+        case ConstraintKind::DistanceY: return tr("Along y: a line, or two points");
+        case ConstraintKind::Radius: return tr("An arc's or a circle's radius");
+        case ConstraintKind::Diameter: return tr("An arc's or a circle's diameter");
+        case ConstraintKind::Angle: return tr("The angle between two lines, in degrees");
+    }
+    return {};
+}
+
+void SketchEditor::updateConstraintList() {
+    const QSignalBlocker block(consList_);
+    consList_->clear();
+    const auto& cs = canvas_->constraints();
+    for (std::size_t i = 0; i < cs.size(); ++i) {
+        QString text = QString("%1. %2").arg(i + 1).arg(canvas_->kindTitle(cs[i].kind));
+        if (constraintHasValue(cs[i].kind)) text += ": " + canvas_->labelOf(cs[i]);
+        consList_->addItem(text);
+    }
+    consList_->setCurrentRow(canvas_->pickedConstraint());
+}
+
+bool SketchEditor::readValue(const QString& typed, double* value, std::string* parameter, QString* why) const {
+    const QString t = typed.trimmed();
+    bool ok = false;
+    double v = QLocale().toDouble(t, &ok);
+    if (!ok) v = QLocale::c().toDouble(t, &ok);
+    if (ok) {
+        *value = v;
+        parameter->clear();
+        return true;
+    }
+    const auto& params = canvas_->parameters();
+    if (const auto it = params.find(t.toStdString()); it != params.end()) {
+        *value = it->second;
+        *parameter = it->first;
+        return true;
+    }
+    QStringList names;
+    for (const auto& [n, _] : params) names << QString::fromStdString(n);
+    *why = names.isEmpty() ? tr("\"%1\" is not a number, and the part has no parameters.").arg(t)
+                           : tr("\"%1\" is not a number nor a parameter of the part (%2).").arg(t, names.join(", "));
+    return false;
+}
+
+void SketchEditor::constrain(ConstraintKind kind) {
+    std::vector<SketchRef> refs = canvas_->selectionRefs();
+    const Profile& prof = canvas_->profile();
+    auto seg = [&](const SketchRef& r) -> const Segment& { return prof.loops[static_cast<std::size_t>(r.loop)].segments[static_cast<std::size_t>(r.segment)]; };
+    auto isPoint = [](const SketchRef& r) { return r.part != SketchRef::Part::Edge; };
+    // Points first where the solver wants them so (a point on a line, the middle of a line, symmetric about).
+    if (kind == ConstraintKind::OnObject || kind == ConstraintKind::Midpoint || kind == ConstraintKind::Symmetric)
+        std::stable_partition(refs.begin(), refs.end(), isPoint);
+    // A circle picked for a point-only constraint means its centre.
+    if (kind == ConstraintKind::Fix || kind == ConstraintKind::Coincident)
+        for (auto& r : refs)
+            if (r.part == SketchRef::Part::Edge && seg(r).kind == Segment::Kind::Circle) r.part = SketchRef::Part::Centre;
+    // Horizontal or vertical distance of one line: between its two ends.
+    if ((kind == ConstraintKind::DistanceX || kind == ConstraintKind::DistanceY) && refs.size() == 1 && refs[0].part == SketchRef::Part::Edge &&
+        seg(refs[0]).kind == Segment::Kind::Line)
+        refs = {{refs[0].loop, refs[0].segment, SketchRef::Part::Start}, {refs[0].loop, refs[0].segment, SketchRef::Part::End}};
+    std::size_t need = 2;
+    switch (kind) {
+        case ConstraintKind::Horizontal:
+        case ConstraintKind::Vertical:
+        case ConstraintKind::Distance:
+            need = !refs.empty() && refs[0].part == SketchRef::Part::Edge && refs.size() == 1 ? 1 : 2;
+            break;
+        case ConstraintKind::Fix:
+        case ConstraintKind::Radius:
+        case ConstraintKind::Diameter: need = 1; break;
+        case ConstraintKind::Symmetric: need = 3; break;
+        default: need = 2; break;
+    }
+    if (refs.size() < need) {
+        QMessageBox::information(this, tr("Constraint"),
+                                 tr("Pick first what it applies to (Shift or Ctrl+click picks several): %1.").arg(hint(kind).toLower()));
+        return;
+    }
+    refs.resize(need);
+    SketchConstraint c;
+    c.kind = kind;
+    c.refs = refs;
+    if (constraintHasValue(kind)) {
+        auto now = canvas_->measure(c);
+        if (now && *now < 0 && (kind == ConstraintKind::DistanceX || kind == ConstraintKind::DistanceY)) {
+            std::swap(c.refs[0], c.refs[1]);
+            now = canvas_->measure(c);
+        }
+        if (!now) {
+            QMessageBox::information(this, tr("Constraint"), tr("This dimension does not apply to the picked pieces."));
+            return;
+        }
+        bool ok = false;
+        const QString typed = QInputDialog::getText(this, canvas_->kindTitle(kind), tr("Value (a number, or the name of a parameter of the part):"), QLineEdit::Normal,
+                                                    QLocale().toString(*now, 'f', 3), &ok);
+        if (!ok) return;
+        QString why;
+        if (!readValue(typed, &c.value, &c.parameter, &why)) {
+            QMessageBox::information(this, tr("Constraint"), why);
+            return;
+        }
+    }
+    if (const QString why = canvas_->addConstraint(c); !why.isEmpty())
+        QMessageBox::information(this, tr("Constraint"), tr("It cannot be added: %1").arg(why));
+}
+
+void SketchEditor::editConstraintValue(int index) {
+    const auto& cs = canvas_->constraints();
+    if (index < 0 || index >= static_cast<int>(cs.size()) || !constraintHasValue(cs[static_cast<std::size_t>(index)].kind)) return;
+    const SketchConstraint c = cs[static_cast<std::size_t>(index)];
+    bool ok = false;
+    const QString now = c.parameter.empty() ? QLocale().toString(c.value, 'f', 3) : QString::fromStdString(c.parameter);
+    const QString typed = QInputDialog::getText(this, canvas_->kindTitle(c.kind), tr("Value (a number, or the name of a parameter of the part):"), QLineEdit::Normal, now, &ok);
+    if (!ok) return;
+    double v = 0;
+    std::string param;
+    QString why;
+    if (!readValue(typed, &v, &param, &why)) {
+        QMessageBox::information(this, tr("Constraint"), why);
+        return;
+    }
+    if (const QString w = canvas_->setConstraintValue(index, v, param); !w.isEmpty())
+        QMessageBox::information(this, tr("Constraint"), tr("That value cannot hold: %1").arg(w));
+}
 
 void SketchEditor::loadReference() {
     std::vector<std::vector<Vec2d>> lines;
@@ -925,7 +1558,11 @@ void SketchEditor::updateStatus() {
     if (f.points > 0)
         lines << tr("Section from the sketch: worst %1 mm, median %2 mm.").arg(loc.toString(f.worst, 'f', 3), loc.toString(f.median, 'f', 3));
     status_->setText(lines.join("<br>"));
-    buttons_->button(QDialogButtonBox::Ok)->setEnabled(!empty && why.empty());
+    if (canvas_->constraints().empty()) dofLabel_->setText(tr("No constraints: every point is free."));
+    else if (!canvas_->solved()) dofLabel_->setText("<span style='color:#dc2828'>" + tr("The constraints do not hold: %1").arg(canvas_->solveMessage()) + "</span>");
+    else if (canvas_->dof() == 0) dofLabel_->setText("<span style='color:#28a046'>" + tr("Fully constrained.") + "</span>");
+    else dofLabel_->setText(tr("Degrees of freedom left: %1").arg(canvas_->dof()));
+    buttons_->button(QDialogButtonBox::Ok)->setEnabled(!empty && why.empty() && canvas_->solved());
 }
 
 void SketchEditor::updatePanel() {

@@ -1,5 +1,23 @@
 # Cambios · Changelog
 
+## 0.12.1 — 13 de noviembre de 2026 (paso 5: bocetos con restricciones, 2.ª parte)
+
+- **Restricciones y cotas en el editor de bocetos:** una segunda barra con
+  coincidente, horizontal, vertical, paralela, perpendicular, tangente,
+  igual, fijar, sobre objeto, punto medio y simétrico, y las cotas distancia,
+  distancia horizontal y vertical, radio, diámetro y ángulo, sobre lo elegido
+  (Mayús o Ctrl+clic elige varias cosas).
+- Una cota acepta un número o el **nombre de un parámetro** de la pieza.
+- Etiquetas junto a lo que sujeta cada restricción; clic para elegirla, doble
+  clic para cambiar el valor, Supr para quitarla. Lista de restricciones y
+  **grados de libertad** en el panel.
+- **Arrastre resuelto en directo** con las restricciones.
+- Rectángulos y rectas casi horizontales o verticales quedan restringidos al
+  dibujarlos. Partir, borrar o convertir segmentos conserva las demás
+  restricciones.
+- *Aceptar* guarda las restricciones con el boceto (también en bocetos
+  nuevos).
+
 ## 0.12.0 — 13 de noviembre de 2026 (paso 5: bocetos con restricciones, 1.ª parte)
 
 - **Restricciones y cotas en los bocetos**, resueltas con PlaneGCS, el

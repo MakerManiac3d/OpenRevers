@@ -346,8 +346,31 @@ hay que hacerla por secciones y loft.
     la medida exacta del calibre.
   - Se ajusta a los vértices y a la sección mientras arrastras (casilla
     *Ajustar…*). Rueda para acercar; botón central o derecho para desplazar.
+  - **Restricciones y cotas** (segunda barra): elige lo que restringir
+    (Mayús o Ctrl+clic elige varias cosas: vértices, rectas, arcos, círculos)
+    y pulsa *Coincidente*, *Horizontal*, *Vertical*, *Paralela*,
+    *Perpendicular*, *Tangente*, *Igual*, *Fijar*, *Sobre objeto*, *Punto
+    medio* o *Simétrico*; o una cota: *Distancia* (la longitud de una recta, o
+    entre dos puntos, o de un punto a una recta), *Distancia horizontal* y
+    *vertical*, *Radio*, *Diámetro* o *Ángulo*. La cota propone la medida
+    actual; escribe la del calibre, o el **nombre de un parámetro** de la pieza
+    para que la mande (al cambiar el parámetro, el boceto se vuelve a
+    resolver).
+  - Cada restricción se ve como una etiqueta junto a lo que sujeta (H, V, ∥,
+    ⊥, =, ⚓… y las cotas con su valor). Un clic en la etiqueta la elige
+    (se resalta lo que sujeta); doble clic en una cota cambia su valor; Supr
+    la quita. La lista de la derecha muestra todas, y los **grados de
+    libertad** que quedan (0: totalmente restringido). Las que se contradicen
+    no se añaden, y se dice con cuáles chocan.
+  - Al arrastrar, el boceto se **resuelve en directo**: el punto sigue al
+    ratón hasta donde lo dejan las restricciones.
+  - Los rectángulos, y las rectas de un polígono casi horizontales o
+    verticales, se quedan **horizontales y verticales** al dibujarlos (casilla
+    en el panel). Partir o borrar segmentos quita solo las restricciones que
+    ya no tienen sentido.
   - *Aceptar* cambia el boceto y reconstruye la pieza en un solo paso de
-    deshacer. No se puede aceptar un boceto que no cierra.
+    deshacer. No se puede aceptar un boceto que no cierra o cuyas
+    restricciones no se cumplen.
 
 Todo lo que haces a mano lo ve el agente de IA (`view_selection` le dice qué
 parámetro, boceto u operación, qué caras y qué aristas has elegido), así que

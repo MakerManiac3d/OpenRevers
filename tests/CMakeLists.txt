@@ -19,3 +19,14 @@ add_test(NAME cli_quads_tsm
 # Large-mesh benchmark, run by hand: see docs/desarrollo/rendimiento.md.
 add_executable(orv_bench bench_large.cpp)
 target_link_libraries(orv_bench PRIVATE orv_core)
+
+# The sketch editor's constraint tools, on an offscreen window (Linux only:
+# the Windows runner has no Qt plugins beside the test before installing).
+if(ORV_BUILD_APP AND NOT WIN32)
+  add_executable(orv_gui_tests test_sketch_editor.cpp ${PROJECT_SOURCE_DIR}/src/app/SketchEditor.cpp ${PROJECT_SOURCE_DIR}/src/app/SketchEditor.h)
+  set_target_properties(orv_gui_tests PROPERTIES AUTOMOC ON)
+  target_link_libraries(orv_gui_tests PRIVATE orv_core Qt6::Widgets GTest::gtest)
+  target_include_directories(orv_gui_tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
+  add_test(NAME gui_sketch_editor COMMAND orv_gui_tests)
+  set_tests_properties(gui_sketch_editor PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()

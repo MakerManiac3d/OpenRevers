@@ -906,15 +906,18 @@ void MainWindow::newSketch(const QString& body, const json& plane, const QString
         p.plane.xDir = v("xDir", Vec3d::UnitX());
     }
     p.plane.normalize();
-    SketchEditor ed(p, name.isEmpty() ? tr("New sketch") : name, doc_.bodies(), lang_, this);
+    SketchEditor ed(p, name.isEmpty() ? tr("New sketch") : name, doc_.bodies(), lang_, this, {}, b->model->parameters);
     if (ed.exec() != QDialog::Accepted) return;
     const Profile out = ed.profile();
     if (out.loops.empty()) return;
     json j = profileToJson(out);
     json in = {{"body", b->ref()}, {"plane", j["plane"]}, {"loops", j["loops"]}};
     if (!name.isEmpty()) in["name"] = name.toStdString();
-    run("part.sketch", in, [this](const json& r) {
+    json cons = json::array();
+    for (const auto& c : ed.constraints()) cons.push_back(constraintToJson(c));
+    run("part.sketch", in, [this, cons, body = b->ref()](const json& r) {
         partItem_ = QString::fromStdString(r.value("ref", ""));
+        if (!cons.empty()) run("part.constrain", {{"body", body}, {"sketch", r.value("ref", "")}, {"add", cons}});
         refreshTree();
         refreshProperties();
     });
@@ -1666,10 +1669,12 @@ void MainWindow::editSketch(std::uint64_t bodyId, std::uint64_t sketchId) {
     if (!b || !b->isPart()) return;
     const Sketch* sk = b->model->sketch("s" + std::to_string(sketchId));
     if (!sk) return;
-    SketchEditor ed(sk->profile, QString::fromStdString(sk->name), doc_.bodies(), lang_, this);
+    SketchEditor ed(sk->profile, QString::fromStdString(sk->name), doc_.bodies(), lang_, this, sk->constraints, b->model->parameters);
     if (ed.exec() != QDialog::Accepted) return;
     json loops = profileToJson(ed.profile())["loops"];
-    run("part.edit_sketch", {{"body", b->ref()}, {"sketch", sk->ref()}, {"loops", loops}});
+    json cons = json::array();
+    for (const auto& c : ed.constraints()) cons.push_back(constraintToJson(c));
+    run("part.edit_sketch", {{"body", b->ref()}, {"sketch", sk->ref()}, {"loops", loops}, {"constraints", cons}});
 }
 
 void MainWindow::newSketchOnFace() {
@@ -1691,13 +1696,16 @@ void MainWindow::newSketchOnFace() {
     if (std::abs(f.axis.dot(x)) > 0.9) x = Vec3d::UnitY();
     p.plane.xDir = x;
     p.plane.normalize();
-    SketchEditor ed(p, tr("New sketch"), doc_.bodies(), lang_, this);
+    SketchEditor ed(p, tr("New sketch"), doc_.bodies(), lang_, this, {}, b->model->parameters);
     if (ed.exec() != QDialog::Accepted) return;
     const Profile out = ed.profile();
     if (out.loops.empty()) return;
     json j = profileToJson(out);
-    run("part.sketch", {{"body", b->ref()}, {"plane", j["plane"]}, {"loops", j["loops"]}}, [this](const json& r) {
+    json cons = json::array();
+    for (const auto& c : ed.constraints()) cons.push_back(constraintToJson(c));
+    run("part.sketch", {{"body", b->ref()}, {"plane", j["plane"]}, {"loops", j["loops"]}}, [this, cons, body = b->ref()](const json& r) {
         partItem_ = QString::fromStdString(r.value("ref", ""));
+        if (!cons.empty()) run("part.constrain", {{"body", body}, {"sketch", r.value("ref", "")}, {"add", cons}});
         refreshTree();
         refreshProperties();
     });
