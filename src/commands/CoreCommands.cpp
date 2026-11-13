@@ -139,10 +139,10 @@ std::string extensionOf(const fs::path& p) {
 
 }  // namespace
 
-void registerCoreCommands(CommandRegistry& R) {
+void registerCoreCommands(CommandRegistry& R, bool withScan) {
     registerFeatureCommands(R);
     registerPartCommands(R);
-    registerScanCommands(R);
+    if (withScan) registerScanCommands(R);
     using namespace schema;
 
     // ------------------------------------------------------------ files --

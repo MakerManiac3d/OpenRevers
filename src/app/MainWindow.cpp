@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "core/util/Config.h"
 #include "app/MainWindow.h"
 
 #include "scan/ScanBackend.h"
@@ -30,6 +31,7 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QListWidget>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
@@ -57,7 +59,8 @@ namespace orv {
 MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(parent), lang_(lang) {
     setObjectName("MainWindow");
     setAcceptDrops(true);
-    registerCoreCommands(registry_);
+    scanEnabled_ = loadAgentSettings().experimentalScan;
+    registerCoreCommands(registry_, scanEnabled_);
     viewport_ = new Viewport(this);
     setCentralWidget(viewport_);
     SelectionAccess access;
@@ -173,7 +176,7 @@ MainWindow::MainWindow(const QString& lang, QWidget* parent) : QMainWindow(paren
 
     scanTimer_ = new QTimer(this);
     connect(scanTimer_, &QTimer::timeout, this, &MainWindow::pollScan);
-    scanTimer_->start(400);
+    if (scanEnabled_) scanTimer_->start(400);
 
     agent_->start();
     refresh();
@@ -205,7 +208,8 @@ void MainWindow::buildActions() {
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
     auto* meshMenu = menuBar()->addMenu(tr("&Mesh"));
     auto* pointsMenu = menuBar()->addMenu(tr("&Points"));
-    auto* scanMenu = menuBar()->addMenu(tr("S&can"));
+    // Direct scanning is experimental: no menu unless Settings turns it on.
+    auto* scanMenu = scanEnabled_ ? menuBar()->addMenu(tr("S&can")) : nullptr;
     auto* shapesMenu = menuBar()->addMenu(tr("S&hapes"));
     auto* alignMenu = menuBar()->addMenu(tr("&Align"));
     auto* partMenu = menuBar()->addMenu(tr("&Part"));
@@ -288,6 +292,7 @@ void MainWindow::buildActions() {
     }
     for (const char* name : {"scan.status", "scan.connect", "scan.preview", "scan.start", "scan.pause", "scan.stop", "scan.export_to_body",
                              "scan.disconnect", "scan.use_simulator"}) {
+        if (!scanMenu || !registry_.find(name)) continue;  // direct scanning turned off
         auto* a = add(scanMenu, cmdText(name), [this, name]() { runFromUi(name); });
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
         if (std::string(name) == "scan.connect" || std::string(name) == "scan.export_to_body") scanMenu->addSeparator();

@@ -25,6 +25,9 @@ struct AgentSettings {
     /// Empty means: the user's home folder.
     std::vector<std::filesystem::path> allowedFolders;
     bool enabled{true};
+    /// Direct scanning through CrealityScan's library (experimental, off by
+    /// default): its commands and the Scan menu only exist when on.
+    bool experimentalScan{false};
 };
 
 /// Loads agent.json from configDir(), creating it (with a new token) if missing.

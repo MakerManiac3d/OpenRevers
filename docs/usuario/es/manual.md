@@ -349,7 +349,13 @@ puedes señalar algo y pedirle que siga desde ahí.
   originales. Con *asPoints*, como nube de puntos para reconstruir una sola
   malla con *Puntos → Malla desde puntos*.
 
-## Escanear desde OpenRevers (fase 6)
+## Escanear desde OpenRevers (fase 6, experimental)
+
+> **Oculto por defecto desde la 0.10.5.** Con el Raptor conecta y da vista
+> previa, pero todavía no registra el escaneo y puede cerrar el programa. Lo
+> recomendado es escanear en CrealityScan e importar el archivo (OBJ, STL o
+> PLY). Para probarlo: *Ajustes → Experimental → Escaneo directo*, y
+> reiniciar OpenRevers.
 
 Con **CrealityScan instalado** (Windows) y el escáner conectado por USB
 (Raptor, Otter, Ferret…), el menú **Escanear** maneja el escáner sin salir

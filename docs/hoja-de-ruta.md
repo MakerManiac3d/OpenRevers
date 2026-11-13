@@ -63,7 +63,36 @@ libre ajustada a un escaneo. Hecho en la v0.6 con piezas de prueba (una
 turbina de seis álabes, una tapa abombada con 0,2 % de error en volumen);
 falta un escaneo real.
 
-## Fase 6, por pasos (escaneo directo)
+## Nueva etapa (13/11/2026): modelado a mano y agente
+
+Decidido tras la presentación «Modelado a mano: propuesta de interfaz»:
+
+- **El escaneo directo se aparca** (fase 6). Queda oculto tras *Ajustes →
+  Experimental* desde la 0.10.5. Se escanea en CrealityScan y se importa.
+- **Interfaz al estilo Fusion:** pestañas por tarea, navegador del modelo a
+  la izquierda, panel de la operación a la derecha, línea de tiempo abajo,
+  cubo de vista.
+- **Bocetos como en FreeCAD:** restricciones geométricas y de cota con un
+  solucionador (planegcs, LGPL 2.1, compatible con la GPL 3).
+- **Primero el sólido paramétrico** (todas las operaciones con tiradores,
+  referencias estables, volver atrás en el historial) y **después la forma
+  libre** (superficies de subdivisión con paso a sólido).
+
+Versiones previstas:
+
+| Versión | Contenido |
+|---|---|
+| 0.11 | La ventana: pestañas, navegador, panel de operación, línea de tiempo, cubo de vista, atajos |
+| 0.12 | Bocetos con restricciones (planegcs), cotas como parámetros, proyectar la sección del escaneo |
+| 0.13 | Operaciones sólidas con tiradores, referencias estables, volver atrás en el historial |
+| 0.14 | Forma libre (subdivisión → B-spline → sólido); pincel y lazo en mallas |
+| 0.15 | El agente reconoce rasgos y propone un árbol que la persona revisa |
+
+Los arreglos E1–E3 del informe de la 0.10.0 (secciones con inicio común,
+ajuste dentro de tolerancia, superficie por una sola cara) pueden ir en una
+0.10.x.
+
+## Fase 6, por pasos (escaneo directo, aparcada)
 
 Objetivo: escanear desde OpenRevers con cualquier escáner que maneje
 CrealityScan (el del usuario es un Creality Raptor). Es interoperabilidad: se

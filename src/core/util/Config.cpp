@@ -98,6 +98,7 @@ AgentSettings loadAgentSettings() {
             s.port = j.value("port", s.port);
             s.token = j.value("token", std::string());
             s.enabled = j.value("enabled", true);
+            s.experimentalScan = j.value("experimentalScan", false);
             for (const auto& f : j.value("allowedFolders", json::array())) s.allowedFolders.emplace_back(f.get<std::string>());
         } else {
             dirty = true;
@@ -125,6 +126,7 @@ void saveAgentSettings(const AgentSettings& s) {
     j["port"] = s.port;
     j["token"] = s.token;
     j["enabled"] = s.enabled;
+    j["experimentalScan"] = s.experimentalScan;
     j["allowedFolders"] = json::array();
     for (const auto& f : s.allowedFolders) j["allowedFolders"].push_back(f.string());
     std::ofstream out(dir / "agent.json", std::ios::trunc);

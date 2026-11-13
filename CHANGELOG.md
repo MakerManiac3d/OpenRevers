@@ -1,5 +1,15 @@
 # Cambios · Changelog
 
+## 0.10.5 — 13 de noviembre de 2026
+
+- El escaneo directo con la biblioteca de CrealityScan queda oculto: no hay
+  menú *Escanear* ni comandos `scan.*` (tampoco por MCP) salvo que se active
+  *Ajustes → Experimental → Escaneo directo* y se reinicie. Se aparca hasta
+  nuevo aviso; lo recomendado es escanear en CrealityScan e importar.
+- Hoja de ruta de la nueva etapa (0.11–0.15): interfaz al estilo Fusion,
+  bocetos con restricciones como en FreeCAD, sólido paramétrico y después
+  forma libre.
+
 ## 0.10.4 — 13 de noviembre de 2026
 
 - Escáner: OpenRevers se cerraba al conectar con un modo que el escáner no

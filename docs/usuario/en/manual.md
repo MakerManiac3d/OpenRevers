@@ -327,7 +327,12 @@ picked), so you can point at something and ask it to carry on from there.
   originals. With *asPoints*, as a point cloud to rebuild one mesh with
   *Points → Mesh from points*.
 
-## Scanning from OpenRevers (phase 6)
+## Scanning from OpenRevers (phase 6, experimental)
+
+> **Hidden by default since 0.10.5.** With the Raptor it connects and
+> previews, but does not record the scan yet and may close the program. Scan
+> in CrealityScan and import the file (OBJ, STL or PLY) instead. To try it:
+> *Settings → Experimental → Direct scanning*, then restart OpenRevers.
 
 With **CrealityScan installed** (Windows) and the scanner plugged in by USB
 (Raptor, Otter, Ferret…), the **Scan** menu drives the scanner without

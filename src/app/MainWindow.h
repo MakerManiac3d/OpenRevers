@@ -126,6 +126,7 @@ private:
     void showPairAlign();
     void deleteSelection();
     QTimer* scanTimer_{nullptr};
+    bool scanEnabled_{false};  // Settings → Experimental → direct scanning
     bool scanShown_{false};
     QListWidget* history_{nullptr};
     QPlainTextEdit* log_{nullptr};

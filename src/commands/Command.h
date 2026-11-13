@@ -107,6 +107,8 @@ json kind(json s, const char* k, const char* of = nullptr);
 }  // namespace schema
 
 /// The commands that need no interface: files, mesh tools, bodies, history, help.
-void registerCoreCommands(CommandRegistry& registry);
+/// Every command. withScan: also the scanner's (scan.*), which the app and
+/// the agent bridge only offer when Settings → Experimental turns them on.
+void registerCoreCommands(CommandRegistry& registry, bool withScan = true);
 
 }  // namespace orv

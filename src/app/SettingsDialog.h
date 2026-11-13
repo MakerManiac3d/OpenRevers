@@ -22,6 +22,7 @@ private:
 
     QComboBox* language_{nullptr};
     QCheckBox* agentEnabled_{nullptr};
+    QCheckBox* experimentalScan_{nullptr};
     QSpinBox* port_{nullptr};
     QListWidget* folders_{nullptr};
     bool languageChanged_{false};

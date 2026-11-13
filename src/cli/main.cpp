@@ -106,7 +106,7 @@ int runMcp(const std::vector<std::string>& args) {
     FILE* const out = reserveStdout();
     const AgentSettings settings = loadAgentSettings();
     CommandRegistry registry;
-    registerCoreCommands(registry);
+    registerCoreCommands(registry, loadAgentSettings().experimentalScan);
     Document doc;
     std::unique_ptr<ToolBackend> backend;
     if (!headless && settings.enabled) backend = AgentLinkClient::connect(settings.port, settings.token, lang);
@@ -126,7 +126,7 @@ int runMcp(const std::vector<std::string>& args) {
 
 int runCommands(const std::vector<std::string>& args) {
     CommandRegistry registry;
-    registerCoreCommands(registry);
+    registerCoreCommands(registry, loadAgentSettings().experimentalScan);
     Document doc;
     CommandContext ctx{doc, PathPolicy::unrestricted(), systemLang(), "script", nullptr};
     FILE* const out = reserveStdout();
@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
     if (args[0] == "run") return runCommands(rest);
     if (args[0] == "list") {
         CommandRegistry registry;
-        registerCoreCommands(registry);
+        registerCoreCommands(registry, loadAgentSettings().experimentalScan);
         std::cout << describeCommands(registry, false).dump(2) << '\n';
         return 0;
     }

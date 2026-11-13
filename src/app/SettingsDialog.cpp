@@ -36,6 +36,15 @@ SettingsDialog::SettingsDialog(const QString&, QWidget* parent) : QDialog(parent
     gf->addRow(tr("Language"), language_);
     layout->addWidget(general);
 
+    auto* experimental = new QGroupBox(tr("Experimental"));
+    auto* ef = new QVBoxLayout(experimental);
+    experimentalScan_ = new QCheckBox(tr("Direct scanning with CrealityScan's library (restart OpenRevers to apply)"));
+    experimentalScan_->setToolTip(tr("Connects, previews and scans with a Creality scanner from OpenRevers. Unfinished: it may fail or close the program. "
+                                     "Scanning in CrealityScan and importing the file is the supported way."));
+    experimentalScan_->setChecked(loadAgentSettings().experimentalScan);
+    ef->addWidget(experimentalScan_);
+    layout->addWidget(experimental);
+
     const AgentSettings a = loadAgentSettings();
     auto* agent = new QGroupBox(tr("AI agent (MCP)"));
     auto* af = new QVBoxLayout(agent);
@@ -87,6 +96,7 @@ void SettingsDialog::save() {
     s.setValue("language", lang);
     AgentSettings a = loadAgentSettings();
     a.enabled = agentEnabled_->isChecked();
+    a.experimentalScan = experimentalScan_->isChecked();
     a.port = port_->value();
     a.allowedFolders.clear();
     for (int i = 0; i < folders_->count(); ++i) a.allowedFolders.emplace_back(folders_->item(i)->text().toStdString());
