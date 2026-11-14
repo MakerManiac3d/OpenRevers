@@ -137,8 +137,8 @@ QHash<QString, Glyph> glyphs() {
         p.drawRect(QRectF(8, 20, 34, 34));
         pencil(p, kAccent);
     };
-    g["edit_sketch"] = g["part.sketch"];
-    g["part.edit_sketch"] = g["part.sketch"];
+    { const Glyph from = g["part.sketch"]; g["edit_sketch"] = from; }  // a copy: inserting may move the table
+    { const Glyph from = g["part.sketch"]; g["part.edit_sketch"] = from; }  // a copy: inserting may move the table
     g["sketch_on_face"] = [](QPainter& p) {
         box(p, 8, 16, 40, kLine);
         p.setPen(pen(kAccent, 4));
@@ -197,14 +197,14 @@ QHash<QString, Glyph> glyphs() {
         s.lineTo(54, 10);
         p.drawPath(s);
     };
-    g["fillet_edges"] = g["part.fillet"];
+    { const Glyph from = g["part.fillet"]; g["fillet_edges"] = from; }  // a copy: inserting may move the table
     g["part.chamfer"] = [](QPainter& p) {
         p.setPen(pen(kSoft, 3, Qt::DashLine));
         p.drawPolyline(QPolygonF({QPointF(10, 54), QPointF(10, 10), QPointF(54, 10)}));
         p.setPen(pen(kAccent, 5));
         p.drawPolyline(QPolygonF({QPointF(10, 54), QPointF(10, 30), QPointF(30, 10), QPointF(54, 10)}));
     };
-    g["chamfer_edges"] = g["part.chamfer"];
+    { const Glyph from = g["part.chamfer"]; g["chamfer_edges"] = from; }  // a copy: inserting may move the table
     g["part.hole"] = [](QPainter& p) {
         p.setPen(pen(kLine, 3));
         p.drawRoundedRect(QRectF(8, 14, 48, 36), 4, 4);
@@ -268,8 +268,8 @@ QHash<QString, Glyph> glyphs() {
         p.setPen(pen(kAccent, 3));
         for (int x : {26, 32, 38}) p.drawLine(QPointF(x, 26), QPointF(x, 48));
     };
-    g["delete_selection"] = g["part.delete"];
-    g["mesh.delete_faces"] = g["part.delete"];
+    { const Glyph from = g["part.delete"]; g["delete_selection"] = from; }  // a copy: inserting may move the table
+    { const Glyph from = g["part.delete"]; g["mesh.delete_faces"] = from; }  // a copy: inserting may move the table
     g["part.surface_from_scan"] = [](QPainter& p) {
         p.setPen(Qt::NoPen);
         p.setBrush(kSoft);
@@ -438,7 +438,7 @@ QHash<QString, Glyph> glyphs() {
         p.drawEllipse(QPointF(48, 26), 6, 6);
         p.drawEllipse(QPointF(46, 52), 6, 6);
     };
-    g["align.move"] = g["part.move"];
+    { const Glyph from = g["part.move"]; g["align.move"] = from; }  // a copy: inserting may move the table
     g["features.segment"] = [](QPainter& p) {
         p.setPen(Qt::NoPen);
         p.setBrush(QColor(80, 140, 210));
@@ -455,7 +455,7 @@ QHash<QString, Glyph> glyphs() {
         p.drawLine(QPointF(50, 14), QPointF(50, 50));
         p.drawArc(QRectF(14, 43, 36, 14), 180 * 16, 180 * 16);
     };
-    g["features.refit"] = g["features.fit"];
+    { const Glyph from = g["features.fit"]; g["features.refit"] = from; }  // a copy: inserting may move the table
     g["features.measure"] = [](QPainter& p) {
         p.setPen(pen(kLine, 4));
         p.drawRect(QRectF(6, 22, 52, 20));
@@ -489,13 +489,13 @@ QHash<QString, Glyph> glyphs() {
         p.setPen(pen(kLine, 4));
         p.drawPolyline(QPolygonF({QPointF(32, 30), QPointF(32, 58), QPointF(42, 50), QPointF(52, 58), QPointF(52, 30), QPointF(32, 30)}));
     };
-    g["part.import_step"] = g["import"];
+    { const Glyph from = g["import"]; g["part.import_step"] = from; }  // a copy: inserting may move the table
     g["part.export_step"] = [](QPainter& p) {
         p.setPen(pen(kLine));
         p.drawPolyline(QPolygonF({QPointF(8, 38), QPointF(8, 54), QPointF(56, 54), QPointF(56, 38)}));
         arrowUp(p, 32, 44, 8, kAccent);
     };
-    g["part.export_mesh"] = g["part.export_step"];
+    { const Glyph from = g["part.export_step"]; g["part.export_mesh"] = from; }  // a copy: inserting may move the table
     return g;
 }
 

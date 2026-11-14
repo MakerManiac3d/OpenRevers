@@ -1,5 +1,11 @@
 # Cambios · Changelog
 
+## 0.13.1 — 14 de noviembre de 2026
+
+- Arreglo: la aplicación se cerraba al arrancar (error de iconos: un alias de
+  icono copiaba desde una posición de la tabla que se movía al insertar).
+  Afectaba a la 0.13.0, que no llegó a publicarse.
+
 ## 0.13.0 — 14 de noviembre de 2026 (operaciones sólidas y bocetos, más completos)
 
 - **Nuevas operaciones:** `part.chamfer` (chaflán), `part.hole` (taladro en
