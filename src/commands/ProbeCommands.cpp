@@ -4,11 +4,14 @@
 // zones) and mesh.unwrap (what is not round, on a map of angle × position).
 #include "commands/ProbeCommands.h"
 
+#include "core/mesh/MeshAnalysis.h"
 #include "core/mesh/MeshProbe.h"
 #include "doc/Document.h"
 
 #include <cmath>
+#include <algorithm>
 #include <fstream>
+#include <map>
 
 namespace orv {
 namespace {
@@ -217,6 +220,66 @@ void registerProbeCommands(CommandRegistry& R) {
                    out["path"] = p.string();
                }
                out["summary"] = ctx.say(std::to_string(devs.size()) + " patches off the round.", std::to_string(devs.size()) + " zonas fuera de lo redondo.");
+               return out;
+           }});
+
+    R.add({"mesh.pieces", "mesh", {"Find the pieces", "Encontrar los trozos"},
+           {"Lists the separate pieces of a scan (parts of the mesh not joined by any triangle: several parts scanned together, a fixture, a loose chunk): faces, area, volume when closed, size and centre, largest first. "
+            "With split, each piece of at least minFaces faces becomes its own body (named after the scan), so each can be aligned and compared on its own.",
+            "Lista los trozos separados de un escaneo (partes de la malla que ningún triángulo une: varias piezas escaneadas juntas, una sujeción, un pedazo suelto): caras, área, volumen si está cerrado, tamaño y centro, de mayor a menor. "
+            "Con split, cada trozo de al menos minFaces caras pasa a ser un cuerpo propio (con el nombre del escaneo), para alinear y comparar cada uno por separado."},
+           object({{"body", body(kBody)},
+                   {"minFaces", integer({"Ignore pieces with fewer faces", "Ignorar los trozos con menos caras"}, 100, 1, 100000000)},
+                   {"split", boolean({"Make each piece its own body", "Hacer de cada trozo un cuerpo propio"}, false)}},
+                  {"body"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = scanBody(ctx, in["body"], true);
+               const TriMesh& m = *b.mesh;
+               std::vector<std::uint32_t> comp;
+               const std::size_t n = faceComponents(m, comp);
+               const auto minFaces = static_cast<std::size_t>(in["minFaces"].get<long long>());
+               std::vector<std::size_t> count(n, 0);
+               std::vector<double> areaOf(n, 0.0);
+               for (std::size_t f = 0; f < comp.size(); ++f) {
+                   ++count[comp[f]];
+                   const auto& t = m.faces[f];
+                   areaOf[comp[f]] += 0.5 * (m.vertices[t[1]] - m.vertices[t[0]]).cross(m.vertices[t[2]] - m.vertices[t[0]]).cast<double>().norm();
+               }
+               std::vector<std::uint32_t> order;
+               for (std::uint32_t c = 0; c < n; ++c)
+                   if (count[c] >= minFaces) order.push_back(c);
+               std::sort(order.begin(), order.end(), [&](auto a, auto c) { return areaOf[a] > areaOf[c]; });
+               if (order.size() > 200) order.resize(200);
+               json list = json::array();
+               int made = 0;
+               for (std::size_t k = 0; k < order.size(); ++k) {
+                   const std::uint32_t c = order[k];
+                   auto sub = std::make_shared<TriMesh>();
+                   std::map<std::uint32_t, std::uint32_t> remap;
+                   for (std::size_t f = 0; f < m.faces.size(); ++f) {
+                       if (comp[f] != c) continue;
+                       Tri t = m.faces[f];
+                       for (auto& v : t) {
+                           auto [it, fresh] = remap.emplace(v, static_cast<std::uint32_t>(sub->vertices.size()));
+                           if (fresh) sub->vertices.push_back(m.vertices[v]);
+                           v = it->second;
+                       }
+                       sub->faces.push_back(t);
+                   }
+                   const Box3 box = sub->bounds();
+                   json j{{"index", k + 1}, {"faces", count[c]}, {"area", r4(sub->area())}, {"size", j3(box.size().cast<double>())}, {"centre", j3(box.center().cast<double>())}};
+                   if (const double vol = sub->signedVolume(); vol > 0) j["volume"] = r4(vol);
+                   if (in["split"].get<bool>() && order.size() > 1) {
+                       const Body nb = ctx.doc.addBody(b.name + " " + std::to_string(k + 1), sub, b.source);
+                       j["body"] = nb.ref();
+                       ++made;
+                   }
+                   list.push_back(j);
+               }
+               json out{{"body", b.ref()}, {"pieces", list}, {"total", n}};
+               out["summary"] = ctx.say(std::to_string(order.size()) + " pieces" + (made ? ", " + std::to_string(made) + " bodies made." : "."),
+                                        std::to_string(order.size()) + " trozos" + (made ? ", " + std::to_string(made) + " cuerpos creados." : "."));
                return out;
            }});
 }

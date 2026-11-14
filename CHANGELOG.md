@@ -1,5 +1,11 @@
 # Cambios · Changelog
 
+## 0.14.1 — 14 de noviembre de 2026
+
+- Nuevo comando `mesh.pieces`: lista los trozos separados de un escaneo y,
+  con `split`, hace de cada uno un cuerpo propio (para alinear y comparar
+  piezas escaneadas juntas).
+
 ## 0.14.0 — 14 de noviembre de 2026 (análisis directo del escaneo)
 
 - **Nuevos comandos sobre la malla** (CLI, MCP y paleta): `mesh.cast` (rayos:

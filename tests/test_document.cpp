@@ -1004,3 +1004,22 @@ TEST(Commands, ProbeAScannedShaft) {
     EXPECT_EQ(sweep["rays"].size(), 5u);
     EXPECT_NEAR(sweep["rays"][2]["crossings"][0]["point"][1].get<double>(), 8.0, 0.05);  // z = 0: the floor of the recess
 }
+
+TEST(Commands, FindAndSplitThePiecesOfAScan) {
+    const auto dir = tempDir("pieces");
+    TriMesh two = test::box(10, 10, 10);
+    const TriMesh other = test::box(20, 20, 20);
+    const auto base = static_cast<std::uint32_t>(two.vertices.size());
+    for (const auto& v : other.vertices) two.vertices.push_back(v + Vec3f(100.f, 0.f, 0.f));
+    for (auto f : other.faces) two.faces.push_back({f[0] + base, f[1] + base, f[2] + base});
+    writeMesh(two, dir / "two.stl");
+    Fixture f;
+    f.run("mesh.import", {{"path", (dir / "two.stl").string()}});
+    const json list = f.run("mesh.pieces", {{"body", "b1"}, {"minFaces", 4}});
+    ASSERT_EQ(list["pieces"].size(), 2u);
+    EXPECT_GT(list["pieces"][0]["volume"].get<double>(), list["pieces"][1]["volume"].get<double>());  // the large cube first
+    EXPECT_NEAR(list["pieces"][0]["size"][0].get<double>(), 20.0, 1e-3);
+    EXPECT_EQ(list["pieces"][0].contains("body"), false);
+    const json split = f.run("mesh.pieces", {{"body", "b1"}, {"minFaces", 4}, {"split", true}});
+    EXPECT_TRUE(split["pieces"][1].contains("body"));
+}

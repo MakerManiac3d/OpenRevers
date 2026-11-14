@@ -262,6 +262,12 @@ antes (panel de comandos, CLI o agente):
 - `mesh.cast`: lanza uno o varios rayos y da los cruces, las cuerdas (grosor de pared) y los
   huecos.
 
+### Varias piezas en un mismo escaneo
+
+`mesh.pieces` lista los trozos que ningún triángulo une (varias piezas escaneadas juntas, una
+sujeción, un pedazo suelto) con sus caras, área, volumen, tamaño y centro. Con `split`, cada
+trozo pasa a ser un cuerpo propio que se puede alinear y comparar por separado.
+
 ## Pieza paramétrica (fase 3)
 
 Una **pieza** es un sólido exacto con su historial, que se exporta a STEP para
