@@ -53,6 +53,7 @@ add_library(orv_core STATIC
   core/solid/SketchFit.cpp
   core/solid/SketchSolve.cpp
   core/mesh/Distance.cpp
+  core/mesh/MeshProbe.cpp
   core/points/E57.cpp
   core/util/Xml.cpp
   core/util/Config.cpp
@@ -62,6 +63,7 @@ add_library(orv_core STATIC
   commands/Command.cpp
   commands/CoreCommands.cpp
   commands/FeatureCommands.cpp
+  commands/ProbeCommands.cpp
   commands/PartCommands.cpp
   commands/ScanCommands.cpp
   commands/FieldKind.cpp

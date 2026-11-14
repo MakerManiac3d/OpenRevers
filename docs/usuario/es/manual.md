@@ -248,6 +248,20 @@ Para piezas mecánicas (caras planas, taladros, ejes, conos):
 - El agente de IA puede leer lo que has señalado, así que puedes pedirle
   cosas como «mide la distancia entre estas dos caras».
 
+## Medir el escaneo directamente (0.14)
+
+Para piezas torneadas, ranuras y paredes, tres comandos miden la malla sin ajustar formas
+antes (panel de comandos, CLI o agente):
+
+- `mesh.profile`: radio de la pieza a lo largo de un eje (el de un cilindro ya ajustado, con
+  `shape`, o `axisPoint` + `axisDirection`). La piel puede ser exterior o interior, y devuelve
+  zonas cilindro, cono y escalón con sus radios y longitudes.
+- `mesh.unwrap`: «desenrolla» la superficie en un mapa ángulo × posición y lista los rebajes
+  y resaltes respecto al radio de cada fila (planos, chaveteros, ranuras). Con `path` escribe
+  un CSV.
+- `mesh.cast`: lanza uno o varios rayos y da los cruces, las cuerdas (grosor de pared) y los
+  huecos.
+
 ## Pieza paramétrica (fase 3)
 
 Una **pieza** es un sólido exacto con su historial, que se exporta a STEP para

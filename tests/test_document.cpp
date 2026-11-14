@@ -925,3 +925,82 @@ TEST(Commands, ConstructionGeometryAndOriginReferences) {
     EXPECT_TRUE(std::filesystem::exists(mf));
     EXPECT_THROW(f.run("part.export_mesh", {{"body", "b1"}, {"path", stl}}), CommandError);  // would overwrite
 }
+
+namespace {
+/// A turned shaft along x: bore 4, radius 10 to x = 30, a flange of 15 to x = 40, a cone down to 10 at x = 60;
+/// a recess cut into its +y side between x = 5 and 15.
+TriMesh turnedShaft() {
+    Profile p;
+    Loop l;
+    const std::vector<Vec2d> v = {{0, 4}, {0, 10}, {30, 10}, {30, 15}, {40, 15}, {60, 10}, {60, 4}};
+    for (std::size_t i = 0; i < v.size(); ++i) l.segments.push_back(Segment::line(v[i], v[(i + 1) % v.size()]));
+    p.loops.push_back(l);
+    Solid shaft = Solid::revolve(p, {0, 0}, {1, 0}, 360.0);
+    Profile cutP;
+    cutP.plane.origin = {0, 0, -3};
+    Loop c;
+    const std::vector<Vec2d> w = {{5, 8}, {15, 8}, {15, 11}, {5, 11}};
+    for (std::size_t i = 0; i < w.size(); ++i) c.segments.push_back(Segment::line(w[i], w[(i + 1) % w.size()]));
+    cutP.loops.push_back(c);
+    shaft = shaft.cut(Solid::extrude(cutP, 0.0, 6.0));
+    return shaft.tessellate(0.02).mesh;
+}
+}  // namespace
+
+TEST(Commands, ProbeAScannedShaft) {
+    const auto dir = tempDir("probe");
+    Fixture f;
+    writeMesh(turnedShaft(), dir / "shaft.stl");
+    f.run("mesh.import", {{"path", (dir / "shaft.stl").string()}});
+    const json axis = {{"body", "b1"}, {"axisPoint", {0.0, 0.0, 0.0}}, {"axisDirection", {1.0, 0.0, 0.0}}};
+    // The profile finds the cylinder, the flange and the cone.
+    json in = axis;
+    in["step"] = 1.0;
+    const json prof = f.run("mesh.profile", in);
+    bool cyl10 = false, flange = false, cone = false;
+    for (const auto& z : prof["zones"]) {
+        const double len = z["length"].get<double>();
+        if (z["kind"] == "cylinder" && std::abs(z["radiusStart"].get<double>() - 10.0) < 0.1 && len > 15) cyl10 = true;
+        if (z["kind"] == "cylinder" && std::abs(z["radiusStart"].get<double>() - 15.0) < 0.1 && len > 5) flange = true;
+        if (z["kind"] == "cone" && std::abs(z["halfAngle"].get<double>() + 14.04) < 1.0 && len > 15) cone = true;
+    }
+    EXPECT_TRUE(cyl10);
+    EXPECT_TRUE(flange);
+    EXPECT_TRUE(cone);
+    // The inner skin is the bore.
+    in["skin"] = "inner";
+    const json bore = f.run("mesh.profile", in);
+    ASSERT_FALSE(bore["zones"].empty());
+    EXPECT_NEAR(bore["zones"][0]["radiusStart"].get<double>(), 4.0, 0.1);
+    // The unwrapped map finds the recess: the radius there is smaller; angle 0 is +y.
+    json un = axis;
+    un["reference"] = {0.0, 1.0, 0.0};
+    un["step"] = 1.0;
+    un["from"] = 0.0;
+    un["to"] = 30.0;
+    const json map = f.run("mesh.unwrap", un);
+    ASSERT_GE(map["patches"].size(), 1u);
+    const auto& patch = map["patches"][0];
+    EXPECT_EQ(patch["kind"], "recess");
+    EXPECT_LT(patch["worstDeviation"].get<double>(), -1.0);
+    EXPECT_GE(patch["from"].get<double>(), 3.0);
+    EXPECT_LE(patch["to"].get<double>(), 17.0);
+    EXPECT_NEAR(patch["rowRadius"].get<double>(), 10.0, 0.1);
+    const double mid = std::fmod(0.5 * (patch["angleFrom"].get<double>() + patch["angleTo"].get<double>()), 360.0);
+    EXPECT_TRUE(mid < 20.0 || mid > 340.0) << mid;
+    // The map can be written for a spreadsheet.
+    un["path"] = (dir / "map.csv").string();
+    f.run("mesh.unwrap", un);
+    EXPECT_GT(std::filesystem::file_size(dir / "map.csv"), 1000u);
+    // A ray across the bore: two chords of wall (10 - 4) with the bore between them.
+    const json cast = f.run("mesh.cast", {{"body", "b1"}, {"origin", {20.0, 30.0, 0.0}}, {"direction", {0.0, -1.0, 0.0}}});
+    const auto& ray = cast["rays"][0];
+    ASSERT_EQ(ray["chords"].size(), 2u);
+    EXPECT_NEAR(ray["chords"][0]["length"].get<double>(), 6.0, 0.05);
+    ASSERT_EQ(ray["gaps"].size(), 1u);
+    EXPECT_NEAR(ray["gaps"][0]["length"].get<double>(), 8.0, 0.05);
+    // A sweep of rays across the recess finds its floor.
+    const json sweep = f.run("mesh.cast", {{"body", "b1"}, {"origin", {10.0, 30.0, -2.0}}, {"direction", {0.0, -1.0, 0.0}}, {"count", 5}, {"step", 1.0}, {"stepDirection", {0.0, 0.0, 1.0}}});
+    EXPECT_EQ(sweep["rays"].size(), 5u);
+    EXPECT_NEAR(sweep["rays"][2]["crossings"][0]["point"][1].get<double>(), 8.0, 0.05);  // z = 0: the floor of the recess
+}

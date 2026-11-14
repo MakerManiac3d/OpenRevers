@@ -1,5 +1,16 @@
 # Cambios · Changelog
 
+## 0.14.0 — 14 de noviembre de 2026 (análisis directo del escaneo)
+
+- **Nuevos comandos sobre la malla** (CLI, MCP y paleta): `mesh.cast` (rayos:
+  cruces, cuerdas de pared, huecos y barridos), `mesh.profile` (perfil radial
+  alrededor de un eje, piel exterior o interior, zonas cilindro/cono/escalón) y
+  `mesh.unwrap` (mapa desenrollado ángulo × posición con parches de rebaje o
+  resalte; CSV opcional). Sirven para medir piezas torneadas, ranuras y
+  grosores sin ajustar formas antes.
+- El muestreo subdivide los triángulos largos, de modo que las paredes teseladas
+  con pocos vértices también se miden bien.
+
 ## 0.13.1 — 14 de noviembre de 2026
 
 - Arreglo: la aplicación se cerraba al arrancar (error de iconos: un alias de

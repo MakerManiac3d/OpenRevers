@@ -11,6 +11,7 @@
 #include "core/mesh/MeshRepair.h"
 #include "core/points/PointCloud.h"
 #include "commands/FeatureCommands.h"
+#include "commands/ProbeCommands.h"
 #include "commands/PartCommands.h"
 #include "commands/ScanCommands.h"
 #include "core/util/Version.h"
@@ -141,6 +142,7 @@ std::string extensionOf(const fs::path& p) {
 
 void registerCoreCommands(CommandRegistry& R, bool withScan) {
     registerFeatureCommands(R);
+    registerProbeCommands(R);
     registerPartCommands(R);
     if (withScan) registerScanCommands(R);
     using namespace schema;

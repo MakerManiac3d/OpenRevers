@@ -79,6 +79,9 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `features_list` | Formas del cuerpo con medidas, posición y σ | No |
 | `features_measure` | Ángulo y distancia entre dos formas | No |
 | `features_rename` / `features_delete` | Renombrar o borrar formas | Sí |
+| `mesh_cast` | Lanza rayos contra la malla y devuelve cruces, cuerdas (grosor de pared) y huecos; admite barridos de varios rayos | No |
+| `mesh_profile` | Perfil radial de una pieza de revolución alrededor de un eje (el de un cilindro ajustado o uno dado): piel exterior o interior, tramos y zonas cilindro/cono/escalón | No |
+| `mesh_unwrap` | Mapa desenrollado ángulo × posición de la piel y parches de rebaje o resalte respecto al radio de cada fila; puede escribir un CSV | No |
 | `view_selection` | Lo que la persona ha señalado con el ratón: punto, cuerpo y formas en orden; en una pieza, el parámetro, boceto u operación elegido en el árbol y las caras y aristas del sólido (tipo, medida, eje; en las aristas, el punto medio para `part_fillet`). Solo con la ventana abierta | No |
 | `view_pick` | Hacer clic en la vista como la persona (x, y de 0 a 1; `add` para añadir) | No |
 | `align_principal` | Alinea a los ejes principales | Sí |
