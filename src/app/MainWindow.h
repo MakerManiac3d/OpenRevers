@@ -130,6 +130,7 @@ private:
     void clearPreview();
     void newSketchOnFace();
     void filletPickedEdges();
+    void chamferPickedEdges();
     void compareWithScan();
     // Scanning: while the scanner runs, its points are shown live.
     void pollScan();

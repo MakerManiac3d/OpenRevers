@@ -93,6 +93,10 @@ public:
     void split();
     void deleteVertex();
     void deleteLoop();
+    /// Turns the picked loop into construction geometry (no material), or back.
+    void toggleConstruction();
+    /// Adds the sketch's origin (0), its x axis (1) or y axis (2) to the selection.
+    void selectReference(int which);
     void moveVertex(int loop, int seg, const Vec2d& to);
     void setArcRadius(double r);
     void setLineLength(double len);

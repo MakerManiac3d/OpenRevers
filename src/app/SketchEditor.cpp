@@ -469,6 +469,22 @@ void SketchCanvas::deleteLoop() {
     emit picked();
 }
 
+void SketchCanvas::toggleConstruction() {
+    if (pick_.loop < 0 || pick_.loop >= static_cast<int>(prof_.loops.size())) return;
+    pushUndo();
+    Loop& l = prof_.loops[static_cast<std::size_t>(pick_.loop)];
+    l.construction = !l.construction;
+    edited();
+    emit picked();
+}
+
+void SketchCanvas::selectReference(int which) {
+    const SketchPick p = which == 0 ? SketchPick{SketchPick::What::Vertex, -1, 0} : SketchPick{SketchPick::What::Segment, -1, which == 1 ? 0 : 1};
+    if (!selected(p)) selection_.push_back(p);
+    update();
+    emit picked();
+}
+
 void SketchCanvas::setArcRadius(double r) {
     if (pick_.loop < 0) return;
     Segment& s = prof_.loops[static_cast<std::size_t>(pick_.loop)].segments[static_cast<std::size_t>(pick_.seg)];
@@ -559,7 +575,10 @@ void SketchCanvas::paintEvent(QPaintEvent*) {
                 picked = picked || (q.loop == static_cast<int>(l) && q.seg == static_cast<int>(s) &&
                                     (q.what == SketchPick::What::Segment || q.what == SketchPick::What::ArcMiddle || x.kind == Segment::Kind::Circle));
             const bool hovered = hover_.loop == static_cast<int>(l) && hover_.seg == static_cast<int>(s) && hover_.what == SketchPick::What::Segment;
-            p.setPen(QPen(picked ? QColor(255, 150, 20) : colourOf(l, s), picked || hovered ? 3.2 : 2.0));
+            QPen pen(picked ? QColor(255, 150, 20) : (prof_.loops[l].construction ? (dark ? QColor(110, 200, 190) : QColor(0, 140, 130)) : colourOf(l, s)),
+                     picked || hovered ? 3.2 : 2.0);
+            if (prof_.loops[l].construction) pen.setStyle(Qt::DashLine);
+            p.setPen(pen);
             QPainterPath path;
             const auto pts = x.sample(std::max(0.005, 2.0 / scale_));
             for (std::size_t k = 0; k < pts.size(); ++k) k ? path.lineTo(toScreen(pts[k])) : path.moveTo(toScreen(pts[k]));
@@ -612,11 +631,25 @@ void SketchCanvas::paintEvent(QPaintEvent*) {
         }
     p.setBrush(Qt::NoBrush);
 
+    // The origin: lit when picked for a constraint.
+    if (selected({SketchPick::What::Vertex, -1, 0}) || selected({SketchPick::What::Segment, -1, 0}) || selected({SketchPick::What::Segment, -1, 1})) {
+        p.setPen(QPen(QColor(255, 150, 20), 2));
+        const QPointF o = toScreen({0, 0});
+        p.drawEllipse(o, 7.0, 7.0);
+        if (selected({SketchPick::What::Segment, -1, 0})) p.drawLine(toScreen({-1e4, 0}), toScreen({1e4, 0}));
+        if (selected({SketchPick::What::Segment, -1, 1})) p.drawLine(toScreen({0, -1e4}), toScreen({0, 1e4}));
+    }
+
     // Constraints: a tag beside what each holds; the picked one's pieces lit.
     tagRects_.clear();
     if (pickedCons_ >= 0 && pickedCons_ < static_cast<int>(cons_.size())) {
         p.setPen(QPen(QColor(200, 60, 200), 4));
         for (const auto& r : cons_[static_cast<std::size_t>(pickedCons_)].refs) {
+            if (r.loop == -1) {
+                p.drawEllipse(toScreen({0, 0}), 6.0, 6.0);
+                if (r.part == SketchRef::Part::Edge) p.drawLine(r.segment == 1 ? toScreen({0, -1e4}) : toScreen({-1e4, 0}), r.segment == 1 ? toScreen({0, 1e4}) : toScreen({1e4, 0}));
+                continue;
+            }
             if (r.loop < 0 || r.loop >= static_cast<int>(prof_.loops.size())) continue;
             const auto& sg = prof_.loops[static_cast<std::size_t>(r.loop)].segments;
             if (r.segment < 0 || r.segment >= static_cast<int>(sg.size())) continue;
@@ -641,8 +674,9 @@ void SketchCanvas::paintEvent(QPaintEvent*) {
             if (c.refs.empty()) continue;
             bool valid = true;
             for (const auto& r : c.refs)
-                valid = valid && r.loop >= 0 && r.loop < static_cast<int>(prof_.loops.size()) && r.segment >= 0 &&
-                        r.segment < static_cast<int>(prof_.loops[static_cast<std::size_t>(r.loop)].segments.size());
+                valid = valid && (r.loop == -1 ? r.segment >= 0 && r.segment <= 1
+                                               : r.loop >= 0 && r.loop < static_cast<int>(prof_.loops.size()) && r.segment >= 0 &&
+                                                     r.segment < static_cast<int>(prof_.loops[static_cast<std::size_t>(r.loop)].segments.size()));
             if (!valid) continue;
             Vec2d at = anchorOf(c.refs.front());
             if (constraintHasValue(c.kind) && c.refs.size() >= 2) at = 0.5 * (anchorOf(c.refs[0]) + anchorOf(c.refs[1]));
@@ -1053,7 +1087,7 @@ std::optional<double> SketchCanvas::measure(const SketchConstraint& c) const {
 std::vector<SketchRef> SketchCanvas::selectionRefs() const {
     std::vector<SketchRef> out;
     for (const auto& p : selection_) {
-        if (p.loop < 0 || p.seg < 0) continue;
+        if (p.loop < -1 || p.seg < 0) continue;
         switch (p.what) {
             case SketchPick::What::Vertex: out.push_back({p.loop, p.seg, SketchRef::Part::Start}); break;
             case SketchPick::What::Segment:
@@ -1137,6 +1171,7 @@ void SketchCanvas::addAutoConstraints(int loop) {
 }
 
 Vec2d SketchCanvas::anchorOf(const SketchRef& r) const {
+    if (r.loop == -1) return r.part == SketchRef::Part::Edge ? (r.segment == 1 ? Vec2d(0, 30.0 / scale_) : Vec2d(30.0 / scale_, 0)) : Vec2d(0, 0);
     const Segment& s = prof_.loops[static_cast<std::size_t>(r.loop)].segments[static_cast<std::size_t>(r.segment)];
     switch (r.part) {
         case SketchRef::Part::Start: return s.kind == Segment::Kind::Circle ? s.centre : s.a;
@@ -1253,6 +1288,8 @@ SketchEditor::SketchEditor(const Profile& profile, const QString& name, const st
     tb->addAction(tr("Split"), this, [this]() { canvas_->split(); })->setToolTip(tr("Split the picked segment in two at its middle"));
     tb->addAction(tr("Delete vertex"), this, [this]() { canvas_->deleteVertex(); })->setToolTip(tr("Join the two segments at the picked vertex into one line (Del)"));
     tb->addAction(tr("Delete loop"), this, [this]() { canvas_->deleteLoop(); })->setToolTip(tr("Delete the whole loop the pick is on"));
+    tb->addAction(tr("Construction"), this, [this]() { canvas_->toggleConstruction(); })
+        ->setToolTip(tr("Make the picked loop construction geometry (dashed: it makes no material, it is there to hang dimensions on), or make it material again"));
     tb->addSeparator();
     tb->addAction(tr("Undo"), this, [this]() { canvas_->undo(); })->setShortcut(QKeySequence::Undo);
     tb->addAction(tr("Redo"), this, [this]() { canvas_->redo(); })->setShortcut(QKeySequence::Redo);
@@ -1282,6 +1319,10 @@ SketchEditor::SketchEditor(const Profile& profile, const QString& name, const st
     con(tr("Radius"), ConstraintKind::Radius);
     con(tr("Diameter"), ConstraintKind::Diameter);
     con(tr("Angle"), ConstraintKind::Angle);
+    tc->addSeparator();
+    tc->addAction(tr("+ Origin"), this, [this]() { canvas_->selectReference(0); })->setToolTip(tr("Add the sketch's origin to the selection, to constrain or dimension against it"));
+    tc->addAction(tr("+ X axis"), this, [this]() { canvas_->selectReference(1); })->setToolTip(tr("Add the sketch's x axis to the selection"));
+    tc->addAction(tr("+ Y axis"), this, [this]() { canvas_->selectReference(2); })->setToolTip(tr("Add the sketch's y axis to the selection"));
 
     // Side panel: the reference, the tolerance, the picked element's values.
     scan_ = new QComboBox();
@@ -1448,7 +1489,11 @@ bool SketchEditor::readValue(const QString& typed, double* value, std::string* p
 void SketchEditor::constrain(ConstraintKind kind) {
     std::vector<SketchRef> refs = canvas_->selectionRefs();
     const Profile& prof = canvas_->profile();
-    auto seg = [&](const SketchRef& r) -> const Segment& { return prof.loops[static_cast<std::size_t>(r.loop)].segments[static_cast<std::size_t>(r.segment)]; };
+    static const Segment axes[2] = {Segment::line({0, 0}, {1, 0}), Segment::line({0, 0}, {0, 1})};
+    auto seg = [&](const SketchRef& r) -> const Segment& {
+        if (r.loop == -1) return axes[r.segment == 1 ? 1 : 0];
+        return prof.loops[static_cast<std::size_t>(r.loop)].segments[static_cast<std::size_t>(r.segment)];
+    };
     auto isPoint = [](const SketchRef& r) { return r.part != SketchRef::Part::Edge; };
     // Points first where the solver wants them so (a point on a line, the middle of a line, symmetric about).
     if (kind == ConstraintKind::OnObject || kind == ConstraintKind::Midpoint || kind == ConstraintKind::Symmetric)

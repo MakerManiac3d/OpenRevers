@@ -346,6 +346,7 @@ void MainWindow::buildActions() {
     add(fileMenu, tr("Export &T-Spline for Fusion (.tsm)…"), &MainWindow::exportTsm);
     add(fileMenu, cmdText("part.import_step") + "…", [this]() { runFromUi("part.import_step"); })->setObjectName("part.import_step");
     add(fileMenu, cmdText("part.export_step") + "…", [this]() { runFromUi("part.export_step"); })->setObjectName("part.export_step");
+    add(fileMenu, cmdText("part.export_mesh") + "…", [this]() { runFromUi("part.export_mesh"); })->setObjectName("part.export_mesh");
     fileMenu->addSeparator();
     add(fileMenu, tr("&Quit"), &QWidget::close, QKeySequence::Quit);
     tb->addSeparator();
@@ -402,7 +403,7 @@ void MainWindow::buildActions() {
         a->setToolTip(QString::fromStdString(registry_.find(name)->description.in(lang_.toStdString())));
         if (std::string(name) == "scan.connect" || std::string(name) == "scan.export_to_body") scanMenu->addSeparator();
     }
-    for (const char* name : {"part.new", "part.sketch_from_section", "part.sketch", "part.constrain", "part.extrude", "part.revolve", "part.loft", "part.pattern", "part.fillet",
+    for (const char* name : {"part.new", "part.sketch_from_section", "part.sketch", "part.constrain", "part.extrude", "part.revolve", "part.loft", "part.pattern", "part.mirror", "part.hole", "part.fillet", "part.chamfer",
                              "part.surface_from_scan", "part.cut_by_surface", "part.thicken", "part.parameter", "part.edit", "part.move", "part.delete", "part.list",
                              "part.compare", "mesh.section"}) {
         auto* a = add(partMenu, cmdText(name), [this, name]() { runFromUi(name); });
@@ -420,6 +421,7 @@ void MainWindow::buildActions() {
             add(partMenu, tr("Round the picked edges…"), &MainWindow::filletPickedEdges)->setObjectName("fillet_edges");
             partMenu->addSeparator();
         }
+        if (std::string(name) == "part.chamfer") add(partMenu, tr("Chamfer the picked edges…"), &MainWindow::chamferPickedEdges)->setObjectName("chamfer_edges");
         if (std::string(name) == "part.thicken") partMenu->addSeparator();
         if (std::string(name) == "part.list") partMenu->addSeparator();
     }
@@ -477,8 +479,8 @@ void MainWindow::buildRibbon() {
     const int solid = r->addTab(tr("Solid"));
     r->addGroup(solid, tr("Insert"), group({"import", "part.import_step"}));
     r->addGroup(solid, tr("Create"), group({"part.new", "part.sketch", "sketch_on_face", "part.extrude", "part.revolve", "part.loft"}));
-    r->addGroup(solid, tr("Modify"), group({"part.fillet", "fillet_edges", "part.pattern", "part.move", "part.edit", "part.parameter", "part.delete"}));
-    r->addGroup(solid, tr("Export"), group({"part.export_step"}));
+    r->addGroup(solid, tr("Modify"), group({"part.fillet", "fillet_edges", "part.chamfer", "chamfer_edges", "part.hole", "part.pattern", "part.mirror", "part.move", "part.edit", "part.parameter", "part.delete"}));
+    r->addGroup(solid, tr("Export"), group({"part.export_step", "part.export_mesh"}));
     const int sketch = r->addTab(tr("Sketch"));
     r->addGroup(sketch, tr("Create"), group({"part.sketch", "sketch_on_face", "part.sketch_from_section"}));
     r->addGroup(sketch, tr("Edit"), group({"edit_sketch", "part.constrain"}));
@@ -1487,6 +1489,22 @@ void MainWindow::showPartProperties(const Body& b) {
                 if (const Sketch* s2 = b.model->sketch("s" + std::to_string(o->sketch))) row(tr("Sketch"), QString::fromStdString(s2->name));
                 row(tr("From (mm)"), valueText(o->start), "start");
                 row(tr("To (mm)"), valueText(o->end), "end");
+                row(tr("Extent"), QString::fromStdString(extentName(o->extent)));
+                break;
+            case OpKind::Chamfer:
+                row(tr("Edges"), loc.toString(static_cast<qlonglong>(o->edgePoints.size())));
+                row(tr("Distance (mm)"), valueText(o->radius), "distance");
+                break;
+            case OpKind::Hole:
+                if (const Sketch* s2 = b.model->sketch("s" + std::to_string(o->sketch))) row(tr("Sketch"), QString::fromStdString(s2->name));
+                row(tr("Kind"), QString::fromStdString(holeKindName(o->holeKind)));
+                row(tr("Diameter (mm)"), valueText(o->diameter), "diameter");
+                if (!o->throughAll) row(tr("Depth (mm)"), valueText(o->depth), "depth");
+                else row(tr("Depth (mm)"), tr("through all"));
+                break;
+            case OpKind::Mirror:
+                if (const Operation* src = b.model->operation("o" + std::to_string(o->source))) row(tr("Reflects"), QString::fromStdString(src->name));
+                else row(tr("Reflects"), tr("the whole part"));
                 break;
             case OpKind::Revolve:
                 if (const Sketch* s2 = b.model->sketch("s" + std::to_string(o->sketch))) row(tr("Sketch"), QString::fromStdString(s2->name));
@@ -1728,6 +1746,25 @@ void MainWindow::filletPickedEdges() {
         }
     pickedEdges_.clear();
     run("part.fillet", {{"body", b->ref()}, {"points", pts}, {"radius", r}});
+}
+
+void MainWindow::chamferPickedEdges() {
+    auto b = doc_.findBody(selectedRef().toStdString());
+    if (!b || !b->isPart() || pickedEdges_.empty() || !b->view) {
+        QMessageBox::information(this, tr("OpenRevers"), tr("Pick the edges to chamfer in the view first (Ctrl+click adds more)."));
+        return;
+    }
+    bool ok = false;
+    const double d = QInputDialog::getDouble(this, tr("Chamfer edges"), tr("Distance (mm) for the %1 picked edges:").arg(pickedEdges_.size()), 0.5, 0.001, 1000, 3, &ok);
+    if (!ok) return;
+    json pts = json::array();
+    for (int e : pickedEdges_)
+        if (static_cast<std::size_t>(e) < b->view->edgeMiddle.size()) {
+            const Vec3d m = b->view->edgeMiddle[static_cast<std::size_t>(e)];
+            pts.push_back({m.x(), m.y(), m.z()});
+        }
+    pickedEdges_.clear();
+    run("part.chamfer", {{"body", b->ref()}, {"points", pts}, {"distance", d}});
 }
 
 void MainWindow::compareWithScan() {

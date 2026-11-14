@@ -56,6 +56,10 @@ struct Segment {
 /// A closed chain: each segment starts where the previous one ended.
 struct Loop {
     std::vector<Segment> segments;
+    /// Construction geometry: drawn (dashed) and constrained like the rest,
+    /// to hang dimensions on (a bolt circle, a centre line), but it makes no
+    /// material. It may be an open chain (a single line).
+    bool construction{false};
     /// Signed area (positive counterclockwise).
     double area() const;
     std::vector<Vec2d> polygon(double step) const;
@@ -68,6 +72,8 @@ struct Profile {
     /// Empty when the loops are usable, else what is wrong (open chain, a
     /// segment of no length, an arc whose ends are not on its circle).
     std::string problem(double tolerance = 1e-6) const;
+    /// The same profile without its construction loops: what is built.
+    Profile solidPart() const;
 };
 
 const char* segmentKindName(Segment::Kind k);

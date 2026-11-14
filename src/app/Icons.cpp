@@ -198,6 +198,28 @@ QHash<QString, Glyph> glyphs() {
         p.drawPath(s);
     };
     g["fillet_edges"] = g["part.fillet"];
+    g["part.chamfer"] = [](QPainter& p) {
+        p.setPen(pen(kSoft, 3, Qt::DashLine));
+        p.drawPolyline(QPolygonF({QPointF(10, 54), QPointF(10, 10), QPointF(54, 10)}));
+        p.setPen(pen(kAccent, 5));
+        p.drawPolyline(QPolygonF({QPointF(10, 54), QPointF(10, 30), QPointF(30, 10), QPointF(54, 10)}));
+    };
+    g["chamfer_edges"] = g["part.chamfer"];
+    g["part.hole"] = [](QPainter& p) {
+        p.setPen(pen(kLine, 3));
+        p.drawRoundedRect(QRectF(8, 14, 48, 36), 4, 4);
+        p.setPen(pen(kAccent, 4));
+        p.drawEllipse(QPointF(32, 32), 11, 11);
+        p.drawLine(QPointF(32, 25), QPointF(32, 39));
+    };
+    g["part.mirror"] = [](QPainter& p) {
+        p.setPen(pen(kSoft, 3, Qt::DashLine));
+        p.drawLine(QPointF(32, 6), QPointF(32, 58));
+        p.setPen(pen(kAccent, 4));
+        p.drawPolyline(QPolygonF({QPointF(28, 14), QPointF(10, 14), QPointF(10, 50), QPointF(28, 50)}));
+        p.setPen(pen(kLine, 4));
+        p.drawPolyline(QPolygonF({QPointF(36, 14), QPointF(54, 14), QPointF(54, 50), QPointF(36, 50)}));
+    };
     g["part.move"] = [](QPainter& p) {
         p.setPen(pen(kAccent, 4));
         p.drawLine(QPointF(32, 8), QPointF(32, 56));
@@ -473,6 +495,7 @@ QHash<QString, Glyph> glyphs() {
         p.drawPolyline(QPolygonF({QPointF(8, 38), QPointF(8, 54), QPointF(56, 54), QPointF(56, 38)}));
         arrowUp(p, 32, 44, 8, kAccent);
     };
+    g["part.export_mesh"] = g["part.export_step"];
     return g;
 }
 

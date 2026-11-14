@@ -146,6 +146,11 @@ std::string Profile::problem(double tol) const {
         const auto& sg = loops[l].segments;
         const std::string where = "loop " + std::to_string(l + 1);
         if (sg.empty()) return where + " is empty";
+        if (loops[l].construction) {
+            for (std::size_t i = 0; i < sg.size(); ++i)
+                if (sg[i].kind == Segment::Kind::Line && (sg[i].b - sg[i].a).norm() <= tol) return where + ", segment " + std::to_string(i + 1) + " has no length";
+            continue;
+        }
         if (sg.size() == 1 && sg[0].kind == Segment::Kind::Circle) {
             if (sg[0].radius <= tol) return where + ": a circle needs a radius";
             continue;
@@ -169,6 +174,14 @@ std::string Profile::problem(double tol) const {
         }
     }
     return {};
+}
+
+Profile Profile::solidPart() const {
+    Profile out;
+    out.plane = plane;
+    for (const auto& l : loops)
+        if (!l.construction) out.loops.push_back(l);
+    return out;
 }
 
 const char* segmentKindName(Segment::Kind k) {

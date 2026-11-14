@@ -54,17 +54,89 @@ BuildResult rebuild(const Model& m) {
         if (op.suppressed) continue;
         try {
             Solid piece;
+            OpMode mode = op.mode;
             switch (op.kind) {
                 case OpKind::Extrude:
                 case OpKind::Revolve: {
                     const Sketch& sk = sketchOf(op.sketch);
-                    piece = op.kind == OpKind::Extrude ? Solid::extrude(sk.profile, m.value(op.start), m.value(op.end))
-                                                       : Solid::revolve(sk.profile, op.axisPoint, op.axisDir, m.value(op.angle));
+                    if (op.kind == OpKind::Revolve) {
+                        piece = Solid::revolve(sk.profile.solidPart(), op.axisPoint, op.axisDir, m.value(op.angle));
+                        break;
+                    }
+                    SketchPlane pl = sk.profile.plane;
+                    pl.normalize();
+                    double from = m.value(op.start), to = m.value(op.end);
+                    if (op.extent == Extent::Symmetric) {
+                        from = -0.5 * to;
+                        to = 0.5 * to;
+                    } else if (op.extent == Extent::ThroughAll || op.extent == Extent::UpToFace) {
+                        if (r.solid.empty()) throw SolidError("there is no part yet to go through or up to");
+                        double limit = 0.0;
+                        if (op.extent == Extent::UpToFace) {
+                            const int f = r.solid.faceNear(op.toPoint, 0.1);
+                            if (f < 0) throw SolidError("no face of the part at the point it goes up to");
+                            const ShapeInfo info = r.solid.faceInfo(f);
+                            if (info.type != "plane" || std::abs(info.axis.normalized().dot(pl.normal)) < 0.9999)
+                                throw SolidError("it can only go up to a flat face parallel to the sketch");
+                            limit = (info.origin - pl.origin).dot(pl.normal);
+                        } else {
+                            const auto box = r.solid.bounds();
+                            double lo = 1e300, hi = -1e300;
+                            for (int c = 0; c < 8; ++c) {
+                                const double t = (box.corner(static_cast<Eigen::AlignedBox3d::CornerType>(c)) - pl.origin).dot(pl.normal);
+                                lo = std::min(lo, t);
+                                hi = std::max(hi, t);
+                            }
+                            limit = op.reverse ? lo - 1.0 : hi + 1.0;
+                        }
+                        if (op.reverse) { to = from; from = limit; }
+                        else to = limit;
+                        if (!(to > from)) throw SolidError("the part does not reach that way from the sketch");
+                    }
+                    piece = Solid::extrude(sk.profile.solidPart(), from, to);
+                    break;
+                }
+                case OpKind::Hole: {
+                    const Sketch& sk = sketchOf(op.sketch);
+                    SketchPlane pl = sk.profile.plane;
+                    pl.normalize();
+                    if (r.solid.empty()) throw SolidError("there is nothing to drill yet");
+                    const Vec3d axis = op.reverse ? pl.normal : Vec3d(-pl.normal);
+                    const double depth = op.throughAll ? r.solid.bounds().diagonal().norm() + 1.0 : m.value(op.depth);
+                    for (const auto& loop : sk.profile.loops) {
+                        if (loop.construction) continue;
+                        if (loop.segments.size() != 1 || loop.segments[0].kind != Segment::Kind::Circle)
+                            throw SolidError("a hole's sketch holds circles only (one per hole)");
+                        const Segment& c = loop.segments[0];
+                        const double want = m.value(op.diameter);
+                        const double dia = want > 0 ? want : 2 * c.radius;
+                        const Solid tool = Solid::drill(pl.toWorld(c.centre), axis, dia, depth,
+                                                        op.holeKind == HoleKind::Counterbore ? m.value(op.cbDiameter) : 0.0,
+                                                        op.holeKind == HoleKind::Counterbore ? m.value(op.cbDepth) : 0.0,
+                                                        op.holeKind == HoleKind::Countersink ? m.value(op.csDiameter) : 0.0, m.value(op.csAngle));
+                        piece = piece.empty() ? tool : piece.fused(tool);
+                    }
+                    if (piece.empty()) throw SolidError("the sketch has no circle to drill");
+                    mode = OpMode::Cut;
+                    break;
+                }
+                case OpKind::Mirror: {
+                    Solid src;
+                    if (op.source) {
+                        const auto it = pieceOf.find(op.source);
+                        if (it == pieceOf.end()) throw SolidError("the operation it mirrors is missing, suppressed or after it");
+                        src = it->second;
+                    } else {
+                        src = r.solid;
+                    }
+                    if (src.empty()) throw SolidError("there is nothing to mirror yet");
+                    piece = src.mirrored(op.axisOrigin, op.axisDirection);
+                    if (mode == OpMode::New) mode = OpMode::Join;
                     break;
                 }
                 case OpKind::Loft: {
                     std::vector<Profile> sections;
-                    for (auto id : op.sections) sections.push_back(sketchOf(id).profile);
+                    for (auto id : op.sections) sections.push_back(sketchOf(id).profile.solidPart());
                     piece = Solid::loft(sections, op.ruled);
                     break;
                 }
@@ -94,17 +166,21 @@ BuildResult rebuild(const Model& m) {
                     if (r.solid.empty()) throw SolidError("there is nothing to round yet");
                     r.solid = r.solid.filleted(op.edgePoints, m.value(op.radius));
                     continue;
+                case OpKind::Chamfer:
+                    if (r.solid.empty()) throw SolidError("there is nothing to bevel yet");
+                    r.solid = r.solid.chamfered(op.edgePoints, m.value(op.radius));
+                    continue;
                 case OpKind::SurfaceCut:
                     r.solid = r.solid.cutBySurface(surfaceOf(op.surface).surface, op.keepBelow);
                     continue;
             }
             pieceOf[op.id] = piece;
-            if (r.solid.empty() || op.mode == OpMode::New) {
-                if (op.mode == OpMode::Cut || op.mode == OpMode::Intersect) throw SolidError("there is nothing to cut yet");
+            if (r.solid.empty() || mode == OpMode::New) {
+                if (mode == OpMode::Cut || mode == OpMode::Intersect) throw SolidError("there is nothing to cut yet");
                 r.solid = r.solid.empty() ? piece : r.solid.fused(piece);  // a second "new" body joins the part
-            } else if (op.mode == OpMode::Join) {
+            } else if (mode == OpMode::Join) {
                 r.solid = r.solid.fused(piece);
-            } else if (op.mode == OpMode::Cut) {
+            } else if (mode == OpMode::Cut) {
                 r.solid = r.solid.cut(piece);
             } else {
                 r.solid = r.solid.common(piece);
@@ -139,6 +215,16 @@ SketchConstraint constraintFromJson(const json& j) {
     c.kind = *k;
     for (const auto& jr : j.value("refs", json::array())) {
         SketchRef r;
+        if (jr.is_string()) {  // the sketch's own origin and axes
+            const std::string name = jr.get<std::string>();
+            r.loop = -1;
+            if (name == "origin") { r.segment = 0; r.part = SketchRef::Part::Start; }
+            else if (name == "x_axis") { r.segment = 0; r.part = SketchRef::Part::Edge; }
+            else if (name == "y_axis") { r.segment = 1; r.part = SketchRef::Part::Edge; }
+            else throw std::invalid_argument("a reference given as text is origin, x_axis or y_axis");
+            c.refs.push_back(r);
+            continue;
+        }
         r.loop = jr.value("loop", 0);
         r.segment = jr.at("segment").get<int>();
         const std::string part = jr.value("part", "edge");
@@ -216,8 +302,42 @@ const char* opKindName(OpKind k) {
         case OpKind::Pattern: return "pattern";
         case OpKind::SurfaceCut: return "surface_cut";
         case OpKind::Thicken: return "thicken";
+        case OpKind::Chamfer: return "chamfer";
+        case OpKind::Hole: return "hole";
+        case OpKind::Mirror: return "mirror";
     }
     return "?";
+}
+
+const char* extentName(Extent e) {
+    switch (e) {
+        case Extent::Distance: return "distance";
+        case Extent::Symmetric: return "symmetric";
+        case Extent::ThroughAll: return "through_all";
+        case Extent::UpToFace: return "up_to_face";
+    }
+    return "?";
+}
+
+std::optional<Extent> extentFromName(const std::string& s) {
+    for (auto e : {Extent::Distance, Extent::Symmetric, Extent::ThroughAll, Extent::UpToFace})
+        if (s == extentName(e)) return e;
+    return std::nullopt;
+}
+
+const char* holeKindName(HoleKind k) {
+    switch (k) {
+        case HoleKind::Simple: return "simple";
+        case HoleKind::Counterbore: return "counterbore";
+        case HoleKind::Countersink: return "countersink";
+    }
+    return "?";
+}
+
+std::optional<HoleKind> holeKindFromName(const std::string& s) {
+    for (auto k : {HoleKind::Simple, HoleKind::Counterbore, HoleKind::Countersink})
+        if (s == holeKindName(k)) return k;
+    return std::nullopt;
 }
 
 const char* opModeName(OpMode m) {
@@ -328,6 +448,8 @@ json profileToJson(const Profile& p) {
                 }
             }
         }
+        if (l.construction)
+            for (auto& sj : segs) sj["construction"] = true;
         loops.push_back(segs);
     }
     return {{"plane", {{"origin", v3(p.plane.origin)}, {"normal", v3(p.plane.normal)}, {"xDir", v3(p.plane.xDir)}}}, {"loops", loops}};
@@ -357,6 +479,7 @@ Profile profileFromJson(const json& j) {
                 for (const auto& q : s.at("poles")) poles.push_back(v2(q, "poles"));
                 l.segments.push_back(Segment::spline(std::move(poles)));
             } else throw std::invalid_argument("a segment's type must be line, arc, circle or spline");
+            if (s.value("construction", false)) l.construction = true;
         }
         p.loops.push_back(std::move(l));
     }
@@ -380,13 +503,38 @@ json modelToJson(const Model& m) {
     for (const auto& o : m.operations) {
         json jo{{"id", o.id}, {"name", o.name}, {"kind", opKindName(o.kind)}, {"mode", opModeName(o.mode)}, {"suppressed", o.suppressed}};
         switch (o.kind) {
-            case OpKind::Extrude: jo["sketch"] = o.sketch; jo["start"] = valueToJson(o.start); jo["end"] = valueToJson(o.end); break;
+            case OpKind::Extrude:
+                jo["sketch"] = o.sketch;
+                jo["start"] = valueToJson(o.start);
+                jo["end"] = valueToJson(o.end);
+                if (o.extent != Extent::Distance) jo["extent"] = extentName(o.extent);
+                if (o.reverse) jo["reverse"] = true;
+                if (o.extent == Extent::UpToFace) jo["toPoint"] = v3(o.toPoint);
+                break;
+            case OpKind::Hole:
+                jo["sketch"] = o.sketch;
+                jo["holeKind"] = holeKindName(o.holeKind);
+                jo["diameter"] = valueToJson(o.diameter);
+                jo["depth"] = valueToJson(o.depth);
+                jo["throughAll"] = o.throughAll;
+                jo["reverse"] = o.reverse;
+                jo["cbDiameter"] = valueToJson(o.cbDiameter);
+                jo["cbDepth"] = valueToJson(o.cbDepth);
+                jo["csDiameter"] = valueToJson(o.csDiameter);
+                jo["csAngle"] = valueToJson(o.csAngle);
+                break;
+            case OpKind::Mirror:
+                jo["source"] = o.source;
+                jo["axisOrigin"] = v3(o.axisOrigin);
+                jo["axisDirection"] = v3(o.axisDirection);
+                break;
             case OpKind::Revolve:
                 jo["sketch"] = o.sketch;
                 jo["axisPoint"] = v2(o.axisPoint);
                 jo["axisDir"] = v2(o.axisDir);
                 jo["angle"] = valueToJson(o.angle);
                 break;
+            case OpKind::Chamfer:
             case OpKind::Fillet: {
                 json pts = json::array();
                 for (const auto& p : o.edgePoints) pts.push_back(v3(p));
@@ -433,7 +581,7 @@ Model modelFromJson(const json& j) {
         o.name = jo.value("name", "");
         const std::string k = jo.value("kind", "extrude");
         o.kind = OpKind::Extrude;
-        for (auto kind : {OpKind::Revolve, OpKind::Fillet, OpKind::Import, OpKind::Loft, OpKind::Pattern, OpKind::SurfaceCut, OpKind::Thicken})
+        for (auto kind : {OpKind::Revolve, OpKind::Fillet, OpKind::Import, OpKind::Loft, OpKind::Pattern, OpKind::SurfaceCut, OpKind::Thicken, OpKind::Chamfer, OpKind::Hole, OpKind::Mirror})
             if (k == opKindName(kind)) o.kind = kind;
         o.mode = opModeFromName(jo.value("mode", "new")).value_or(OpMode::New);
         o.suppressed = jo.value("suppressed", false);
@@ -455,6 +603,17 @@ Model modelFromJson(const json& j) {
         o.surface = jo.value("surface", std::uint64_t{0});
         o.keepBelow = jo.value("keepBelow", true);
         if (jo.contains("thickness")) o.thickness = valueFromJson(jo["thickness"]);
+        o.extent = extentFromName(jo.value("extent", "distance")).value_or(Extent::Distance);
+        o.reverse = jo.value("reverse", false);
+        if (jo.contains("toPoint")) o.toPoint = v3(jo["toPoint"], "toPoint");
+        o.holeKind = holeKindFromName(jo.value("holeKind", "simple")).value_or(HoleKind::Simple);
+        if (jo.contains("diameter")) o.diameter = valueFromJson(jo["diameter"]);
+        if (jo.contains("depth")) o.depth = valueFromJson(jo["depth"]);
+        o.throughAll = jo.value("throughAll", false);
+        if (jo.contains("cbDiameter")) o.cbDiameter = valueFromJson(jo["cbDiameter"]);
+        if (jo.contains("cbDepth")) o.cbDepth = valueFromJson(jo["cbDepth"]);
+        if (jo.contains("csDiameter")) o.csDiameter = valueFromJson(jo["csDiameter"]);
+        if (jo.contains("csAngle")) o.csAngle = valueFromJson(jo["csAngle"]);
         m.operations.push_back(std::move(o));
     }
     for (const auto& jf : j.value("surfaces", json::array())) m.surfaces.push_back(surfaceFromJson(jf));

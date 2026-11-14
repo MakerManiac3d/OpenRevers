@@ -82,6 +82,19 @@ public:
     /// Rounds the edges whose both ends lie within `tolerance` of the given
     /// points (an edge is picked by a point on it), with radius r.
     Solid filleted(const std::vector<Vec3d>& edgePoints, double r, double tolerance = 0.05) const;
+    /// Bevels the same kind of picked edges, `d` back along both faces.
+    Solid chamfered(const std::vector<Vec3d>& edgePoints, double d, double tolerance = 0.05) const;
+    /// The solid reflected in the plane through `origin` with this normal.
+    Solid mirrored(const Vec3d& origin, const Vec3d& normal) const;
+    /// The tool of a hole, to cut with: from `origin` (on the surface) along
+    /// `axis` (into the material), `depth` deep. A counterbore (cbDiameter > 0,
+    /// cbDepth deep) or a countersink (csDiameter > 0, csAngleDeg across the
+    /// cone) widens the mouth. The tool starts a little outside the surface.
+    static Solid drill(const Vec3d& origin, const Vec3d& axis, double diameter, double depth, double cbDiameter = 0, double cbDepth = 0,
+                       double csDiameter = 0, double csAngleDeg = 90);
+    /// Index of the face nearest to `p` within `tolerance` (as tessellate
+    /// numbers faces), or -1.
+    int faceNear(const Vec3d& p, double tolerance = 0.05) const;
 
     // ---- exchange ----------------------------------------------------------
     static Solid readStep(const std::filesystem::path& path);

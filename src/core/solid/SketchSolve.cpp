@@ -38,19 +38,39 @@ public:
     double* constant(double v) { return param(v, false); }
 
     void build() {
+        // The sketch's own origin and axes (loop -1: segment 0 is the x axis,
+        // segment 1 the y axis; the origin is the start of either). Fixed.
+        origin_ = GCS::Point(constant(0.0), constant(0.0));
+        for (int a = 0; a < 2; ++a) {
+            Geo& g = ref_[a];
+            g.kind = Segment::Kind::Line;
+            g.start = origin_;
+            g.end = GCS::Point(constant(a == 0 ? 1.0 : 0.0), constant(a == 0 ? 0.0 : 1.0));
+            g.line.p1 = g.start;
+            g.line.p2 = g.end;
+        }
         geos_.resize(p_.loops.size());
         for (std::size_t li = 0; li < p_.loops.size(); ++li) {
             auto& loop = p_.loops[li];
             auto& geos = geos_[li];
             geos.resize(loop.segments.size());
             const std::size_t n = loop.segments.size();
+            // A construction chain may stay open (a single line, say).
+            const bool open = loop.construction && n > 0 && loop.segments.back().kind != Segment::Kind::Circle &&
+                              (loop.segments.back().b - loop.segments.front().a).norm() > 1e-9;
             // The joints: point k is where segment k starts (and k-1 ends).
-            std::vector<GCS::Point> joints(n);
+            std::vector<GCS::Point> joints(open ? n + 1 : n);
             for (std::size_t k = 0; k < n; ++k) {
                 const Segment& s = loop.segments[k];
                 if (s.kind == Segment::Kind::Circle) continue;
-                const bool movable = s.kind != Segment::Kind::Spline && loop.segments[(k + n - 1) % n].kind != Segment::Kind::Spline;
+                const bool prevSpline = (open && k == 0) ? false : loop.segments[(k + n - 1) % n].kind == Segment::Kind::Spline;
+                const bool movable = s.kind != Segment::Kind::Spline && !prevSpline;
                 joints[k] = GCS::Point(param(s.a.x(), movable), param(s.a.y(), movable));
+            }
+            if (open) {
+                const Segment& last = loop.segments.back();
+                const bool movable = last.kind != Segment::Kind::Spline;
+                joints[n] = GCS::Point(param(last.b.x(), movable), param(last.b.y(), movable));
             }
             for (std::size_t k = 0; k < n; ++k) {
                 const Segment& s = loop.segments[k];
@@ -63,7 +83,7 @@ public:
                     continue;
                 }
                 g.start = joints[k];
-                g.end = joints[(k + 1) % n];
+                g.end = open ? joints[k + 1] : joints[(k + 1) % n];
                 if (s.kind == Segment::Kind::Line) {
                     g.line.p1 = g.start;
                     g.line.p2 = g.end;
@@ -87,6 +107,10 @@ public:
     }
 
     const Geo& geo(const SketchRef& r) const {
+        if (r.loop == -1) {
+            if (r.segment < 0 || r.segment > 1) throw std::invalid_argument("the sketch's references are its origin and its two axes");
+            return ref_[r.segment];
+        }
         if (r.loop < 0 || r.loop >= static_cast<int>(geos_.size()) || r.segment < 0 || r.segment >= static_cast<int>(geos_[static_cast<std::size_t>(r.loop)].size()))
             throw std::invalid_argument("no such segment (loop " + std::to_string(r.loop) + ", segment " + std::to_string(r.segment) + ")");
         return geos_[static_cast<std::size_t>(r.loop)][static_cast<std::size_t>(r.segment)];
@@ -232,8 +256,21 @@ public:
             }
             case ConstraintKind::Angle: {
                 need(2);
+                // The angle from the first line to the second, counterclockwise,
+                // taken modulo 180 (a line has no direction): the second is
+                // used the way round that is nearer to the value now.
                 *value = c.value * kPi / 180.0;
-                sys_.addConstraintL2LAngle(line(R[0]), line(R[1]), value, tag, drv);
+                GCS::Line& l1 = line(R[0]);
+                GCS::Line l2 = line(R[1]);
+                const double now = std::atan2(*l2.p2.y - *l2.p1.y, *l2.p2.x - *l2.p1.x) - std::atan2(*l1.p2.y - *l1.p1.y, *l1.p2.x - *l1.p1.x);
+                auto far = [&](double a) {
+                    double d = std::fmod(a - *value, 2 * kPi);
+                    if (d > kPi) d -= 2 * kPi;
+                    if (d < -kPi) d += 2 * kPi;
+                    return std::abs(d);
+                };
+                if (far(now + kPi) < far(now)) std::swap(l2.p1, l2.p2);
+                sys_.addConstraintL2LAngle(l1, l2, value, tag, drv);
                 break;
             }
             case ConstraintKind::Fix: {
@@ -308,6 +345,8 @@ private:
     GCS::VEC_pD unknowns_;
     std::vector<std::vector<Geo>> geos_;
     GCS::System sys_;
+    GCS::Point origin_;
+    Geo ref_[2];
 };
 
 std::vector<int> fromTags(const GCS::VEC_I& tags, std::size_t n) {
@@ -371,7 +410,11 @@ SketchSolveResult solveSketch(Profile& profile, const std::vector<SketchConstrai
 
 std::optional<double> measureConstraint(const Profile& p, const SketchConstraint& c) {
     if (!constraintHasValue(c.kind) || c.refs.empty()) return std::nullopt;
-    auto seg = [&](const SketchRef& r) -> const Segment& { return p.loops.at(static_cast<std::size_t>(r.loop)).segments.at(static_cast<std::size_t>(r.segment)); };
+    static const Segment axes[2] = {Segment::line({0, 0}, {1, 0}), Segment::line({0, 0}, {0, 1})};
+    auto seg = [&](const SketchRef& r) -> const Segment& {
+        if (r.loop == -1) return axes[r.segment == 1 ? 1 : 0];
+        return p.loops.at(static_cast<std::size_t>(r.loop)).segments.at(static_cast<std::size_t>(r.segment));
+    };
     auto pt = [&](const SketchRef& r) -> Vec2d {
         const Segment& s = seg(r);
         switch (r.part) {
@@ -407,7 +450,8 @@ std::optional<double> measureConstraint(const Profile& p, const SketchConstraint
             case ConstraintKind::Angle:
                 if (R.size() >= 2) {
                     const Vec2d u = seg(R[0]).b - seg(R[0]).a, v = seg(R[1]).b - seg(R[1]).a;
-                    double a = std::atan2(u.x() * v.y() - u.y() * v.x(), u.dot(v)) * 180.0 / kPi;
+                    double a = std::fmod(std::atan2(u.x() * v.y() - u.y() * v.x(), u.dot(v)) * 180.0 / kPi, 180.0);
+                    if (a < 0) a += 180.0;
                     return a;
                 }
                 break;

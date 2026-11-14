@@ -264,8 +264,13 @@ puedes retocar cualquier parte sin salir del programa.
    taladros salen como círculos, las esquinas vivas donde se cruzan rectas y
    los arcos tangentes a las rectas que tocan. Da la medida de cada segmento
    para compararla con el calibre. Un lazo dentro de otro es un agujero.
-4. **Pieza → Extruir** (unir, cortar, intersecar), **Revolución** y
-   **Redondear aristas**. Los valores pueden ser números o nombres de
+4. **Pieza → Extruir** (unir, cortar, intersecar; con alcance *distance*,
+   *symmetric*, *through_all* o *up_to_face*), **Revolución**, **Redondear
+   aristas**, **Achaflanar aristas**, **Taladro** (un agujero en cada círculo
+   de un boceto: simple, con cajeado o avellanado; con profundidad o a través
+   de todo) y **Simetría** (refleja una operación, o toda la pieza, en un
+   plano). **Archivo → Exportar** da la pieza como STEP o como malla (STL,
+   3MF) para imprimirla. Los valores pueden ser números o nombres de
    **parámetros** (*Pieza → Fijar un parámetro*): al cambiar un parámetro, la
    pieza se reconstruye. Si un cambio la rompe, no se aplica y se dice por
    qué.
@@ -362,6 +367,16 @@ hay que hacerla por secciones y loft.
     la quita. La lista de la derecha muestra todas, y los **grados de
     libertad** que quedan (0: totalmente restringido). Las que se contradicen
     no se añaden, y se dice con cuáles chocan.
+  - **Origen y ejes:** los botones *+ Origen*, *+ Eje X* y *+ Eje Y* añaden
+    el origen o un eje del boceto a lo elegido, para acotar respecto a ellos
+    (en un perfil de revolución, el radio es la distancia al eje).
+  - **Construcción:** con un lazo elegido, *Construcción* lo convierte en
+    geometría de construcción (punteada): no hace material, pero admite
+    restricciones y cotas (un círculo de taladros, una recta guía). Vuelve a
+    pulsarlo para que sea material otra vez.
+  - La cota de **ángulo** es el ángulo antihorario de la primera recta a la
+    segunda, módulo 180: 45° y 135° son los dos lados del mismo par de
+    rectas, y se resuelve el más cercano a lo dibujado.
   - Al arrastrar, el boceto se **resuelve en directo**: el punto sigue al
     ratón hasta donde lo dejan las restricciones.
   - Los rectángulos, y las rectas de un polígono casi horizontales o

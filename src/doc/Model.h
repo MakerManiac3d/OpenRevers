@@ -47,7 +47,13 @@ struct FreeSurface {
     std::string ref() const { return "sf" + std::to_string(id); }
 };
 
-enum class OpKind { Extrude, Revolve, Fillet, Import, Loft, Pattern, SurfaceCut, Thicken };
+enum class OpKind { Extrude, Revolve, Fillet, Import, Loft, Pattern, SurfaceCut, Thicken, Chamfer, Hole, Mirror };
+/// How far an extrusion goes: `start` to `end`; both ways from the sketch
+/// (`end` is the whole length); on past the whole part; or up to a face
+/// parallel to the sketch, picked by a point on it.
+enum class Extent { Distance, Symmetric, ThroughAll, UpToFace };
+/// The shape of a hole's mouth.
+enum class HoleKind { Simple, Counterbore, Countersink };
 /// How an operation's solid combines with what was built before it.
 enum class OpMode { New, Join, Cut, Intersect };
 
@@ -61,6 +67,9 @@ struct Operation {
     std::uint64_t sketch{0};
     // extrude: from `start` to `end` along the sketch's normal
     Value start, end;
+    Extent extent{Extent::Distance};
+    bool reverse{false};     // extent through all / hole: the other way along the normal
+    Vec3d toPoint{Vec3d::Zero()};  // extent up to face: a point on that face
     // revolve: an axis in the sketch's plane, and the angle
     Vec2d axisPoint{Vec2d::Zero()}, axisDir{Vec2d::UnitY()};
     Value angle{360.0, {}};
@@ -81,6 +90,14 @@ struct Operation {
     std::uint64_t surface{0};
     bool keepBelow{true};
     Value thickness{1.0, {}};
+    // hole: one per circle of the sketch, going into the material (against the
+    // sketch's normal); diameter 0 takes each circle's own
+    HoleKind holeKind{HoleKind::Simple};
+    Value diameter{0.0, {}}, depth{10.0, {}};
+    bool throughAll{false};
+    Value cbDiameter{0.0, {}}, cbDepth{0.0, {}}, csDiameter{0.0, {}}, csAngle{90.0, {}};
+    // mirror: another operation's piece (source 0: the whole part so far)
+    // reflected in the plane through axisOrigin with normal axisDirection
 
     std::string ref() const { return "o" + std::to_string(id); }
 };
@@ -118,6 +135,10 @@ SketchConstraint constraintFromJson(const nlohmann::json& j);
 
 const char* opKindName(OpKind k);
 const char* opModeName(OpMode m);
+const char* extentName(Extent e);
+std::optional<Extent> extentFromName(const std::string& s);
+const char* holeKindName(HoleKind k);
+std::optional<HoleKind> holeKindFromName(const std::string& s);
 std::optional<OpMode> opModeFromName(const std::string& s);
 
 nlohmann::json valueToJson(const Value& v);

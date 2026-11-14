@@ -810,3 +810,118 @@ TEST(Commands, ConstrainedSketchFollowsItsParameter) {
     EXPECT_EQ(again["sketches"][0]["constraints"], 6);
     EXPECT_EQ(again["sketches"][0]["dof"], 1);
 }
+
+namespace {
+json rectLoop(double x0, double y0, double x1, double y1) {
+    return json::array({{{"type", "line"}, {"from", {x0, y0}}, {"to", {x1, y0}}}, {{"type", "line"}, {"from", {x1, y0}}, {"to", {x1, y1}}},
+                        {{"type", "line"}, {"from", {x1, y1}}, {"to", {x0, y1}}}, {{"type", "line"}, {"from", {x0, y1}}, {"to", {x0, y0}}}});
+}
+json circleLoop(double x, double y, double r) { return json::array({{{"type", "circle"}, {"centre", {x, y}}, {"radius", r}}}); }
+const json kTopPlane = {{"origin", {0.0, 0.0, 10.0}}, {"normal", {0.0, 0.0, 1.0}}, {"xDir", {1.0, 0.0, 0.0}}};
+constexpr double kPiT = 3.14159265358979323846;
+}  // namespace
+
+TEST(Commands, ExtrudeExtents) {
+    Fixture f;
+    f.run("part.new", {{"name", "Block"}});
+    const std::string k1 = f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({rectLoop(0, 0, 40, 30)})}})["ref"];
+    const json base = f.run("part.extrude", {{"body", "b1"}, {"sketch", k1}, {"end", 10.0}, {"mode", "new"}});
+    EXPECT_NEAR(base["solid"]["volume"].get<double>(), 12000.0, 1e-3);
+    // Symmetric: the whole length is split about the sketch's plane.
+    const std::string k2 = f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({circleLoop(10, 15, 3)})}, {"plane", {{"origin", {0.0, 0.0, 5.0}}, {"normal", {0.0, 0.0, 1.0}}}}})["ref"];
+    const json sym = f.run("part.extrude", {{"body", "b1"}, {"sketch", k2}, {"end", 20.0}, {"extent", "symmetric"}, {"mode", "cut"}});
+    EXPECT_NEAR(sym["solid"]["volume"].get<double>(), 12000.0 - kPiT * 9 * 10, 1e-2);
+    // Through all, from the top plane downwards.
+    const std::string k3 = f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({circleLoop(30, 15, 2)})}, {"plane", kTopPlane}})["ref"];
+    const json thru = f.run("part.extrude", {{"body", "b1"}, {"sketch", k3}, {"extent", "through_all"}, {"reverse", true}, {"mode", "cut"}});
+    EXPECT_NEAR(thru["solid"]["volume"].get<double>(), 12000.0 - kPiT * 9 * 10 - kPiT * 4 * 10, 1e-2);
+    // Up to a face: a post from the top plane up to the face of a taller block.
+    const std::string k4 = f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({rectLoop(50, 0, 60, 10)})}})["ref"];
+    f.run("part.extrude", {{"body", "b1"}, {"sketch", k4}, {"end", 25.0}, {"mode", "join"}});
+    const std::string k5 = f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({circleLoop(55, 5, 2)})}, {"plane", {{"origin", {0.0, 0.0, 30.0}}, {"normal", {0.0, 0.0, 1.0}}}}})["ref"];
+    EXPECT_THROW(f.run("part.extrude", {{"body", "b1"}, {"sketch", k5}, {"extent", "up_to_face"}, {"reverse", true}, {"mode", "cut"}}), CommandError);  // needs toPoint
+    const json up = f.run("part.extrude", {{"body", "b1"}, {"sketch", k5}, {"extent", "up_to_face"}, {"reverse", true}, {"toPoint", {55.0, 5.0, 25.0}},
+                                           {"mode", "cut"}});
+    // The hole is cut from z = 30 down to the face at z = 25: nothing removed, as that is outside the post.
+    EXPECT_NEAR(up["solid"]["volume"].get<double>(), 12000.0 - kPiT * 9 * 10 - kPiT * 4 * 10 + 1000.0 * 2.5, 1e-1);
+}
+
+TEST(Commands, ChamferHoleAndMirror) {
+    Fixture f;
+    f.run("part.new", {{"name", "Block"}});
+    const std::string k6 = f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({rectLoop(0, 0, 40, 30)})}})["ref"];
+    f.run("part.extrude", {{"body", "b1"}, {"sketch", k6}, {"end", 10.0}, {"mode", "new"}});
+    // A chamfer on the top edge along x at y = 0.
+    const json ch = f.run("part.chamfer", {{"body", "b1"}, {"points", json::array({{20.0, 0.0, 10.0}})}, {"distance", 2.0}});
+    EXPECT_NEAR(ch["solid"]["volume"].get<double>(), 12000.0 - 0.5 * 2 * 2 * 40, 1e-3);
+    // A counterbored hole on the top face, through all.
+    const std::string k7 = f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({circleLoop(20, 15, 2.0)})}, {"plane", kTopPlane}})["ref"];
+    const json hole = f.run("part.hole", {{"body", "b1"}, {"sketch", k7}, {"throughAll", true}, {"holeKind", "counterbore"}, {"cbDiameter", 8.0}, {"cbDepth", 3.0}});
+    const double cut = kPiT * 4 * 10 + kPiT * (16 - 4) * 3;
+    EXPECT_NEAR(hole["solid"]["volume"].get<double>(), 12000.0 - 80 - cut, 1e-2);
+    EXPECT_THROW(f.run("part.hole", {{"body", "b1"}, {"sketch", k7}, {"holeKind", "counterbore"}}), CommandError);
+    // A parametric depth follows its parameter.
+    f.run("part.parameter", {{"body", "b1"}, {"name", "deep"}, {"value", 4.0}});
+    const std::string k8 = f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({circleLoop(5, 25, 1.0)})}, {"plane", kTopPlane}})["ref"];
+    const json blind = f.run("part.hole", {{"body", "b1"}, {"sketch", k8}, {"depth", "deep"}});
+    EXPECT_NEAR(blind["solid"]["volume"].get<double>(), 12000.0 - 80 - cut - kPiT * 4, 1e-2);
+    const json deeper = f.run("part.parameter", {{"body", "b1"}, {"name", "deep"}, {"value", 6.0}});
+    EXPECT_NEAR(deeper["solid"]["volume"].get<double>(), 12000.0 - 80 - cut - kPiT * 6, 1e-2);
+    // A countersink widens the mouth.
+    const std::string k9 = f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({circleLoop(35, 25, 1.0)})}, {"plane", kTopPlane}})["ref"];
+    const json cs = f.run("part.hole", {{"body", "b1"}, {"sketch", k9}, {"depth", 5.0}, {"holeKind", "countersink"}, {"csDiameter", 4.0}, {"csAngle", 90.0}});
+    EXPECT_LT(cs["solid"]["volume"].get<double>(), deeper["solid"]["volume"].get<double>() - kPiT * 5 + 1e-6);
+    // Mirror the whole part about x = 40: the part doubles (the faces meet).
+    const json mir = f.run("part.mirror", {{"body", "b1"}, {"planeOrigin", {40.0, 0.0, 0.0}}, {"planeNormal", {1.0, 0.0, 0.0}}});
+    EXPECT_NEAR(mir["solid"]["volume"].get<double>(), 2 * cs["solid"]["volume"].get<double>(), 1e-2);
+    EXPECT_EQ(mir["solid"]["solids"], 1);
+    // And a hole cannot be patterned or mirrored as "in place" operations, but it can be reflected.
+    const json again = f.run("part.mirror", {{"body", "b1"}, {"operation", hole["ref"]}, {"planeOrigin", {0.0, 15.0, 0.0}}, {"planeNormal", {0.0, 1.0, 0.0}}});
+    EXPECT_TRUE(again.contains("ref"));
+}
+
+TEST(Commands, ConstructionGeometryAndOriginReferences) {
+    const auto dir = tempDir("construction");
+    Fixture f;
+    f.run("part.new", {{"name", "Plate"}});
+    // A rough rectangle, and a construction circle (a bolt circle to hang the holes on).
+    json circle = circleLoop(20, 15, 10);
+    for (auto& seg : circle) seg["construction"] = true;
+    const std::string sk = f.run("part.sketch", {{"body", "b1"}, {"loops", json::array({rectLoop(1, 1, 39, 29), circle})}})["ref"];
+    // The construction circle makes no material.
+    const json block = f.run("part.extrude", {{"body", "b1"}, {"sketch", sk}, {"end", 5.0}, {"mode", "new"}});
+    EXPECT_NEAR(block["solid"]["volume"].get<double>(), 38 * 28 * 5, 1e-3);
+    // Pin the rectangle to the origin and the construction circle's centre to the x axis.
+    auto e = [](int loop, int seg, const char* part = "edge") { return json{{"loop", loop}, {"segment", seg}, {"part", part}}; };
+    const json cs = json::array({{{"kind", "coincident"}, {"refs", {e(0, 0, "start"), "origin"}}},
+                                 {{"kind", "horizontal"}, {"refs", {e(0, 0)}}},
+                                 {{"kind", "horizontal"}, {"refs", {e(0, 2)}}},
+                                 {{"kind", "vertical"}, {"refs", {e(0, 1)}}},
+                                 {{"kind", "vertical"}, {"refs", {e(0, 3)}}},
+                                 {{"kind", "distance"}, {"refs", {e(0, 0)}}, {"value", 40.0}},
+                                 {{"kind", "distance"}, {"refs", {e(0, 1)}}, {"value", 30.0}},
+                                 {{"kind", "on_object"}, {"refs", {e(1, 0, "centre"), "x_axis"}}},
+                                 {{"kind", "distance"}, {"refs", {e(1, 0, "centre"), "y_axis"}}, {"value", 25.0}},
+                                 {{"kind", "diameter"}, {"refs", {e(1, 0)}}, {"value", 16.0}}});
+    const json c = f.run("part.constrain", {{"body", "b1"}, {"sketch", sk}, {"add", cs}});
+    EXPECT_EQ(c["dof"], 0);
+    EXPECT_NEAR(c["solid"]["volume"].get<double>(), 40 * 30 * 5, 1e-3);
+    // Saved and opened again, the construction flag and the references survive.
+    const auto file = (dir / "k.orvp").string();
+    f.run("project.save", {{"path", file}});
+    f.run("project.open", {{"path", file}});
+    const json l = f.run("part.list", {{"body", "b1"}, {"sketch", sk}});
+    EXPECT_EQ(l["sketches"][0]["dof"], 0);
+    EXPECT_NEAR(l["solid"]["volume"].get<double>(), 40 * 30 * 5, 1e-3);  // the circle still makes no hole
+    // A hole sketch ignores construction circles: this one has none left to drill.
+    EXPECT_THROW(f.run("part.hole", {{"body", "b1"}, {"sketch", sk}, {"depth", 2.0}}), CommandError);
+    // Exported as a mesh.
+    const auto stl = (dir / "plate.stl").string();
+    const json x = f.run("part.export_mesh", {{"body", "b1"}, {"path", stl}});
+    EXPECT_GT(x["triangles"].get<int>(), 10);
+    EXPECT_GT(std::filesystem::file_size(stl), 500u);
+    const auto mf = (dir / "plate.3mf").string();
+    f.run("part.export_mesh", {{"body", "b1"}, {"path", mf}});
+    EXPECT_TRUE(std::filesystem::exists(mf));
+    EXPECT_THROW(f.run("part.export_mesh", {{"body", "b1"}, {"path", stl}}), CommandError);  // would overwrite
+}

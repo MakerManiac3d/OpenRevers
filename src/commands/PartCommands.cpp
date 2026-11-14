@@ -9,6 +9,7 @@
 #include "core/mesh/Distance.h"
 #include "core/solid/BSpline.h"
 #include "core/solid/SketchFit.h"
+#include "core/mesh/MeshIO.h"
 #include "doc/Document.h"
 
 #include <Eigen/Eigenvalues>
@@ -66,7 +67,28 @@ json partJson(const Body& b) {
         json jo{{"ref", o.ref()}, {"name", o.name}, {"kind", opKindName(o.kind)}, {"mode", opModeName(o.mode)}, {"suppressed", o.suppressed}};
         auto sketchRef = [&](std::uint64_t id) { return "s" + std::to_string(id); };
         switch (o.kind) {
-            case OpKind::Extrude: jo["sketch"] = sketchRef(o.sketch); jo["start"] = valueToJson(o.start); jo["end"] = valueToJson(o.end); break;
+            case OpKind::Extrude:
+                jo["sketch"] = sketchRef(o.sketch);
+                jo["start"] = valueToJson(o.start);
+                jo["end"] = valueToJson(o.end);
+                jo["extent"] = extentName(o.extent);
+                if (o.reverse) jo["reverse"] = true;
+                if (o.extent == Extent::UpToFace) jo["toPoint"] = j3(o.toPoint);
+                break;
+            case OpKind::Hole:
+                jo["sketch"] = sketchRef(o.sketch);
+                jo["holeKind"] = holeKindName(o.holeKind);
+                jo["diameter"] = valueToJson(o.diameter);
+                if (o.throughAll) jo["throughAll"] = true; else jo["depth"] = valueToJson(o.depth);
+                if (o.holeKind == HoleKind::Counterbore) { jo["cbDiameter"] = valueToJson(o.cbDiameter); jo["cbDepth"] = valueToJson(o.cbDepth); }
+                if (o.holeKind == HoleKind::Countersink) { jo["csDiameter"] = valueToJson(o.csDiameter); jo["csAngle"] = valueToJson(o.csAngle); }
+                break;
+            case OpKind::Mirror:
+                jo["source"] = o.source ? "o" + std::to_string(o.source) : "all";
+                jo["planeOrigin"] = j3(o.axisOrigin);
+                jo["planeNormal"] = j3(o.axisDirection);
+                break;
+            case OpKind::Chamfer: jo["edges"] = o.edgePoints.size(); jo["distance"] = valueToJson(o.radius); break;
             case OpKind::Revolve: jo["sketch"] = sketchRef(o.sketch); jo["angle"] = valueToJson(o.angle); jo["axisPoint"] = j2(o.axisPoint); jo["axisDir"] = j2(o.axisDir); break;
             case OpKind::Fillet: jo["edges"] = o.edgePoints.size(); jo["radius"] = valueToJson(o.radius); break;
             case OpKind::Import: break;
@@ -365,7 +387,7 @@ void registerPartCommands(CommandRegistry& R) {
                    }
                }
                bool used = false;
-               for (const auto& o : m->operations) used |= (o.kind == OpKind::Extrude || o.kind == OpKind::Revolve) && o.sketch == id;
+               for (const auto& o : m->operations) used |= (o.kind == OpKind::Extrude || o.kind == OpKind::Revolve || o.kind == OpKind::Hole) && o.sketch == id;
                json out = partJson(used ? applyModel(ctx, b, m) : (ctx.doc.setPart(b.id, m, b.solid, PartTriangles{b.mesh, b.view}, b.buildError), ctx.doc.body(b.ref())));
                out["summary"] = ctx.say(used ? "Sketch changed and the part rebuilt." : "Sketch changed.", used ? "Boceto cambiado y pieza reconstruida." : "Boceto cambiado.");
                return out;
@@ -411,7 +433,7 @@ void registerPartCommands(CommandRegistry& R) {
                                                           "El boceto no se puede resolver: " + why + ". No se ha cambiado nada."));
                bool used = false;
                for (const auto& o : m->operations) {
-                   used |= (o.kind == OpKind::Extrude || o.kind == OpKind::Revolve) && o.sketch == id;
+                   used |= (o.kind == OpKind::Extrude || o.kind == OpKind::Revolve || o.kind == OpKind::Hole) && o.sketch == id;
                    for (auto s : o.sections) used |= s == id;
                }
                const Sketch solved = *sk;
@@ -437,8 +459,13 @@ void registerPartCommands(CommandRegistry& R) {
             "Empuja los lazos de un boceto a lo largo de la normal de su plano, de start a end (distancias sobre la normal; en negativo, al otro lado), y combina el resultado con la pieza. Los valores pueden ser números o nombres de parámetros."},
            object({{"body", body(kPart)}, {"sketch", kind(string({"The sketch: s1 or its name", "El boceto: s1 o su nombre"}), "sketch")},
                    {"start", valueSchema({"From", "Desde"}, 0.0)}, {"end", valueSchema({"To", "Hasta"}, 10.0)},
+                   {"extent", json{{"type", "string"}, {"enum", json::array({"distance", "symmetric", "through_all", "up_to_face"})}, {"default", "distance"},
+                                   {"description", "How far: distance (start to end), symmetric (end is the whole length, half each side), through_all (from start on past the whole part), up_to_face (from start up to a flat face parallel to the sketch, given by toPoint)"},
+                                   {"x-es", "Hasta dónde: distance (de start a end), symmetric (end es la longitud total, mitad a cada lado), through_all (desde start más allá de toda la pieza), up_to_face (desde start hasta una cara plana paralela al boceto, dada por toPoint)"}}},
+                   {"reverse", boolean({"Through all / up to face: the other way along the normal", "A través de todo / hasta cara: hacia el otro lado de la normal"}, false)},
+                   {"toPoint", point({"Up to face: a point on that face", "Hasta cara: un punto sobre esa cara"}, nullptr)},
                    {"mode", choice(kMode, {"new", "join", "cut", "intersect"}, "join")}, {"name", string({"Name", "Nombre"})}},
-                  {"body", "sketch", "end"}),
+                  {"body", "sketch"}),
            true, false,
            [](CommandContext& ctx, const json& in) {
                const Body b = partBody(ctx, in["body"]);
@@ -449,6 +476,14 @@ void registerPartCommands(CommandRegistry& R) {
                o.sketch = findSketch(ctx, *m, in["sketch"]).id;
                o.start = valueFromJson(in["start"]);
                o.end = valueFromJson(in["end"]);
+               o.extent = *extentFromName(in.contains("extent") ? in["extent"].get<std::string>() : "distance");
+               o.reverse = in.contains("reverse") && in["reverse"].get<bool>();
+               if (o.extent == Extent::UpToFace) {
+                   if (!in.contains("toPoint")) throw CommandError("invalid_input", ctx.say("up_to_face needs toPoint, a point on the face.", "up_to_face necesita toPoint, un punto de la cara."));
+                   o.toPoint = v3(in["toPoint"]);
+               }
+               if ((o.extent == Extent::Distance || o.extent == Extent::Symmetric) && !in.contains("end"))
+                   throw CommandError("invalid_input", ctx.say("This extent needs end.", "Este alcance necesita end."));
                o.mode = *opModeFromName(in["mode"].get<std::string>());
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, o.mode == OpMode::Cut ? ctx.say("Cut", "Corte") : ctx.say("Extrude", "Extrusión"));
                m->operations.push_back(o);
@@ -518,6 +553,116 @@ void registerPartCommands(CommandRegistry& R) {
                return out;
            }});
 
+    R.add({"part.chamfer", "part", {"Chamfer edges", "Achaflanar aristas"},
+           {"Bevel edges of the part: each is cut back distance along both faces. Each edge is picked by a point on it, [x, y, z] (within 0.05 mm), as part.fillet does.",
+            "Achaflana aristas de la pieza: cada una se recorta distance sobre sus dos caras. Cada arista se elige con un punto sobre ella, [x, y, z] (a menos de 0,05 mm), como en part.fillet."},
+           object({{"body", body(kPart)}, {"points", kind(listSchema({"Points on the edges, [[x, y, z], ...]", "Puntos sobre las aristas, [[x, y, z], ...]"}), "point-list")},
+                   {"distance", valueSchema({"Distance", "Distancia"}, 1.0)}, {"name", string({"Name", "Nombre"})}},
+                  {"body", "points", "distance"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               auto m = std::make_shared<Model>(*b.model);
+               Operation o;
+               o.id = m->nextId++;
+               o.kind = OpKind::Chamfer;
+               for (const auto& p : in["points"]) {
+                   if (!p.is_array() || p.size() != 3) throw CommandError("invalid_input", ctx.say("Each point must be [x, y, z].", "Cada punto debe ser [x, y, z]."));
+                   o.edgePoints.push_back(v3(p));
+               }
+               o.radius = valueFromJson(in["distance"]);
+               o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Chamfer", "Chaflán"));
+               m->operations.push_back(o);
+               json out = partJson(applyModel(ctx, b, m));
+               out["ref"] = o.ref();
+               out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
+               return out;
+           }});
+
+    R.add({"part.hole", "part", {"Hole", "Taladro"},
+           {"Drill a hole at every circle of a sketch (a circle is a loop by itself; draw them with part.sketch, on a face of the part or on a plane). The hole goes into the material, against the sketch's normal (reverse flips it), as deep as depth or through the whole part. Its diameter is the circle's own unless diameter is given. holeKind widens the mouth: counterbore (cbDiameter, cbDepth) or countersink (csDiameter, csAngle: the cone's full angle). Values may be numbers or parameter names.",
+            "Taladra un agujero en cada círculo de un boceto (un círculo es un lazo por sí solo; se dibujan con part.sketch, sobre una cara de la pieza o sobre un plano). El agujero entra en el material, contra la normal del boceto (reverse la invierte), con la profundidad depth o a través de toda la pieza. Su diámetro es el del propio círculo salvo que se dé diameter. holeKind ensancha la boca: counterbore (cbDiameter, cbDepth) o countersink (csDiameter, csAngle: ángulo total del cono). Los valores pueden ser números o nombres de parámetros."},
+           object({{"body", body(kPart)}, {"sketch", kind(string({"The sketch of circles: s1 or its name", "El boceto de círculos: s1 o su nombre"}), "sketch")},
+                   {"holeKind", json{{"type", "string"}, {"enum", json::array({"simple", "counterbore", "countersink"})}, {"default", "simple"}, {"description", "Shape of the mouth"}, {"x-es", "Forma de la boca"}}},
+                   {"diameter", valueSchema({"Diameter (0: each circle's own)", "Diámetro (0: el de cada círculo)"}, 0.0)},
+                   {"depth", valueSchema({"Depth", "Profundidad"}, 10.0)},
+                   {"throughAll", boolean({"Through the whole part", "A través de toda la pieza"}, false)},
+                   {"reverse", boolean({"Drill along the sketch's normal instead", "Taladrar a favor de la normal del boceto"}, false)},
+                   {"cbDiameter", valueSchema({"Counterbore diameter", "Diámetro del cajeado"}, 0.0)}, {"cbDepth", valueSchema({"Counterbore depth", "Profundidad del cajeado"}, 0.0)},
+                   {"csDiameter", valueSchema({"Countersink diameter at the surface", "Diámetro del avellanado en la superficie"}, 0.0)},
+                   {"csAngle", valueSchema({"Countersink full angle (degrees)", "Ángulo total del avellanado (grados)"}, 90.0)},
+                   {"name", string({"Name", "Nombre"})}},
+                  {"body", "sketch"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               auto m = std::make_shared<Model>(*b.model);
+               Operation o;
+               o.id = m->nextId++;
+               o.kind = OpKind::Hole;
+               o.mode = OpMode::Cut;
+               o.sketch = findSketch(ctx, *m, in["sketch"]).id;
+               const auto kindName = in.contains("holeKind") ? in["holeKind"].get<std::string>() : std::string("simple");
+               const auto hk = holeKindFromName(kindName);
+               if (!hk) throw CommandError("invalid_input", ctx.say("holeKind is simple, counterbore or countersink.", "holeKind es simple, counterbore o countersink."));
+               o.holeKind = *hk;
+               if (in.contains("diameter")) o.diameter = valueFromJson(in["diameter"]);
+               if (in.contains("depth")) o.depth = valueFromJson(in["depth"]);
+               o.throughAll = in.contains("throughAll") && in["throughAll"].get<bool>();
+               o.reverse = in.contains("reverse") && in["reverse"].get<bool>();
+               if (in.contains("cbDiameter")) o.cbDiameter = valueFromJson(in["cbDiameter"]);
+               if (in.contains("cbDepth")) o.cbDepth = valueFromJson(in["cbDepth"]);
+               if (in.contains("csDiameter")) o.csDiameter = valueFromJson(in["csDiameter"]);
+               if (in.contains("csAngle")) o.csAngle = valueFromJson(in["csAngle"]);
+               auto unset = [](const Value& v) { return v.parameter.empty() && v.number <= 0; };
+               if (o.holeKind == HoleKind::Counterbore && (unset(o.cbDiameter) || unset(o.cbDepth)))
+                   throw CommandError("invalid_input", ctx.say("A counterbore needs cbDiameter and cbDepth.", "Un cajeado necesita cbDiameter y cbDepth."));
+               if (o.holeKind == HoleKind::Countersink && unset(o.csDiameter))
+                   throw CommandError("invalid_input", ctx.say("A countersink needs csDiameter.", "Un avellanado necesita csDiameter."));
+               o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Hole", "Taladro"));
+               m->operations.push_back(o);
+               json out = partJson(applyModel(ctx, b, m));
+               out["ref"] = o.ref();
+               out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
+               return out;
+           }});
+
+    R.add({"part.mirror", "part", {"Mirror", "Simetría"},
+           {"Reflect what another operation made (or, without operation, the whole part so far) in a plane, and combine the copy with the part. The plane is given by a point and its normal.",
+            "Refleja lo que hizo otra operación (o, sin operation, toda la pieza hasta ahora) en un plano, y combina la copia con la pieza. El plano se da con un punto y su normal."},
+           object({{"body", body(kPart)}, {"operation", kind(string({"The operation to reflect (default: the whole part)", "La operación que reflejar (por defecto, toda la pieza)"}), "operation")},
+                   {"planeOrigin", point({"A point of the mirror plane", "Un punto del plano de simetría"})},
+                   {"planeNormal", point({"The plane's normal", "La normal del plano"}, nullptr)},
+                   {"mode", choice(kMode, {"new", "join", "cut", "intersect"}, "join")}, {"name", string({"Name", "Nombre"})}},
+                  {"body", "planeOrigin", "planeNormal"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               auto m = std::make_shared<Model>(*b.model);
+               Operation o;
+               o.id = m->nextId++;
+               o.kind = OpKind::Mirror;
+               if (in.contains("operation")) {
+                   const Operation& src = findOperation(ctx, *m, in["operation"]);
+                   if (src.kind == OpKind::Fillet || src.kind == OpKind::Chamfer || src.kind == OpKind::SurfaceCut)
+                       throw CommandError("invalid_input", ctx.say("A mirror reflects what an operation adds or cuts; " + src.name + " changes the part in place.",
+                                                                   "Una simetría refleja lo que una operación añade o corta; " + src.name + " cambia la pieza donde está."));
+                   o.source = src.id;
+                   o.mode = in.contains("mode") ? *opModeFromName(in["mode"].get<std::string>()) : (src.mode == OpMode::New ? OpMode::Join : src.mode);
+               } else {
+                   o.mode = in.contains("mode") ? *opModeFromName(in["mode"].get<std::string>()) : OpMode::Join;
+               }
+               o.axisOrigin = v3(in["planeOrigin"]);
+               o.axisDirection = v3(in["planeNormal"]);
+               if (o.axisDirection.norm() < 1e-9) throw CommandError("invalid_input", ctx.say("The plane needs a normal.", "El plano necesita una normal."));
+               o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Mirror", "Simetría"));
+               m->operations.push_back(o);
+               json out = partJson(applyModel(ctx, b, m));
+               out["ref"] = o.ref();
+               out["summary"] = ctx.say("Added " + o.name + ".", "Añadida " + o.name + ".");
+               return out;
+           }});
+
     R.add({"part.parameter", "part", {"Set a parameter", "Fijar un parámetro"},
            {"Create or change a named value of the part (a thickness, a hole's diameter...). Operations that use it by name are rebuilt.",
             "Crea o cambia un valor con nombre de la pieza (un espesor, el diámetro de un taladro...). Se reconstruyen las operaciones que lo usan por su nombre."},
@@ -545,6 +690,17 @@ void registerPartCommands(CommandRegistry& R) {
                    {"end", json{{"type", json::array({"number", "string"})}, {"description", "To"}, {"x-es", "Hasta"}}},
                    {"angle", json{{"type", json::array({"number", "string"})}, {"description", "Angle (degrees)"}, {"x-es", "Ángulo (grados)"}}},
                    {"radius", json{{"type", json::array({"number", "string"})}, {"description", "Radius"}, {"x-es", "Radio"}}},
+                   {"distance", json{{"type", json::array({"number", "string"})}, {"description", "Chamfer: distance"}, {"x-es", "Chaflán: distancia"}}},
+                   {"diameter", json{{"type", json::array({"number", "string"})}, {"description", "Hole: diameter"}, {"x-es", "Taladro: diámetro"}}},
+                   {"depth", json{{"type", json::array({"number", "string"})}, {"description", "Hole: depth"}, {"x-es", "Taladro: profundidad"}}},
+                   {"cbDiameter", json{{"type", json::array({"number", "string"})}, {"description", "Hole: counterbore diameter"}, {"x-es", "Taladro: diámetro del cajeado"}}},
+                   {"cbDepth", json{{"type", json::array({"number", "string"})}, {"description", "Hole: counterbore depth"}, {"x-es", "Taladro: profundidad del cajeado"}}},
+                   {"csDiameter", json{{"type", json::array({"number", "string"})}, {"description", "Hole: countersink diameter"}, {"x-es", "Taladro: diámetro del avellanado"}}},
+                   {"csAngle", json{{"type", json::array({"number", "string"})}, {"description", "Hole: countersink angle"}, {"x-es", "Taladro: ángulo del avellanado"}}},
+                   {"throughAll", json{{"type", "boolean"}, {"description", "Hole: through the whole part"}, {"x-es", "Taladro: a través de toda la pieza"}}},
+                   {"reverse", json{{"type", "boolean"}, {"description", "Extrude/hole: the other way"}, {"x-es", "Extruir/taladro: al otro lado"}}},
+                   {"extent", json{{"type", "string"}, {"enum", json::array({"distance", "symmetric", "through_all", "up_to_face"})}, {"description", "Extrude: how far"}, {"x-es", "Extruir: hasta dónde"}}},
+                   {"toPoint", point({"Extrude up to face: a point on it", "Extruir hasta cara: un punto sobre ella"}, nullptr)},
                    {"mode", json{{"type", "string"}, {"enum", json::array({"new", "join", "cut", "intersect"})}, {"description", kMode.en}, {"x-es", kMode.es}}},
                    {"suppressed", json{{"type", "boolean"}, {"description", "Leave it out of the part"}, {"x-es", "Dejarla fuera de la pieza"}}},
                    {"count", json{{"type", json::array({"number", "string"})}, {"description", "Pattern: copies"}, {"x-es", "Patrón: copias"}}},
@@ -562,6 +718,21 @@ void registerPartCommands(CommandRegistry& R) {
                if (in.contains("end")) o.end = valueFromJson(in["end"]);
                if (in.contains("angle")) o.angle = valueFromJson(in["angle"]);
                if (in.contains("radius")) o.radius = valueFromJson(in["radius"]);
+               if (in.contains("distance")) o.radius = valueFromJson(in["distance"]);
+               if (in.contains("diameter")) o.diameter = valueFromJson(in["diameter"]);
+               if (in.contains("depth")) o.depth = valueFromJson(in["depth"]);
+               if (in.contains("cbDiameter")) o.cbDiameter = valueFromJson(in["cbDiameter"]);
+               if (in.contains("cbDepth")) o.cbDepth = valueFromJson(in["cbDepth"]);
+               if (in.contains("csDiameter")) o.csDiameter = valueFromJson(in["csDiameter"]);
+               if (in.contains("csAngle")) o.csAngle = valueFromJson(in["csAngle"]);
+               if (in.contains("throughAll")) o.throughAll = in["throughAll"].get<bool>();
+               if (in.contains("reverse")) o.reverse = in["reverse"].get<bool>();
+               if (in.contains("extent")) {
+                   const auto e = extentFromName(in["extent"].get<std::string>());
+                   if (!e) throw CommandError("invalid_input", ctx.say("extent is distance, symmetric, through_all or up_to_face.", "extent es distance, symmetric, through_all o up_to_face."));
+                   o.extent = *e;
+               }
+               if (in.contains("toPoint")) o.toPoint = v3(in["toPoint"]);
                if (in.contains("mode")) o.mode = *opModeFromName(in["mode"].get<std::string>());
                if (in.contains("suppressed")) o.suppressed = in["suppressed"].get<bool>();
                if (in.contains("count")) o.count = valueFromJson(in["count"]);
@@ -584,7 +755,7 @@ void registerPartCommands(CommandRegistry& R) {
                const std::string item = in["item"];
                if (const Sketch* s = m->sketch(item)) {
                    for (const auto& o : m->operations)
-                       if (((o.kind == OpKind::Extrude || o.kind == OpKind::Revolve) && o.sketch == s->id) ||
+                       if (((o.kind == OpKind::Extrude || o.kind == OpKind::Revolve || o.kind == OpKind::Hole) && o.sketch == s->id) ||
                            (o.kind == OpKind::Loft && std::find(o.sections.begin(), o.sections.end(), s->id) != o.sections.end()))
                            throw CommandError("refused", ctx.say(o.name + " uses " + s->name + "; delete it first.", o.name + " usa " + s->name + "; bórrala antes."));
                    const auto id = s->id;
@@ -674,7 +845,7 @@ void registerPartCommands(CommandRegistry& R) {
                const Body b = partBody(ctx, in["body"]);
                auto m = std::make_shared<Model>(*b.model);
                const Operation& src = findOperation(ctx, *m, in["operation"]);
-               if (src.kind == OpKind::Fillet || src.kind == OpKind::SurfaceCut)
+               if (src.kind == OpKind::Fillet || src.kind == OpKind::Chamfer || src.kind == OpKind::SurfaceCut)
                    throw CommandError("invalid_input", ctx.say("A pattern repeats what an operation adds or cuts; " + src.name + " changes the part in place.",
                                                                "Un patrón repite lo que una operación añade o corta; " + src.name + " cambia la pieza donde está."));
                Operation o;
@@ -885,6 +1056,35 @@ void registerPartCommands(CommandRegistry& R) {
                    throw CommandError("failed", e.what());
                }
                return json{{"path", p.string()}, {"bytes", fs::file_size(p)}, {"summary", ctx.say("Wrote " + p.filename().string() + ".", "Escrito " + p.filename().string() + ".")}};
+           }});
+
+    R.add({"part.export_mesh", "file", {"Export mesh (STL, 3MF...)", "Exportar malla (STL, 3MF...)"},
+           {"Write a part's solid as a triangle mesh, to print it or use it in a slicer: STL, 3MF, OBJ or PLY by the file's extension (millimetres). deflection is how far the triangles may lie from the exact surface (default 0.02 mm). Refuses to overwrite unless overwrite is true.",
+            "Escribe el sólido de una pieza como malla de triángulos, para imprimirla o usarla en un laminador: STL, 3MF, OBJ o PLY según la extensión del archivo (milímetros). deflection es cuánto pueden separarse los triángulos de la superficie exacta (por defecto 0,02 mm). No sobrescribe salvo con overwrite."},
+           object({{"body", body(kPart)}, {"path", path({"File to write", "Archivo a escribir"}, true, "STL (*.stl);;3MF (*.3mf);;OBJ (*.obj);;PLY (*.ply)")},
+                   {"deflection", number({"Largest distance from the exact surface", "Mayor distancia a la superficie exacta"}, 0.02, 0.0005, 5.0, "mm")},
+                   {"overwrite", boolean({"Replace the file if it exists", "Reemplazar el archivo si existe"}, false)}},
+                  {"body", "path"}),
+           false, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               if (b.solid.empty()) throw CommandError("failed", ctx.say(b.name + " has no solid yet.", b.name + " aún no tiene sólido."));
+               const fs::path p = ctx.paths.check(in["path"].get<std::string>(), true);
+               if (fs::exists(p) && !in["overwrite"].get<bool>())
+                   throw CommandError("refused", ctx.say(p.string() + " already exists; pass overwrite: true to replace it.", p.string() + " ya existe; usa overwrite: true para reemplazarlo."));
+               try {
+                   const auto fmt = formatFromPath(p);
+                   if (fmt != MeshFormat::Stl && fmt != MeshFormat::StlAscii && fmt != MeshFormat::ThreeMf && fmt != MeshFormat::Obj && fmt != MeshFormat::Ply && fmt != MeshFormat::PlyAscii)
+                       throw CommandError("invalid_input", ctx.say("Use .stl, .3mf, .obj or .ply.", "Usa .stl, .3mf, .obj o .ply."));
+                   const SolidTessellation t = b.solid.tessellate(in["deflection"].get<double>());
+                   writeMesh(t.mesh, p, fmt);
+                   return json{{"path", p.string()}, {"bytes", fs::file_size(p)}, {"triangles", t.mesh.faces.size()},
+                               {"summary", ctx.say("Wrote " + p.filename().string() + ".", "Escrito " + p.filename().string() + ".")}};
+               } catch (const SolidError& e) {
+                   throw CommandError("failed", e.what());
+               } catch (const IoError& e) {
+                   throw CommandError("failed", e.what());
+               }
            }});
 
     R.add({"part.import_step", "file", {"Import STEP", "Importar STEP"},

@@ -1,5 +1,27 @@
 # Cambios · Changelog
 
+## 0.13.0 — 14 de noviembre de 2026 (operaciones sólidas y bocetos, más completos)
+
+- **Nuevas operaciones:** `part.chamfer` (chaflán), `part.hole` (taladro en
+  cada círculo de un boceto: simple, con cajeado o avellanado; con
+  profundidad o a través de todo, con parámetros) y `part.mirror` (simetría
+  de una operación o de toda la pieza respecto a un plano).
+- **Extruir con alcance:** `distance`, `symmetric`, `through_all` y
+  `up_to_face` (hasta una cara plana paralela al boceto), con `reverse`.
+- **Bocetos:** *geometría de construcción* (lazos punteados que no hacen
+  material y admiten restricciones; pueden ser una recta abierta);
+  restricciones respecto al **origen y los ejes** del boceto (botones
+  «+ Origen», «+ Eje X», «+ Eje Y» en el editor; `"origin"`, `"x_axis"`,
+  `"y_axis"` por comando).
+- **Cota de ángulo sin ambigüedad:** es el ángulo antihorario de la primera
+  recta a la segunda, módulo 180 (45° y 135° se resuelven según el lado más
+  cercano al dibujo actual); antes 135° podía no resolverse.
+- **`part.export_mesh`:** exporta la pieza como STL, 3MF, OBJ o PLY, con la
+  desviación máxima a la superficie exacta que se pida.
+- Los comandos nuevos están en la cinta (*Sólido*) y en el menú Pieza; los
+  chaflanes se pueden aplicar a las aristas elegidas en la vista.
+
+
 ## 0.12.1 — 13 de noviembre de 2026 (paso 5: bocetos con restricciones, 2.ª parte)
 
 - **Restricciones y cotas en el editor de bocetos:** una segunda barra con

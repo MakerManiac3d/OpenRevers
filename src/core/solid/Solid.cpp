@@ -20,7 +20,10 @@
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepFilletAPI_MakeChamfer.hxx>
 #include <BRepFilletAPI_MakeFillet.hxx>
+#include <BRepPrimAPI_MakeCone.hxx>
+#include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepGProp.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
@@ -206,6 +209,7 @@ std::vector<std::pair<TopoDS_Face, int>> facesOf(const Profile& p) {
             if (j != i && std::abs(p.loops[j].area()) > std::abs(L.area()) && p.loops[j].contains(q, 0.01)) ++depth;
         out.emplace_back(mf.Face(), depth);
     }
+    if (out.empty()) throw SolidError("the sketch has no loop that makes material (construction geometry does not)");
     std::stable_sort(out.begin(), out.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
     return out;
 }
@@ -489,6 +493,86 @@ Solid Solid::filleted(const std::vector<Vec3d>& points, double r, double tol) co
         f.Build();
         if (!f.IsDone()) throw SolidError("the fillet failed (radius too large for the faces around it?)");
         return make(f.Shape());
+    });
+}
+
+Solid Solid::chamfered(const std::vector<Vec3d>& points, double d, double tol) const {
+    if (d <= 0) throw SolidError("a chamfer needs a distance");
+    return guarded("chamfer", [&] {
+        BRepFilletAPI_MakeChamfer f(shapeOf(*this));
+        TopTools_IndexedMapOfShape edges;
+        TopExp::MapShapes(shapeOf(*this), TopAbs_EDGE, edges);
+        int added = 0;
+        for (const auto& p : points) {
+            const TopoDS_Shape v = BRepBuilderAPI_MakeVertex(pnt(p)).Shape();
+            int best = 0;
+            double bestD = tol;
+            for (int i = 1; i <= edges.Extent(); ++i) {
+                BRepExtrema_DistShapeShape dist(v, edges(i));
+                if (dist.IsDone() && dist.Value() < bestD) { bestD = dist.Value(); best = i; }
+            }
+            if (!best) throw SolidError("no edge within " + std::to_string(tol) + " of a chamfer point");
+            f.Add(d, TopoDS::Edge(edges(best)));
+            ++added;
+        }
+        if (!added) throw SolidError("a chamfer needs at least one edge");
+        f.Build();
+        if (!f.IsDone()) throw SolidError("the chamfer failed (distance too large for the faces around it?)");
+        return make(f.Shape());
+    });
+}
+
+Solid Solid::mirrored(const Vec3d& origin, const Vec3d& normal) const {
+    if (normal.norm() < 1e-12) throw SolidError("the mirror plane needs a normal");
+    return guarded("mirror", [&] {
+        gp_Trsf t;
+        t.SetMirror(gp_Ax2(pnt(origin), dir(normal.normalized())));
+        return make(BRepBuilderAPI_Transform(shapeOf(*this), t, Standard_True).Shape());
+    });
+}
+
+Solid Solid::drill(const Vec3d& origin, const Vec3d& axis, double diameter, double depth, double cbD, double cbDepth, double csD, double csAngle) {
+    if (!(diameter > 0) || !(depth > 0)) throw SolidError("a hole needs a diameter and a depth");
+    if (axis.norm() < 1e-12) throw SolidError("a hole needs a direction");
+    return guarded("hole", [&] {
+        const Vec3d u = axis.normalized();
+        constexpr double out = 0.5;  // the tool starts outside the surface so the cut is clean
+        const double r = 0.5 * diameter;
+        auto cylinder = [&](double radius, double from, double to) {
+            const gp_Ax2 ax(pnt(origin + u * from), dir(u));
+            return BRepPrimAPI_MakeCylinder(ax, radius, to - from).Shape();
+        };
+        TopoDS_Shape tool = cylinder(r, -out, depth);
+        auto join = [&](const TopoDS_Shape& s) {
+            BRepAlgoAPI_Fuse f(tool, s);
+            if (!f.IsDone()) throw SolidError("the hole's tool could not be built");
+            tool = f.Shape();
+        };
+        if (cbD > diameter && cbDepth > 0) join(cylinder(0.5 * cbD, -out, std::min(cbDepth, depth)));
+        if (csD > diameter) {
+            const double half = std::clamp(csAngle, 10.0, 170.0) * 0.5 * kPi / 180;
+            const double h = 0.5 * (csD - diameter) / std::tan(half);
+            const gp_Ax2 ax(pnt(origin), dir(u));
+            join(BRepPrimAPI_MakeCone(ax, 0.5 * csD, r, h).Shape());
+            join(cylinder(0.5 * csD, -out, 0.0));
+        }
+        return make(tool);
+    });
+}
+
+int Solid::faceNear(const Vec3d& p, double tol) const {
+    if (empty()) return -1;
+    return guarded("face", [&] {
+        TopTools_IndexedMapOfShape faces;
+        TopExp::MapShapes(shapeOf(*this), TopAbs_FACE, faces);
+        const TopoDS_Shape v = BRepBuilderAPI_MakeVertex(pnt(p)).Shape();
+        int best = -1;
+        double bestD = tol;
+        for (int i = 1; i <= faces.Extent(); ++i) {
+            BRepExtrema_DistShapeShape d(v, faces(i));
+            if (d.IsDone() && d.Value() < bestD) { bestD = d.Value(); best = i - 1; }
+        }
+        return best;
     });
 }
 

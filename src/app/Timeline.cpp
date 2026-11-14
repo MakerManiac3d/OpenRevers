@@ -33,6 +33,9 @@ QString iconFor(OpKind k) {
         case OpKind::Pattern: return "part.pattern";
         case OpKind::SurfaceCut: return "part.cut_by_surface";
         case OpKind::Thicken: return "part.thicken";
+        case OpKind::Chamfer: return "part.chamfer";
+        case OpKind::Hole: return "part.hole";
+        case OpKind::Mirror: return "part.mirror";
     }
     return "part.edit";
 }

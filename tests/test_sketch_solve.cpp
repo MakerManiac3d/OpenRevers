@@ -111,3 +111,65 @@ TEST(SketchSolve, MeasuresDimensions) {
     EXPECT_FALSE(measureConstraint(p, con(ConstraintKind::Parallel, {edge(0), edge(2)})).has_value());
     EXPECT_EQ(constraintKindFromName("perpendicular"), ConstraintKind::Perpendicular);
 }
+
+TEST(SketchSolve, DimensionsFromTheOriginAndAxes) {
+    Profile p = roughQuad();
+    const SketchRef origin{-1, 0, P::Start}, xAxis{-1, 0, P::Edge}, yAxis{-1, 1, P::Edge};
+    std::vector<SketchConstraint> cs = {
+        con(ConstraintKind::Coincident, {start(0), origin}),
+        con(ConstraintKind::Horizontal, {edge(0)}),
+        con(ConstraintKind::Horizontal, {edge(2)}),
+        con(ConstraintKind::Vertical, {edge(1)}),
+        con(ConstraintKind::Vertical, {edge(3)}),
+        con(ConstraintKind::Distance, {edge(0)}, 30.0),
+        con(ConstraintKind::Distance, {{0, 2, P::Start}, xAxis}, 12.0),  // the top edge is 12 above the x axis
+    };
+    const auto r = solveSketch(p, cs);
+    ASSERT_TRUE(r.solved) << r.message;
+    EXPECT_EQ(r.dof, 0);
+    EXPECT_NEAR(p.loops[0].segments[0].a.x(), 0.0, 1e-9);
+    EXPECT_NEAR(p.loops[0].segments[0].a.y(), 0.0, 1e-9);
+    EXPECT_NEAR(p.loops[0].segments[2].a.y(), 12.0, 1e-6);
+    (void)yAxis;
+    // A point on the y axis, and the measured distance to it.
+    cs = {con(ConstraintKind::Coincident, {start(0), origin}), con(ConstraintKind::Horizontal, {edge(0)}), con(ConstraintKind::Distance, {edge(0)}, 30.0),
+          con(ConstraintKind::OnObject, {{0, 1, P::End}, yAxis})};
+    Profile q = roughQuad();
+    ASSERT_TRUE(solveSketch(q, cs).solved);
+    EXPECT_NEAR(q.loops[0].segments[1].b.x(), 0.0, 1e-6);
+}
+
+TEST(SketchSolve, ConstructionLineAndAnglesInEitherDirection) {
+    // A triangle with an angle given as 135 or as 45 gives the one the sketch is nearer to.
+    for (double want : {45.0, 135.0}) {
+        Profile p;
+        Loop l;
+        const Vec2d a(0, 0), b(20, 0), c(20, 20);
+        l.segments = {Segment::line(a, b), Segment::line(b, c), Segment::line(c, a)};
+        p.loops.push_back(l);
+        // A construction line: an open chain, from the origin out to the right.
+        Loop k;
+        k.construction = true;
+        k.segments = {Segment::line({0, 0}, {10, 3})};
+        p.loops.push_back(k);
+        std::vector<SketchConstraint> cs = {
+            con(ConstraintKind::Fix, {start(0)}),
+            con(ConstraintKind::Horizontal, {edge(0)}),
+            con(ConstraintKind::Angle, {{0, 0, P::Edge}, {0, 2, P::Edge}}, want),
+            con(ConstraintKind::Coincident, {{1, 0, P::Start}, start(0)}),
+            con(ConstraintKind::Parallel, {{1, 0, P::Edge}, edge(2)}),
+        };
+        const auto r = solveSketch(p, cs);
+        ASSERT_TRUE(r.solved) << want << ": " << r.message;
+        const Vec2d u = p.loops[0].segments[0].b - p.loops[0].segments[0].a, v = p.loops[0].segments[2].b - p.loops[0].segments[2].a;
+        double got = std::fmod(std::atan2(u.x() * v.y() - u.y() * v.x(), u.dot(v)) * 180 / 3.14159265358979, 180.0);
+        if (got < 0) got += 180;
+        EXPECT_NEAR(got, want, 1e-6);
+        // The construction line stayed open and follows its constraints.
+        const auto& line = p.loops[1].segments[0];
+        EXPECT_NEAR(line.a.norm(), 0.0, 1e-6);
+        const Vec2d d = line.b - line.a, e = p.loops[0].segments[2].b - p.loops[0].segments[2].a;
+        EXPECT_NEAR(d.x() * e.y() - d.y() * e.x(), 0.0, 1e-6);
+        EXPECT_NEAR(measureConstraint(p, cs[2]).value_or(-1), want, 1e-6);
+    }
+}
