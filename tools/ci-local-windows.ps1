@@ -17,6 +17,9 @@ Refresh-Path
 foreach ($d in "$env:ProgramFiles\CMake\bin", "$env:ProgramFiles\Git\cmd", "$env:ProgramFiles\NSIS", "C:\Program Files\CMake\bin", "C:\Program Files\Git\cmd") {
   if ((Test-Path $d) -and ($env:PATH -notlike "*$d*")) { $env:PATH += ";$d" }
 }
+foreach ($d in (Get-Item "C:\Users\*\AppData\Local\Microsoft\WinGet\Links" -ErrorAction SilentlyContinue)) {
+  if ($env:PATH -notlike "*$($d.FullName)*") { $env:PATH += ";$($d.FullName)" }
+}
 foreach ($d in (Get-ChildItem "C:\Users\*\AppData\Local\Programs\Python\Python3*" -Directory -ErrorAction SilentlyContinue), (Get-ChildItem "$env:ProgramFiles\Python3*" -Directory -ErrorAction SilentlyContinue)) {
   if ($d -and ($env:PATH -notlike "*$($d.FullName)*")) { $env:PATH += ";$($d.FullName);$($d.FullName)\Scripts" }
 }
