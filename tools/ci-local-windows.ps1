@@ -13,6 +13,13 @@ $QtRoot = Join-Path $DepsDir "qt"
 function Step($t) { Write-Host "`n==> $t" -ForegroundColor Cyan }
 function Refresh-Path { $env:PATH = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User") }
 Refresh-Path
+# Un servicio (p. ej. el runner de GitHub) puede no ver el PATH del usuario que instaló las herramientas.
+foreach ($d in "$env:ProgramFiles\CMake\bin", "$env:ProgramFiles\Git\cmd", "$env:ProgramFiles\NSIS", "C:\Program Files\CMake\bin", "C:\Program Files\Git\cmd") {
+  if ((Test-Path $d) -and ($env:PATH -notlike "*$d*")) { $env:PATH += ";$d" }
+}
+foreach ($d in (Get-ChildItem "C:\Users\*\AppData\Local\Programs\Python\Python3*" -Directory -ErrorAction SilentlyContinue), (Get-ChildItem "$env:ProgramFiles\Python3*" -Directory -ErrorAction SilentlyContinue)) {
+  if ($d -and ($env:PATH -notlike "*$($d.FullName)*")) { $env:PATH += ";$($d.FullName);$($d.FullName)\Scripts" }
+}
 function Run { param([string]$Cmd) & cmd /c $Cmd; if ($LASTEXITCODE -ne 0) { throw "Fallo: $Cmd" } }
 
 if ($Deps) {
