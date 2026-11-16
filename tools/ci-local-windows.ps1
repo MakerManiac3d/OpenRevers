@@ -11,6 +11,8 @@ $Repo = (Get-Location).Path
 $Occt = Join-Path $DepsDir "occt"
 $QtRoot = Join-Path $DepsDir "qt"
 function Step($t) { Write-Host "`n==> $t" -ForegroundColor Cyan }
+function Refresh-Path { $env:PATH = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User") }
+Refresh-Path
 function Run { param([string]$Cmd) & cmd /c $Cmd; if ($LASTEXITCODE -ne 0) { throw "Fallo: $Cmd" } }
 
 if ($Deps) {
@@ -19,7 +21,7 @@ if ($Deps) {
   winget install --id Kitware.CMake -e
   winget install --id Python.Python.3.12 -e
   winget install --id NSIS.NSIS -e
-  Write-Host "Cierra y abre PowerShell para que el PATH se actualice y repite SIN -Deps si falta algo." -ForegroundColor Yellow
+  Refresh-Path
   Step "Qt 6.8 (aqtinstall)"
   python -m pip install --upgrade aqtinstall
   python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O $QtRoot
@@ -29,6 +31,7 @@ if (-not $QtDir) { throw "No hay Qt en ${QtRoot}: ejecuta con -Deps." }
 $QtPrefix = Join-Path $QtDir.FullName "msvc2022_64"
 $env:PATH = "$QtPrefix\bin;$Occt\win64\vc14\bin;$env:PATH"
 
+foreach ($t in "cmake", "git", "python") { if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { throw "Falta '$t' en el PATH: cierra y abre PowerShell (como administrador) y repite el script." } }
 if (-not (Test-Path "$Occt\cmake")) {
   Step "Open CASCADE 7.9.3 (solo la primera vez; sobre una hora)"
   $src = Join-Path $DepsDir "occt-src"
