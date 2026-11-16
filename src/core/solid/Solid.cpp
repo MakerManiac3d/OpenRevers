@@ -470,21 +470,46 @@ Solid Solid::transformed(const Eigen::Isometry3d& t) const {
     });
 }
 
-Solid Solid::filleted(const std::vector<Vec3d>& points, double r, double tol) const {
+namespace {
+/// The edge (1-based in `edges`) a pick means: the one at the point, else, with
+/// a hint, the nearest of the same kind and direction within `reach`.
+int pickEdge(const TopTools_IndexedMapOfShape& edges, const Vec3d& p, double tol, const EdgeHint* hint, double reach) {
+    const TopoDS_Shape v = BRepBuilderAPI_MakeVertex(pnt(p)).Shape();
+    int best = 0;
+    double bestD = tol;
+    std::vector<std::pair<double, int>> similar;
+    for (int i = 1; i <= edges.Extent(); ++i) {
+        BRepExtrema_DistShapeShape d(v, edges(i));
+        if (!d.IsDone()) continue;
+        if (d.Value() < bestD) { bestD = d.Value(); best = i; }
+        if (hint && !hint->type.empty() && d.Value() <= reach) {
+            const TopoDS_Edge& e = TopoDS::Edge(edges(i));
+            if (BRep_Tool::Degenerated(e)) continue;
+            BRepAdaptor_Curve c(e);
+            const bool line = c.GetType() == GeomAbs_Line, circle = c.GetType() == GeomAbs_Circle;
+            if ((hint->type == "line" && !line) || (hint->type == "circle" && !circle) || (!line && !circle)) continue;
+            const gp_Dir dir = line ? c.Line().Direction() : c.Circle().Axis().Direction();
+            if (std::abs(hint->dir.x() * dir.X() + hint->dir.y() * dir.Y() + hint->dir.z() * dir.Z()) > 0.98) similar.push_back({d.Value(), i});
+        }
+    }
+    if (best) return best;
+    if (similar.empty()) return 0;
+    std::sort(similar.begin(), similar.end());
+    if (similar.size() > 1 && similar[1].first < 1.25 * similar[0].first + 1e-9) return 0;  // two as near: not clear which
+    return similar[0].second;
+}
+}  // namespace
+
+Solid Solid::filleted(const std::vector<Vec3d>& points, double r, double tol, const std::vector<EdgeHint>& hints) const {
     if (r <= 0) throw SolidError("a fillet needs a radius");
     return guarded("fillet", [&] {
         BRepFilletAPI_MakeFillet f(shapeOf(*this));
         TopTools_IndexedMapOfShape edges;
         TopExp::MapShapes(shapeOf(*this), TopAbs_EDGE, edges);
+        const double reach = 0.25 * (bounds().max() - bounds().min()).norm();
         int added = 0;
-        for (const auto& p : points) {
-            const TopoDS_Shape v = BRepBuilderAPI_MakeVertex(pnt(p)).Shape();
-            int best = 0;
-            double bestD = tol;
-            for (int i = 1; i <= edges.Extent(); ++i) {
-                BRepExtrema_DistShapeShape d(v, edges(i));
-                if (d.IsDone() && d.Value() < bestD) { bestD = d.Value(); best = i; }
-            }
+        for (std::size_t k = 0; k < points.size(); ++k) {
+            const int best = pickEdge(edges, points[k], tol, k < hints.size() ? &hints[k] : nullptr, reach);
             if (!best) throw SolidError("no edge within " + std::to_string(tol) + " of a fillet point");
             f.Add(r, TopoDS::Edge(edges(best)));
             ++added;
@@ -496,21 +521,16 @@ Solid Solid::filleted(const std::vector<Vec3d>& points, double r, double tol) co
     });
 }
 
-Solid Solid::chamfered(const std::vector<Vec3d>& points, double d, double tol) const {
+Solid Solid::chamfered(const std::vector<Vec3d>& points, double d, double tol, const std::vector<EdgeHint>& hints) const {
     if (d <= 0) throw SolidError("a chamfer needs a distance");
     return guarded("chamfer", [&] {
         BRepFilletAPI_MakeChamfer f(shapeOf(*this));
         TopTools_IndexedMapOfShape edges;
         TopExp::MapShapes(shapeOf(*this), TopAbs_EDGE, edges);
+        const double reach = 0.25 * (bounds().max() - bounds().min()).norm();
         int added = 0;
-        for (const auto& p : points) {
-            const TopoDS_Shape v = BRepBuilderAPI_MakeVertex(pnt(p)).Shape();
-            int best = 0;
-            double bestD = tol;
-            for (int i = 1; i <= edges.Extent(); ++i) {
-                BRepExtrema_DistShapeShape dist(v, edges(i));
-                if (dist.IsDone() && dist.Value() < bestD) { bestD = dist.Value(); best = i; }
-            }
+        for (std::size_t k = 0; k < points.size(); ++k) {
+            const int best = pickEdge(edges, points[k], tol, k < hints.size() ? &hints[k] : nullptr, reach);
             if (!best) throw SolidError("no edge within " + std::to_string(tol) + " of a chamfer point");
             f.Add(d, TopoDS::Edge(edges(best)));
             ++added;
@@ -519,6 +539,23 @@ Solid Solid::chamfered(const std::vector<Vec3d>& points, double d, double tol) c
         f.Build();
         if (!f.IsDone()) throw SolidError("the chamfer failed (distance too large for the faces around it?)");
         return make(f.Shape());
+    });
+}
+
+EdgeHint Solid::edgeHintAt(const Vec3d& p, double tol) const {
+    EdgeHint h;
+    if (empty()) return h;
+    return guarded("edge", [&] {
+        TopTools_IndexedMapOfShape edges;
+        TopExp::MapShapes(shapeOf(*this), TopAbs_EDGE, edges);
+        const int i = pickEdge(edges, p, tol, nullptr, 0);
+        if (!i) return h;
+        const ShapeInfo info = edgeInfo(i - 1);
+        if (info.type == "line" || info.type == "circle") {
+            h.type = info.type;
+            h.dir = info.axis;
+        }
+        return h;
     });
 }
 

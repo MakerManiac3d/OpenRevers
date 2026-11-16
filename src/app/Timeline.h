@@ -29,6 +29,7 @@ signals:
     void picked(std::uint64_t body, const QString& item);
     void editRequested(std::uint64_t body, const QString& item);
     void suppressRequested(std::uint64_t body, const QString& item, bool suppressed);
+    void rollbackRequested(std::uint64_t body, const QString& item);  // an operation, or "end"
     void deleteRequested(std::uint64_t body, const QString& item);
 
 private:

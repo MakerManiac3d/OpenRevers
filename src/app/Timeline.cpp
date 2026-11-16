@@ -20,7 +20,7 @@ namespace {
 struct Step {
     std::uint64_t id;  // the model's counter: the order steps were made in
     QString ref, name, icon, tip;
-    bool suppressed{false}, failed{false}, isOperation{false};
+    bool suppressed{false}, failed{false}, isOperation{false}, rolledBack{false};
 };
 
 QString iconFor(OpKind k) {
@@ -89,10 +89,13 @@ void Timeline::showPart(const Body* part, const QString& current) {
         steps.push_back({sk.id, QString::fromStdString(sk.ref()), QString::fromStdString(sk.name), "part.sketch", tr("Sketch") + " · " + QString::fromStdString(sk.ref())});
     for (const auto& sf : part->model->surfaces)
         steps.push_back({sf.id, QString::fromStdString(sf.ref()), QString::fromStdString(sf.name), "part.surface_from_scan", tr("Surface") + " · " + QString::fromStdString(sf.ref())});
+    bool afterRollback = false;
     for (const auto& op : part->model->operations) {
         Step s{op.id, QString::fromStdString(op.ref()), QString::fromStdString(op.name), iconFor(op.kind),
                QString::fromStdString(op.ref() + " · " + opKindName(op.kind) + " · " + opModeName(op.mode))};
         s.suppressed = op.suppressed;
+        s.rolledBack = afterRollback;
+        if (part->model->rollback != 0 && op.id == part->model->rollback) afterRollback = true;
         s.failed = !part->buildError.empty() && part->buildError.find(op.ref()) != std::string::npos;
         s.isOperation = true;
         steps.push_back(s);
@@ -107,6 +110,10 @@ void Timeline::showPart(const Body* part, const QString& current) {
         if (s.suppressed) {
             it->setForeground(palette().brush(QPalette::Disabled, QPalette::Text));
             tip += "\n" + tr("Suppressed: left out of the part");
+        }
+        if (s.rolledBack) {
+            it->setForeground(palette().brush(QPalette::Disabled, QPalette::Text));
+            tip += "\n" + tr("Rolled back: left out until the history is applied again");
         }
         if (s.failed) {
             it->setForeground(QColor(200, 40, 40));
@@ -130,6 +137,10 @@ void Timeline::menuAt(const QPoint& pos) {
     if (op)
         menu.addAction(suppressed ? tr("Bring back into the part") : tr("Suppress (leave out of the part)"), this,
                        [this, ref, suppressed]() { emit suppressRequested(body_, ref, !suppressed); });
+    if (op) {
+        menu.addAction(tr("Roll back to here"), this, [this, ref]() { emit rollbackRequested(body_, ref); });
+        menu.addAction(tr("Apply the whole history"), this, [this]() { emit rollbackRequested(body_, "end"); });
+    }
     menu.addSeparator();
     menu.addAction(tr("Delete"), this, [this, ref]() { emit deleteRequested(body_, ref); });
     menu.exec(list_->viewport()->mapToGlobal(pos));

@@ -650,6 +650,9 @@ void MainWindow::buildDocks() {
     connect(timeline_, &Timeline::suppressRequested, this, [this](std::uint64_t body, const QString& ref, bool on) {
         run("part.edit", {{"body", "b" + std::to_string(body)}, {"operation", ref.toStdString()}, {"suppressed", on}});
     });
+    connect(timeline_, &Timeline::rollbackRequested, this, [this](std::uint64_t body, const QString& ref) {
+        run("part.rollback", {{"body", "b" + std::to_string(body)}, {"operation", ref.toStdString()}});
+    });
     connect(timeline_, &Timeline::deleteRequested, this, [this](std::uint64_t body, const QString& ref) {
         if (QMessageBox::question(this, tr("OpenRevers"), tr("Delete %1 from the part? Undo brings it back.").arg(ref)) != QMessageBox::Yes) return;
         run("part.delete", {{"body", "b" + std::to_string(body)}, {"item", ref.toStdString()}});

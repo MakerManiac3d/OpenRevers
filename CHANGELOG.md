@@ -1,5 +1,16 @@
 # Cambios · Changelog
 
+## 0.15.0 — 16 de noviembre de 2026 (historial y referencias estables)
+
+- **Volver atrás en el historial:** `part.rollback` y, en la línea de tiempo,
+  «Volver atrás hasta aquí» / «Aplicar todo el historial». Las operaciones
+  posteriores quedan fuera de la pieza (en gris) y una operación nueva se
+  añade justo en ese punto. Se guarda en el proyecto.
+- **Referencias de arista estables:** redondeos y chaflanes recuerdan el tipo
+  y la dirección de su arista y la siguen cuando el modelo cambia (antes
+  fallaban si la arista se movía). Si dos aristas parecidas están igual de
+  cerca, no adivina.
+
 ## 0.14.2 — 16 de noviembre de 2026
 
 - `part.compare` da el error **cara por cara** del modelo (desvío medio, dispersión

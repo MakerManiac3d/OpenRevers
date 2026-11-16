@@ -112,6 +112,7 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `part_cut_by_surface` · `part_thicken` | Quitar lo que queda por encima o por debajo de una superficie libre; engrosarla hasta un sólido | Sí |
 | `part_extrude` · `part_revolve` · `part_fillet` | Operaciones; se combinan con la pieza (`new`, `join`, `cut`, `intersect`). Los valores pueden ser números o nombres de parámetros | Sí |
 | `part_parameter` | Crea o cambia un parámetro con nombre; la pieza se reconstruye | Sí |
+| `part_rollback` | Vuelve a una operación anterior del historial (las posteriores quedan retrocedidas pero siguen en la lista); una operación nueva se añade justo ahí. `operation: "end"` aplica todo | Sí |
 | `part_edit` · `part_delete` · `part_move` | Cambiar valores, modo o supresión de una operación (también `count`, `thickness`, `keep`, `ruled`); borrar operaciones, bocetos o superficies; mover una operación en el historial. Un cambio que rompe la pieza no se aplica | Sí |
 | `part_list` | Parámetros, bocetos, operaciones y el sólido (volumen, área, caras, tamaño) | No |
 | `part_compare` | Distancias con signo del escaneo al sólido: mediana, percentiles 90 y 95, parte dentro de ±tolerancia y **zonas** fuera de ella (centro, tamaño, % del escaneo, distancia media y lado). Con `faces` (por defecto) da también el error cara por cara (media, dispersión = textura, p95, peor caso) y con `texture` (mm) esa banda no cuenta como error. Con `colorMap` colorea el escaneo en la vista (no es un paso de deshacer) | No |

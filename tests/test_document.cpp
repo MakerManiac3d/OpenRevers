@@ -1062,3 +1062,59 @@ TEST(Commands, CompareFaceByFaceAndDiscountTheTexture) {
     EXPECT_GT(net, plain + 10.0);
     EXPECT_FALSE(f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"faces", false}, {"colorMap", false}}).contains("faces"));
 }
+
+TEST(Commands, FilletFollowsItsEdgeWhenTheModelChanges) {
+    Fixture f;
+    f.run("part.new", {{"name", "Block"}});
+    f.run("part.parameter", {{"body", "b1"}, {"name", "height"}, {"value", 3.0}});
+    json loops = json::array();
+    loops.push_back(json::array({{{"type", "line"}, {"from", {0, 0}}, {"to", {30, 0}}}, {{"type", "line"}, {"from", {30, 0}}, {"to", {30, 12}}},
+                                 {{"type", "line"}, {"from", {30, 12}}, {"to", {0, 12}}}, {{"type", "line"}, {"from", {0, 12}}, {"to", {0, 0}}}}));
+    f.run("part.sketch", {{"body", "b1"}, {"loops", loops}});
+    f.run("part.extrude", {{"body", "b1"}, {"sketch", "s1"}, {"end", "height"}, {"mode", "new"}});
+    // Round the top front edge (it runs along x at y = 0, z = 3).
+    f.run("part.fillet", {{"body", "b1"}, {"points", {{15.0, 0.0, 3.0}}}, {"radius", 0.5}});
+    const double rounded = (1.0 - 3.14159265358979 / 4.0) * 0.25 * 30.0;
+    // The block grows to 5 mm: the edge is no longer where it was picked, yet the round follows it.
+    const json t = f.run("part.parameter", {{"body", "b1"}, {"name", "height"}, {"value", 5.0}});
+    EXPECT_NEAR(t["solid"]["volume"].get<double>(), 30.0 * 12.0 * 5.0 - rounded, 0.05);
+    // A pick with no such edge anywhere near it is still refused.
+    EXPECT_THROW(f.run("part.fillet", {{"body", "b1"}, {"points", {{15.0, 6.0, 2.5}}}, {"radius", 0.5}}), CommandError);
+}
+
+TEST(Commands, RollBackTheHistoryAndAddThere) {
+    Fixture f;
+    f.run("part.new", {{"name", "Block"}});
+    json loops = json::array();
+    loops.push_back(json::array({{{"type", "line"}, {"from", {0, 0}}, {"to", {30, 0}}}, {{"type", "line"}, {"from", {30, 0}}, {"to", {30, 12}}},
+                                 {{"type", "line"}, {"from", {30, 12}}, {"to", {0, 12}}}, {{"type", "line"}, {"from", {0, 12}}, {"to", {0, 0}}}}));
+    f.run("part.sketch", {{"body", "b1"}, {"loops", loops}});
+    const json e = f.run("part.extrude", {{"body", "b1"}, {"sketch", "s1"}, {"end", 3.0}, {"mode", "new"}});
+    const std::string extrude = e["ref"];
+    const double box = 30.0 * 12.0 * 3.0;
+    const json fl = f.run("part.fillet", {{"body", "b1"}, {"points", {{15.0, 0.0, 3.0}}}, {"radius", 1.0}});
+    const double rounded = fl["solid"]["volume"].get<double>();
+    EXPECT_LT(rounded, box - 1.0);
+
+    // Back to the extrusion: the block as it was, the fillet listed as rolled back.
+    const json back = f.run("part.rollback", {{"body", "b1"}, {"operation", extrude}});
+    EXPECT_NEAR(back["solid"]["volume"].get<double>(), box, 1e-3);
+    EXPECT_EQ(back["rollback"], extrude);
+    ASSERT_EQ(back["operations"].size(), 2u);
+    EXPECT_FALSE(back["operations"][0].contains("rolledBack"));
+    EXPECT_TRUE(back["operations"][1]["rolledBack"].get<bool>());
+
+    // An operation added there goes right after the point, and the point moves onto it.
+    const json ch = f.run("part.chamfer", {{"body", "b1"}, {"points", {{15.0, 12.0, 3.0}}}, {"distance", 1.0}});
+    ASSERT_EQ(ch["operations"].size(), 3u);
+    EXPECT_EQ(ch["operations"][1]["kind"], "chamfer");
+    EXPECT_EQ(ch["operations"][2]["kind"], "fillet");
+    EXPECT_EQ(ch["rollback"], ch["ref"]);
+    EXPECT_LT(ch["solid"]["volume"].get<double>(), box - 0.1);
+
+    // The whole history applies again: both the chamfer and the fillet.
+    const json all = f.run("part.rollback", {{"body", "b1"}, {"operation", "end"}});
+    EXPECT_FALSE(all.contains("rollback"));
+    EXPECT_LT(all["solid"]["volume"].get<double>(), ch["solid"]["volume"].get<double>());
+    EXPECT_THROW(f.run("part.rollback", {{"body", "b1"}, {"operation", "o99"}}), CommandError);
+}

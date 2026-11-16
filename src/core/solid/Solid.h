@@ -46,6 +46,14 @@ struct ShapeInfo {
     double size{0.0};                // face: area (mm²); edge: length (mm)
 };
 
+/// What an edge was when it was picked, to find it again after the model
+/// changes: its kind ("line", "circle", ...) and direction (a line's direction,
+/// a circle's axis). Empty: only the picked point is known.
+struct EdgeHint {
+    std::string type;
+    Vec3d dir{Vec3d::Zero()};
+};
+
 class Solid {
 public:
     Solid();
@@ -79,11 +87,16 @@ public:
     Solid cut(const Solid& other) const;
     Solid common(const Solid& other) const;
     Solid transformed(const Eigen::Isometry3d& t) const;
-    /// Rounds the edges whose both ends lie within `tolerance` of the given
-    /// points (an edge is picked by a point on it), with radius r.
-    Solid filleted(const std::vector<Vec3d>& edgePoints, double r, double tolerance = 0.05) const;
+    /// Rounds the edges picked by points on them (within `tolerance`), with
+    /// radius r. When no edge lies at a point (the model changed since it was
+    /// picked) and a hint is given, the nearest edge of the same kind and
+    /// direction within a quarter of the solid's size is taken instead, if
+    /// only one is clearly the nearest.
+    Solid filleted(const std::vector<Vec3d>& edgePoints, double r, double tolerance = 0.05, const std::vector<EdgeHint>& hints = {}) const;
     /// Bevels the same kind of picked edges, `d` back along both faces.
-    Solid chamfered(const std::vector<Vec3d>& edgePoints, double d, double tolerance = 0.05) const;
+    Solid chamfered(const std::vector<Vec3d>& edgePoints, double d, double tolerance = 0.05, const std::vector<EdgeHint>& hints = {}) const;
+    /// The hint of the edge at `p` (empty when none lies within `tolerance`).
+    EdgeHint edgeHintAt(const Vec3d& p, double tolerance = 0.05) const;
     /// The solid reflected in the plane through `origin` with this normal.
     Solid mirrored(const Vec3d& origin, const Vec3d& normal) const;
     /// The tool of a hole, to cut with: from `origin` (on the surface) along

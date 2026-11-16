@@ -75,6 +75,7 @@ struct Operation {
     Value angle{360.0, {}};
     // fillet: edges picked by points on them, and the radius
     std::vector<Vec3d> edgePoints;
+    std::vector<EdgeHint> edgeHints;  // what each picked edge was, to find it again when the model changes
     Value radius;
     // import: a solid read from a file (Open CASCADE text)
     std::string brep;
@@ -108,6 +109,9 @@ struct Model {
     std::vector<FreeSurface> surfaces;
     std::vector<Operation> operations;
     std::uint64_t nextId{1};
+    /// Rolled back: the operation (id) after which the later ones are left out
+    /// of the part, as if the history stopped there; 0: the whole history.
+    std::uint64_t rollback{0};
 
     const Sketch* sketch(const std::string& refOrName) const;
     const Operation* operation(const std::string& refOrName) const;
@@ -123,6 +127,10 @@ struct BuildResult {
     std::string error;
 };
 BuildResult rebuild(const Model& model);
+
+/// Adds an operation to the history: at the end, or, when rolled back, right
+/// after the rollback point (which then moves onto it).
+void addOperation(Model& model, Operation op);
 
 /// Solves a sketch's constraints, with the dimensions that name a parameter
 /// taking its value from the model. Returns an empty string when solved,

@@ -63,8 +63,11 @@ json partJson(const Body& b) {
         }
         sketches.push_back(js);
     }
+    bool afterRollback = false;
     for (const auto& o : m.operations) {
         json jo{{"ref", o.ref()}, {"name", o.name}, {"kind", opKindName(o.kind)}, {"mode", opModeName(o.mode)}, {"suppressed", o.suppressed}};
+        if (afterRollback) jo["rolledBack"] = true;
+        if (m.rollback != 0 && o.id == m.rollback) afterRollback = true;
         auto sketchRef = [&](std::uint64_t id) { return "s" + std::to_string(id); };
         switch (o.kind) {
             case OpKind::Extrude:
@@ -116,6 +119,7 @@ json partJson(const Body& b) {
         surfaces.push_back({{"ref", f.ref()}, {"name", f.name}, {"poles", {f.surface.nu, f.surface.nv}}, {"rms", r4(f.rms)}, {"maxDeviation", r4(f.maxDeviation)},
                             {"normal", j3(f.surface.normal)}, {"size", {r4(f.surface.width), r4(f.surface.height)}}});
     json out{{"body", b.ref()}, {"name", b.name}, {"parameters", m.parameters}, {"sketches", sketches}, {"operations", ops}};
+    if (m.rollback != 0) out["rollback"] = "o" + std::to_string(m.rollback);
     if (!m.surfaces.empty()) out["surfaces"] = surfaces;
     if (!b.solid.empty()) {
         const auto bb = b.solid.bounds();
@@ -486,7 +490,7 @@ void registerPartCommands(CommandRegistry& R) {
                    throw CommandError("invalid_input", ctx.say("This extent needs end.", "Este alcance necesita end."));
                o.mode = *opModeFromName(in["mode"].get<std::string>());
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, o.mode == OpMode::Cut ? ctx.say("Cut", "Corte") : ctx.say("Extrude", "Extrusión"));
-               m->operations.push_back(o);
+               addOperation(*m, o);
                json out = partJson(applyModel(ctx, b, m));
                out["ref"] = o.ref();
                out["summary"] = ctx.say("Added " + o.name + ".", "Añadida " + o.name + ".");
@@ -520,7 +524,7 @@ void registerPartCommands(CommandRegistry& R) {
                o.angle = valueFromJson(in["angle"]);
                o.mode = *opModeFromName(in["mode"].get<std::string>());
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Revolve", "Revolución"));
-               m->operations.push_back(o);
+               addOperation(*m, o);
                json out = partJson(applyModel(ctx, b, m));
                out["ref"] = o.ref();
                out["summary"] = ctx.say("Added " + o.name + ".", "Añadida " + o.name + ".");
@@ -543,10 +547,11 @@ void registerPartCommands(CommandRegistry& R) {
                for (const auto& p : in["points"]) {
                    if (!p.is_array() || p.size() != 3) throw CommandError("invalid_input", ctx.say("Each point must be [x, y, z].", "Cada punto debe ser [x, y, z]."));
                    o.edgePoints.push_back(v3(p));
+                   o.edgeHints.push_back(b.solid.edgeHintAt(v3(p)));
                }
                o.radius = valueFromJson(in["radius"]);
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Fillet", "Redondeo"));
-               m->operations.push_back(o);
+               addOperation(*m, o);
                json out = partJson(applyModel(ctx, b, m));
                out["ref"] = o.ref();
                out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
@@ -569,10 +574,11 @@ void registerPartCommands(CommandRegistry& R) {
                for (const auto& p : in["points"]) {
                    if (!p.is_array() || p.size() != 3) throw CommandError("invalid_input", ctx.say("Each point must be [x, y, z].", "Cada punto debe ser [x, y, z]."));
                    o.edgePoints.push_back(v3(p));
+                   o.edgeHints.push_back(b.solid.edgeHintAt(v3(p)));
                }
                o.radius = valueFromJson(in["distance"]);
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Chamfer", "Chaflán"));
-               m->operations.push_back(o);
+               addOperation(*m, o);
                json out = partJson(applyModel(ctx, b, m));
                out["ref"] = o.ref();
                out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
@@ -620,7 +626,7 @@ void registerPartCommands(CommandRegistry& R) {
                if (o.holeKind == HoleKind::Countersink && unset(o.csDiameter))
                    throw CommandError("invalid_input", ctx.say("A countersink needs csDiameter.", "Un avellanado necesita csDiameter."));
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Hole", "Taladro"));
-               m->operations.push_back(o);
+               addOperation(*m, o);
                json out = partJson(applyModel(ctx, b, m));
                out["ref"] = o.ref();
                out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
@@ -656,7 +662,7 @@ void registerPartCommands(CommandRegistry& R) {
                o.axisDirection = v3(in["planeNormal"]);
                if (o.axisDirection.norm() < 1e-9) throw CommandError("invalid_input", ctx.say("The plane needs a normal.", "El plano necesita una normal."));
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Mirror", "Simetría"));
-               m->operations.push_back(o);
+               addOperation(*m, o);
                json out = partJson(applyModel(ctx, b, m));
                out["ref"] = o.ref();
                out["summary"] = ctx.say("Added " + o.name + ".", "Añadida " + o.name + ".");
@@ -768,6 +774,10 @@ void registerPartCommands(CommandRegistry& R) {
                    std::erase_if(m->surfaces, [&](const FreeSurface& x) { return x.id == id; });
                } else {
                    const auto id = findOperation(ctx, *m, in["item"]).id;
+                   if (m->rollback == id) {  // the rollback point goes to the operation before it
+                       const auto at = std::find_if(m->operations.begin(), m->operations.end(), [&](const Operation& x) { return x.id == id; });
+                       m->rollback = at == m->operations.begin() ? 0 : (at - 1)->id;
+                   }
                    std::erase_if(m->operations, [&](const Operation& x) { return x.id == id; });
                }
                Body nb = b;
@@ -779,6 +789,28 @@ void registerPartCommands(CommandRegistry& R) {
                }
                json out = partJson(nb);
                out["summary"] = ctx.say("Deleted " + item + ".", "Borrado " + item + ".");
+               return out;
+           }});
+
+    R.add({"part.rollback", "part", {"Roll back the history", "Volver atrás en el historial"},
+           {"Go back to an earlier point of the part's history: the operations after it are left out of the part (they stay in the list, shown as rolled back), so you can look at it as it was, or add an operation right there (it goes after the point). With operation \"end\" (the default) the whole history applies again.",
+            "Vuelve a un punto anterior del historial de la pieza: las operaciones posteriores quedan fuera de la pieza (siguen en la lista, marcadas como retrocedidas), para verla como era o añadir una operación justo ahí (va detrás del punto). Con operation \"end\" (por defecto) se aplica de nuevo todo el historial."},
+           object({{"body", body(kPart)}, {"operation", kind(string({"The operation to stop after: o1 or its name; \"end\" for the whole history", "La operación tras la que parar: o1 o su nombre; \"end\" para todo el historial"}, "end"), "operation")}},
+                  {"body"}),
+           true, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               auto m = std::make_shared<Model>(*b.model);
+               const std::string to = in.value("operation", std::string("end"));
+               if (to.empty() || to == "end") {
+                   m->rollback = 0;
+               } else {
+                   const Operation& o = findOperation(ctx, *m, in["operation"]);
+                   m->rollback = o.id == m->operations.back().id ? 0 : o.id;
+               }
+               json out = partJson(applyModel(ctx, b, m));
+               out["summary"] = m->rollback ? ctx.say("Rolled back to o" + std::to_string(m->rollback) + ".", "Vuelto a o" + std::to_string(m->rollback) + ".")
+                                            : ctx.say("The whole history applies.", "Se aplica todo el historial.");
                return out;
            }});
 
@@ -823,7 +855,7 @@ void registerPartCommands(CommandRegistry& R) {
                o.ruled = in["ruled"].get<bool>();
                o.mode = *opModeFromName(in["mode"].get<std::string>());
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, "Loft");
-               m->operations.push_back(o);
+               addOperation(*m, o);
                json out = partJson(applyModel(ctx, b, m));
                out["ref"] = o.ref();
                out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
@@ -858,7 +890,7 @@ void registerPartCommands(CommandRegistry& R) {
                o.count = valueFromJson(in["count"]);
                o.angle = valueFromJson(in["angle"]);
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Pattern", "Patrón"));
-               m->operations.push_back(o);
+               addOperation(*m, o);
                json out = partJson(applyModel(ctx, b, m));
                out["ref"] = o.ref();
                out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
@@ -981,7 +1013,7 @@ void registerPartCommands(CommandRegistry& R) {
                o.surface = f->id;
                o.keepBelow = in["keep"].get<std::string>() == "below";
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Surface cut", "Corte por superficie"));
-               m->operations.push_back(o);
+               addOperation(*m, o);
                json out = partJson(applyModel(ctx, b, m));
                out["ref"] = o.ref();
                out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
@@ -1008,7 +1040,7 @@ void registerPartCommands(CommandRegistry& R) {
                o.thickness = valueFromJson(in["thickness"]);
                o.mode = *opModeFromName(in["mode"].get<std::string>());
                o.name = in.contains("name") ? in["name"].get<std::string>() : uniqueName(*m, ctx.say("Thicken", "Engrosado"));
-               m->operations.push_back(o);
+               addOperation(*m, o);
                json out = partJson(applyModel(ctx, b, m));
                out["ref"] = o.ref();
                out["summary"] = ctx.say("Added " + o.name + ".", "Añadido " + o.name + ".");
@@ -1103,7 +1135,7 @@ void registerPartCommands(CommandRegistry& R) {
                } catch (const SolidError& e) {
                    throw CommandError("failed", e.what());
                }
-               m->operations.push_back(o);
+               addOperation(*m, o);
                const BuildResult r = rebuild(*m);
                const Body b = ctx.doc.addPart(in.contains("name") ? in["name"].get<std::string>() : p.stem().string(), m, r.solid, partTriangles(r.solid), r.error);
                json out = partJson(b);

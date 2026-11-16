@@ -37,6 +37,20 @@ double Model::value(const Value& v) const {
     return v.negate ? -it->second : it->second;
 }
 
+void addOperation(Model& m, Operation op) {
+    if (m.rollback != 0) {
+        const auto it = std::find_if(m.operations.begin(), m.operations.end(), [&](const Operation& o) { return o.id == m.rollback; });
+        if (it != m.operations.end()) {
+            const auto id = op.id;
+            m.operations.insert(it + 1, std::move(op));
+            m.rollback = id;
+            return;
+        }
+    }
+    m.rollback = 0;
+    m.operations.push_back(std::move(op));
+}
+
 BuildResult rebuild(const Model& m) {
     BuildResult r;
     std::map<std::uint64_t, Solid> pieceOf;  // what each operation made, for patterns
@@ -50,7 +64,10 @@ BuildResult rebuild(const Model& m) {
             if (s.id == id) return s;
         throw SolidError("its surface was deleted");
     };
+    bool pastRollback = false;
     for (const auto& op : m.operations) {
+        if (pastRollback) break;
+        pastRollback = m.rollback != 0 && op.id == m.rollback;
         if (op.suppressed) continue;
         try {
             Solid piece;
@@ -164,11 +181,11 @@ BuildResult rebuild(const Model& m) {
                 case OpKind::Import: piece = Solid::fromBrep(op.brep); break;
                 case OpKind::Fillet:
                     if (r.solid.empty()) throw SolidError("there is nothing to round yet");
-                    r.solid = r.solid.filleted(op.edgePoints, m.value(op.radius));
+                    r.solid = r.solid.filleted(op.edgePoints, m.value(op.radius), 0.05, op.edgeHints);
                     continue;
                 case OpKind::Chamfer:
                     if (r.solid.empty()) throw SolidError("there is nothing to bevel yet");
-                    r.solid = r.solid.chamfered(op.edgePoints, m.value(op.radius));
+                    r.solid = r.solid.chamfered(op.edgePoints, m.value(op.radius), 0.05, op.edgeHints);
                     continue;
                 case OpKind::SurfaceCut:
                     r.solid = r.solid.cutBySurface(surfaceOf(op.surface).surface, op.keepBelow);
@@ -539,6 +556,9 @@ json modelToJson(const Model& m) {
                 json pts = json::array();
                 for (const auto& p : o.edgePoints) pts.push_back(v3(p));
                 jo["edgePoints"] = pts;
+                json hints = json::array();
+                for (const auto& h : o.edgeHints) hints.push_back({{"type", h.type}, {"dir", v3(h.dir)}});
+                if (!o.edgeHints.empty()) jo["edgeHints"] = hints;
                 jo["radius"] = valueToJson(o.radius);
                 break;
             }
@@ -559,6 +579,7 @@ json modelToJson(const Model& m) {
     json sf = json::array();
     for (const auto& f : m.surfaces) sf.push_back(surfaceToJson(f));
     json out{{"parameters", m.parameters}, {"sketches", sk}, {"operations", ops}, {"nextId", m.nextId}};
+    if (m.rollback != 0) out["rollback"] = m.rollback;
     if (!m.surfaces.empty()) out["surfaces"] = sf;
     return out;
 }
@@ -592,6 +613,7 @@ Model modelFromJson(const json& j) {
         if (jo.contains("axisDir")) o.axisDir = v2(jo["axisDir"], "axisDir");
         if (jo.contains("angle")) o.angle = valueFromJson(jo["angle"]);
         for (const auto& p : jo.value("edgePoints", json::array())) o.edgePoints.push_back(v3(p, "edgePoints"));
+        for (const auto& h : jo.value("edgeHints", json::array())) o.edgeHints.push_back({h.value("type", std::string()), h.contains("dir") ? v3(h["dir"], "edgeHints") : Vec3d::Zero()});
         if (jo.contains("radius")) o.radius = valueFromJson(jo["radius"]);
         o.brep = jo.value("brep", "");
         o.sections = jo.value("sections", std::vector<std::uint64_t>{});
@@ -617,6 +639,7 @@ Model modelFromJson(const json& j) {
         m.operations.push_back(std::move(o));
     }
     for (const auto& jf : j.value("surfaces", json::array())) m.surfaces.push_back(surfaceFromJson(jf));
+    m.rollback = j.value("rollback", std::uint64_t{0});
     m.nextId = j.value("nextId", std::uint64_t{1});
     for (const auto& s : m.sketches) m.nextId = std::max(m.nextId, s.id + 1);
     for (const auto& o : m.operations) m.nextId = std::max(m.nextId, o.id + 1);

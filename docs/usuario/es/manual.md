@@ -262,6 +262,17 @@ antes (panel de comandos, CLI o agente):
 - `mesh.cast`: lanza uno o varios rayos y da los cruces, las cuerdas (grosor de pared) y los
   huecos.
 
+### Volver atrás en el historial y referencias de aristas
+
+En la línea de tiempo, clic derecho en una operación → **Volver atrás hasta aquí**
+(`part.rollback`): las operaciones posteriores quedan fuera de la pieza, en gris, y
+puedes ver la pieza como era o añadir una operación justo ahí. **Aplicar todo el
+historial** lo deja como estaba.
+
+Un redondeo o un chaflán recuerda de su arista el tipo y la dirección: si cambias una
+cota y la arista se desplaza, la operación la sigue (si dos aristas parecidas están
+igual de cerca, no adivina y te avisa).
+
 ### Comparar por caras y descontar la textura
 
 `part.compare` da, además de las cifras globales, el error **cara por cara** del modelo: la
