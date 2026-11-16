@@ -3,11 +3,9 @@
 # installer. A tag v* publishes the installer as a GitHub release.
 name: Build
 
+# Los runners de GitHub (este archivo) quedan solo a mano: el CI diario corre en
+# el equipo del autor con local.yml (runners propios).
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
   workflow_dispatch:
 
 permissions:

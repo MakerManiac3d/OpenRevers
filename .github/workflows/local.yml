@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# CI en runners propios (el equipo del autor): compila y prueba en local, sin gastar
+# minutos de GitHub. Windows es obligatorio; Linux (WSL) solo si la variable del
+# repositorio LINUX_RUNNER vale "true". Los pasos viven en tools/ci-local*.
+name: Local
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: [self-hosted, windows]
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: CI local (Windows)
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File tools\ci-local-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OpenRevers-Windows
+          path: |
+            build-ci/OpenRevers-*.exe
+            build-ci/OpenRevers-*.zip
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-view-windows
+          path: view-ci.png
+          if-no-files-found: ignore
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "OpenRevers ${GITHUB_REF_NAME#v}" --notes "See CHANGELOG.md."
+          gh release upload "$GITHUB_REF_NAME" build-ci/OpenRevers-*.exe build-ci/OpenRevers-*.zip --clobber
+
+  linux:
+    if: ${{ vars.LINUX_RUNNER == 'true' }}
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: CI local (Linux)
+        run: tools/ci-local.sh
