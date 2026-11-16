@@ -41,7 +41,7 @@ if (-not $QtDir) { throw "No hay Qt en ${QtRoot}: ejecuta con -Deps." }
 $QtPrefix = Join-Path $QtDir.FullName "msvc2022_64"
 $env:PATH = "$QtPrefix\bin;$Occt\win64\vc14\bin;$env:PATH"
 
-foreach ($t in "cmake", "git", "python") { if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { Write-Host "Usuario: $(whoami)  HOME: $env:USERPROFILE"; Write-Host "PATH: $env:PATH"; throw "Falta '$t' en el PATH: cierra y abre PowerShell (como administrador) y repite el script." } }
+foreach ($t in "cmake", "git") { if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { Write-Host "Usuario: $(whoami)  HOME: $env:USERPROFILE"; Write-Host "PATH: $env:PATH"; throw "Falta '$t' en el PATH: cierra y abre PowerShell (como administrador) y repite el script." } }
 if (-not (Test-Path "$Occt\cmake")) {
   Step "Open CASCADE 7.9.3 (solo la primera vez; sobre una hora)"
   $src = Join-Path $DepsDir "occt-src"
@@ -71,7 +71,7 @@ Step "Install into a staging folder"
 cmake --install build-ci --config Release; if ($LASTEXITCODE -ne 0) { throw "Fallo al instalar" }
 Step "End to end (the installed app driven through MCP)"
 $env:QT_OPENGL = "software"
-python tests\e2e_mcp.py --app "$stage\bin\OpenRevers.exe" --cli "$stage\bin\openrevers-cli.exe" --picture view-ci.png
+if (Get-Command python -ErrorAction SilentlyContinue) { python tests\e2e_mcp.py --app "$stage\bin\OpenRevers.exe" --cli "$stage\bin\openrevers-cli.exe" --picture view-ci.png; if ($LASTEXITCODE -ne 0) { throw "Fallo la prueba e2e" } } else { Write-Host "AVISO: no hay python para todo el equipo; se omite la prueba e2e." -ForegroundColor Yellow }
 if ($LASTEXITCODE -ne 0) { throw "Falla el e2e" }
 Step "Installer"
 Push-Location build-ci
