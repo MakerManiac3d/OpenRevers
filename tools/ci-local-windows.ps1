@@ -25,7 +25,7 @@ if ($Deps) {
   python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O $QtRoot
 }
 $QtDir = Get-ChildItem $QtRoot -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $QtDir) { throw "No hay Qt en $QtRoot: ejecuta con -Deps." }
+if (-not $QtDir) { throw "No hay Qt en ${QtRoot}: ejecuta con -Deps." }
 $QtPrefix = Join-Path $QtDir.FullName "msvc2022_64"
 $env:PATH = "$QtPrefix\bin;$Occt\win64\vc14\bin;$env:PATH"
 
