@@ -321,7 +321,9 @@ puedes retocar cualquier parte sin salir del programa.
    tolerancia, de amarillo a rojo donde al modelo le falta material y de
    cian a azul donde le sobra. *Cuerpo → Quitar colores de desviación* lo
    devuelve a su color.
-6. **Archivo → Exportar STEP.** Para fabricar, `part.drawing` (agente o
+6. **Archivo → Exportar STEP.** Para entregar la comparación, `part.compare`
+   con `report` escribe un **informe de desviación** de una página (PDF o SVG).
+   Para fabricar, `part.drawing` (agente o
    línea de órdenes) genera el **plano 2D acotado** en PDF, SVG o DXF: tres
    vistas, líneas ocultas, cotas y cajetín.
 

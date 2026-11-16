@@ -1,5 +1,14 @@
 # Cambios · Changelog
 
+## 0.16.1 — 16 de noviembre de 2026 (informe de desviación)
+
+- **`part.compare` con `report`:** escribe además un **informe de una página**
+  en PDF o SVG: resumen (puntos, % dentro de la tolerancia, mediana, percentiles,
+  peor caso, media y RMS), histograma de la distancia con signo, el escaneo
+  coloreado por su distancia visto desde arriba, de frente y de lado (con la
+  misma leyenda que la vista), tabla cara por cara y zonas fuera de tolerancia.
+  Sale en el idioma de quien lo pide y no sobrescribe sin `overwrite`.
+
 ## 0.16.0 — 16 de noviembre de 2026 (plano 2D acotado)
 
 - **`part.drawing`:** genera el plano de una pieza en **PDF, SVG o DXF** (por la

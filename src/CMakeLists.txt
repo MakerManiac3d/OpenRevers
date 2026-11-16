@@ -54,6 +54,7 @@ add_library(orv_core STATIC
   core/solid/SketchFit.cpp
   core/solid/SketchSolve.cpp
   core/mesh/Distance.cpp
+  core/mesh/DeviationReport.cpp
   core/mesh/MeshProbe.cpp
   core/points/E57.cpp
   core/util/Xml.cpp

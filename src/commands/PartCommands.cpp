@@ -6,6 +6,7 @@
 #include "commands/Command.h"
 #include "commands/PartCommands.h"
 
+#include "core/mesh/DeviationReport.h"
 #include "core/mesh/Distance.h"
 #include "core/solid/BSpline.h"
 #include "core/solid/Drawing.h"
@@ -1208,7 +1209,9 @@ void registerPartCommands(CommandRegistry& R) {
                    {"texture", number({"Surface texture to discount (layer lines, grain): distances up to it count as zero and are taken off the rest (0: none)", "Textura de superficie a descontar (líneas de capa, grano): las distancias hasta ese valor cuentan como cero y se restan al resto (0: ninguna)"}, 0.0, 0.0, 10.0, "mm")},
                    {"faces", boolean({"Also report the error face by face of the model (systematic offset, scatter = texture, worst case)", "Dar también el error cara por cara del modelo (desvío sistemático, dispersión = textura, peor caso)"}, true)},
                    {"colorMap", boolean({"Colour the scan by its distance in the view", "Colorear el escaneo por su distancia en la vista"}, true)},
-                   {"range", number({"Colour scale: full red or blue at ±range (0: five times the tolerance, so the ±tolerance band shows)", "Escala de color: rojo o azul pleno a ±range (0: cinco veces la tolerancia, para que se vea la banda de ±tolerancia)"}, 0, 0, 1000, "mm")}},
+                   {"range", number({"Colour scale: full red or blue at ±range (0: five times the tolerance, so the ±tolerance band shows)", "Escala de color: rojo o azul pleno a ±range (0: cinco veces la tolerancia, para que se vea la banda de ±tolerancia)"}, 0, 0, 1000, "mm")},
+                   {"report", path({"Also write a one-page report (summary, histogram, the scan coloured from three sides, worst faces and zones) to this file: .pdf or .svg", "Escribir además un informe de una página (resumen, histograma, el escaneo coloreado desde tres lados, peores caras y zonas) en este archivo: .pdf o .svg"}, true, "PDF (*.pdf);;SVG (*.svg)")},
+                   {"overwrite", boolean({"Replace the report file if it exists", "Reemplazar el archivo del informe si existe"}, false)}},
                   {"body", "scan"}),
            false, false,
            [](CommandContext& ctx, const json& in) {
@@ -1305,6 +1308,43 @@ void registerPartCommands(CommandRegistry& R) {
                    map->range = static_cast<float>(range > tol ? range : 5 * tol);
                    map->distance.assign(dist.begin(), dist.end());
                    ctx.doc.setDeviation(s.id, map);
+               }
+               if (in.contains("report") && !in["report"].get<std::string>().empty()) {
+                   const fs::path rp = ctx.paths.check(in["report"].get<std::string>(), true);
+                   if (fs::exists(rp) && !in["overwrite"].get<bool>())
+                       throw CommandError("refused", ctx.say(rp.string() + " already exists; pass overwrite: true to replace it.", rp.string() + " ya existe; usa overwrite: true para reemplazarlo."));
+                   DeviationReport rep;
+                   rep.title = ctx.say("Deviation report: ", "Informe de desviación: ") + b.name;
+                   rep.part = b.name;
+                   rep.scan = s.name;
+                   rep.spanish = ctx.lang == "es";
+                   rep.tolerance = tol;
+                   rep.texture = texture;
+                   const double range = in["range"].get<double>();
+                   rep.range = range > tol ? range : 5 * tol;
+                   rep.stats = d;
+                   rep.points = V;
+                   rep.distance = dist;
+                   if (out.contains("faces"))
+                       for (const auto& f : out["faces"]) rep.faces.push_back({f["type"].get<std::string>() + " " + std::to_string(f["face"].get<long long>()), f["points"].get<std::size_t>(), f["mean"].get<double>(),
+                                                                              f["scatter"].get<double>(), f["p95"].get<double>(), f["worst"].get<double>()});
+                   if (out.contains("zones"))
+                       for (const auto& z : out["zones"]) {
+                           ReportZone rz;
+                           for (std::size_t k = 0; k < 3; ++k) {
+                               rz.centre[k] = z["centre"][k].get<double>();
+                               rz.size[k] = z["size"][k].get<double>();
+                           }
+                           rz.percent = z["percent"].get<double>();
+                           rz.meanDistance = z["meanDistance"].get<double>();
+                           rep.zones.push_back(rz);
+                       }
+                   try {
+                       writeDeviationReport(rep, rp);
+                   } catch (const std::exception& e) {
+                       throw CommandError("failed", ctx.say(std::string("Could not write the report: ") + e.what(), std::string("No se pudo escribir el informe: ") + e.what()));
+                   }
+                   out["report"] = rp.string();
                }
                out["summary"] = ctx.say(std::to_string(static_cast<int>(std::round(pct))) + "% of the scan within ±" + std::to_string(tol).substr(0, 5) + " mm; median " +
                                             std::to_string(r4(d.median)).substr(0, 6) + " mm, 95% under " + std::to_string(r4(d.p95)).substr(0, 6) + " mm.",

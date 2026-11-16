@@ -1061,6 +1061,22 @@ TEST(Commands, CompareFaceByFaceAndDiscountTheTexture) {
     const double net = f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"tolerance", 0.25}, {"texture", 0.1}, {"colorMap", false}})["withinPercent"].get<double>();
     EXPECT_GT(net, plain + 10.0);
     EXPECT_FALSE(f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"faces", false}, {"colorMap", false}}).contains("faces"));
+
+    // The one-page report, as PDF and as SVG.
+    const auto pdf = dir / "report.pdf", svg = dir / "report.svg";
+    const json r = f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"tolerance", 0.1}, {"colorMap", false}, {"report", pdf.string()}});
+    EXPECT_EQ(r["report"], pdf.string());
+    std::ifstream in(pdf, std::ios::binary);
+    const std::string pdfText((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    EXPECT_EQ(pdfText.rfind("%PDF", 0), 0u);
+    EXPECT_NE(pdfText.find("%%EOF"), std::string::npos);
+    EXPECT_NE(pdfText.find("Deviation report"), std::string::npos);
+    EXPECT_THROW(f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"colorMap", false}, {"report", pdf.string()}}), CommandError);  // no overwrite
+    f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"colorMap", false}, {"report", svg.string()}});
+    std::ifstream in2(svg);
+    const std::string svgText((std::istreambuf_iterator<char>(in2)), std::istreambuf_iterator<char>());
+    EXPECT_NE(svgText.find("<svg"), std::string::npos);
+    EXPECT_NE(svgText.find("plane"), std::string::npos);  // the faces table
 }
 
 TEST(Commands, FilletFollowsItsEdgeWhenTheModelChanges) {
