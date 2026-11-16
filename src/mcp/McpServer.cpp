@@ -62,7 +62,7 @@ std::optional<std::string> McpServer::handleLine(const std::string& line) {
 }
 
 std::optional<json> McpServer::handle(const json& msg) {
-    if (!msg.is_object() || msg.value("jsonrpc", "") != "2.0") return rpcError(msg.is_object() ? msg.value("id", json()) : json(), -32600, "Invalid request");
+    if (!msg.is_object() || msg.value("jsonrpc", "") != "2.0") return std::optional<json>(rpcError(msg.is_object() ? msg.value("id", json()) : json(), -32600, "Invalid request"));
     const bool isRequest = msg.contains("id") && msg.contains("method");
     if (!msg.contains("method")) return std::nullopt;  // a response to us: we send no requests
     const std::string method = msg["method"].get<std::string>();
@@ -77,10 +77,10 @@ std::optional<json> McpServer::handle(const json& msg) {
         else if (method == "tools/call") result = callTool(params);
         else if (method == "resources/list") result = {{"resources", json::array()}};
         else if (method == "prompts/list") result = {{"prompts", json::array()}};
-        else return rpcError(id, -32601, "Method not found: " + method);
-        return json{{"jsonrpc", "2.0"}, {"id", id}, {"result", result}};
+        else return std::optional<json>(rpcError(id, -32601, "Method not found: " + method));
+        return std::optional<json>(json{{"jsonrpc", "2.0"}, {"id", id}, {"result", result}});
     } catch (const std::exception& e) {
-        return rpcError(id, -32603, e.what());
+        return std::optional<json>(rpcError(id, -32603, e.what()));
     }
 }
 
