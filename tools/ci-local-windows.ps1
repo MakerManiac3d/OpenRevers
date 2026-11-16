@@ -41,7 +41,7 @@ if (-not $QtDir) { throw "No hay Qt en ${QtRoot}: ejecuta con -Deps." }
 $QtPrefix = Join-Path $QtDir.FullName "msvc2022_64"
 $env:PATH = "$QtPrefix\bin;$Occt\win64\vc14\bin;$env:PATH"
 
-foreach ($t in "cmake", "git", "python") { if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { throw "Falta '$t' en el PATH: cierra y abre PowerShell (como administrador) y repite el script." } }
+foreach ($t in "cmake", "git", "python") { if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { Write-Host "Usuario: $(whoami)  HOME: $env:USERPROFILE"; Write-Host "PATH: $env:PATH"; throw "Falta '$t' en el PATH: cierra y abre PowerShell (como administrador) y repite el script." } }
 if (-not (Test-Path "$Occt\cmake")) {
   Step "Open CASCADE 7.9.3 (solo la primera vez; sobre una hora)"
   $src = Join-Path $DepsDir "occt-src"
