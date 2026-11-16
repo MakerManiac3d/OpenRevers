@@ -1,5 +1,14 @@
 # Cambios · Changelog
 
+## 0.16.0 — 16 de noviembre de 2026 (plano 2D acotado)
+
+- **`part.drawing`:** genera el plano de una pieza en **PDF, SVG o DXF** (por la
+  extensión): vistas frontal, superior y derecha (o las que pidas, incluidas
+  trasera, inferior e izquierda), aristas ocultas discontinuas, ejes de
+  agujeros, cotas de longitud y de diámetro, hoja A4/A3/A2, escala estándar
+  automática (o fija) y cajetín con título y escala. No depende de las
+  herramientas HLR de Open CASCADE, así que funciona igual en Windows.
+
 ## 0.15.0 — 16 de noviembre de 2026 (historial y referencias estables)
 
 - **Volver atrás en el historial:** `part.rollback` y, en la línea de tiempo,

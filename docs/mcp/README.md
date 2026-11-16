@@ -100,6 +100,7 @@ usa el del sistema. `--headless` obliga a trabajar sin la ventana.
 | `part_chamfer` | Achaflana aristas (puntos sobre ellas) con una distancia. |
 | `part_hole` | Taladra un agujero en cada círculo de un boceto: simple, con cajeado o avellanado; con profundidad o a través de todo. |
 | `part_mirror` | Refleja una operación (o toda la pieza) en un plano y combina la copia. |
+| `part_drawing` | Plano 2D acotado de la pieza en PDF, SVG o DXF: vistas (`views`: front, top, right, back, bottom, left), hoja A4/A3/A2, `scale` (0 = automática), líneas ocultas, cotas de longitud y de diámetro, título | No |
 | `part_export_mesh` | Escribe la pieza como malla (STL, 3MF, OBJ, PLY). |
 | `part_loft` | Sólido que pasa por varios bocetos en orden (secciones de un álabe, extremos de un conducto), suave o reglado | Sí |
 | `part_pattern` | Copias de lo que hizo otra operación alrededor de un eje (`count` y `angle` pueden ser parámetros) | Sí |

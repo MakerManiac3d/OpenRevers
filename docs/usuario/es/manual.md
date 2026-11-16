@@ -321,7 +321,9 @@ puedes retocar cualquier parte sin salir del programa.
    tolerancia, de amarillo a rojo donde al modelo le falta material y de
    cian a azul donde le sobra. *Cuerpo → Quitar colores de desviación* lo
    devuelve a su color.
-6. **Archivo → Exportar STEP.**
+6. **Archivo → Exportar STEP.** Para fabricar, `part.drawing` (agente o
+   línea de órdenes) genera el **plano 2D acotado** en PDF, SVG o DXF: tres
+   vistas, líneas ocultas, cotas y cajetín.
 
 Los triángulos de una pieza solo la muestran: las herramientas de malla no
 la cambian.

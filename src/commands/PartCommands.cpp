@@ -8,6 +8,7 @@
 
 #include "core/mesh/Distance.h"
 #include "core/solid/BSpline.h"
+#include "core/solid/Drawing.h"
 #include "core/solid/SketchFit.h"
 #include "core/mesh/MeshIO.h"
 #include "doc/Document.h"
@@ -1088,6 +1089,60 @@ void registerPartCommands(CommandRegistry& R) {
                    throw CommandError("failed", e.what());
                }
                return json{{"path", p.string()}, {"bytes", fs::file_size(p)}, {"summary", ctx.say("Wrote " + p.filename().string() + ".", "Escrito " + p.filename().string() + ".")}};
+           }});
+
+    R.add({"part.drawing", "file", {"Dimensioned drawing (PDF, DXF, SVG)", "Plano acotado (PDF, DXF, SVG)"},
+           {"A 2D drawing of a part: orthographic views (front, top, right by default; also back, bottom, left) with hidden lines dashed, centre lines and diameters on the holes seen end-on, and each view's overall width and height, on an A4, A3 or A2 sheet at a standard scale (or the scale you give). Written by the file's extension: .pdf, .svg or .dxf (layers VISIBLE, HIDDEN, CENTRE, DIMENSIONS). Refuses to overwrite unless overwrite is true.",
+            "Un plano 2D de una pieza: vistas ortogonales (alzado, planta y perfil derecho por defecto; también posterior, inferior e izquierda) con las líneas ocultas a trazos, ejes y diámetros en los taladros vistos de frente, y el ancho y alto totales de cada vista, en una hoja A4, A3 o A2 a una escala normalizada (o la que indiques). Se escribe según la extensión: .pdf, .svg o .dxf (capas VISIBLE, HIDDEN, CENTRE, DIMENSIONS). No sobrescribe salvo con overwrite."},
+           object({{"body", body(kPart)}, {"path", path({"File to write", "Archivo a escribir"}, true, "PDF (*.pdf);;DXF (*.dxf);;SVG (*.svg)")},
+                   {"views", string({"Views, separated by commas: front, top, right, back, bottom, left (default: front,top,right)", "Vistas, separadas por comas: front, top, right, back, bottom, left (por defecto: front,top,right)"})},
+                   {"sheet", choice({"Sheet size", "Tamaño de hoja"}, {"A4", "A3", "A2"}, "A4")},
+                   {"scale", number({"Scale (2: 2:1, 0.5: 1:2; 0: the largest standard one that fits)", "Escala (2: 2:1, 0,5: 1:2; 0: la mayor normalizada que quepa)"}, 0.0, 0.0, 1000.0)},
+                   {"hidden", boolean({"Draw hidden lines dashed", "Dibujar las líneas ocultas a trazos"}, true)},
+                   {"dimensions", boolean({"Dimension the views", "Acotar las vistas"}, true)},
+                   {"title", string({"Title in the title block (default: the part's name)", "Título del cajetín (por defecto, el nombre de la pieza)"})},
+                   {"overwrite", boolean({"Replace the file if it exists", "Reemplazar el archivo si existe"}, false)}},
+                  {"body", "path"}),
+           false, false,
+           [](CommandContext& ctx, const json& in) {
+               const Body b = partBody(ctx, in["body"]);
+               if (b.solid.empty()) throw CommandError("failed", ctx.say(b.name + " has no solid yet.", b.name + " aún no tiene sólido."));
+               const fs::path p = ctx.paths.check(in["path"].get<std::string>(), true);
+               if (fs::exists(p) && !in["overwrite"].get<bool>())
+                   throw CommandError("refused", ctx.say(p.string() + " already exists; pass overwrite: true to replace it.", p.string() + " ya existe; usa overwrite: true para reemplazarlo."));
+               DrawingOptions o;
+               o.views.clear();
+               {
+                   std::string v = in.value("views", std::string("front,top,right")), cur;
+                   for (char ch : v + ",") {
+                       if (ch == ',' || ch == ' ') {
+                           if (!cur.empty()) o.views.push_back(cur);
+                           cur.clear();
+                       } else {
+                           cur += ch;
+                       }
+                   }
+               }
+               o.sheet = in["sheet"].get<std::string>();
+               o.scale = in["scale"].get<double>();
+               o.hidden = in["hidden"].get<bool>();
+               o.dimensions = in["dimensions"].get<bool>();
+               o.title = in.contains("title") && !in["title"].get<std::string>().empty() ? in["title"].get<std::string>() : b.name;
+               try {
+                   const Drawing d = makeDrawing(b.solid, o);
+                   writeDrawing(d, p);
+                   json views = json::array();
+                   std::size_t lines = 0, dims = 0;
+                   for (const auto& v : d.views) {
+                       views.push_back({{"name", v.name}, {"width", r4(v.size.x())}, {"height", r4(v.size.y())}, {"lines", v.segments.size()}, {"dimensions", v.dimensions.size()}});
+                       lines += v.segments.size();
+                       dims += v.dimensions.size();
+                   }
+                   return json{{"path", p.string()}, {"bytes", fs::file_size(p)}, {"sheet", o.sheet}, {"scale", d.scaleText}, {"views", views}, {"lines", lines}, {"dimensions", dims},
+                               {"summary", ctx.say("Wrote " + p.filename().string() + " (" + o.sheet + ", scale " + d.scaleText + ").", "Escrito " + p.filename().string() + " (" + o.sheet + ", escala " + d.scaleText + ").")}};
+               } catch (const SolidError& e) {
+                   throw CommandError("failed", e.what());
+               }
            }});
 
     R.add({"part.export_mesh", "file", {"Export mesh (STL, 3MF...)", "Exportar malla (STL, 3MF...)"},

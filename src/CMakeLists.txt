@@ -48,6 +48,7 @@ add_library(orv_core STATIC
   core/fit/Register.cpp
   core/mesh/MeshClean.cpp
   core/solid/BSpline.cpp
+  core/solid/Drawing.cpp
   core/solid/Profile.cpp
   core/solid/Solid.cpp
   core/solid/SketchFit.cpp

@@ -1118,3 +1118,42 @@ TEST(Commands, RollBackTheHistoryAndAddThere) {
     EXPECT_LT(all["solid"]["volume"].get<double>(), ch["solid"]["volume"].get<double>());
     EXPECT_THROW(f.run("part.rollback", {{"body", "b1"}, {"operation", "o99"}}), CommandError);
 }
+
+TEST(Commands, DimensionedDrawingOfAPlateWithAHole) {
+    const auto dir = tempDir("drawing");
+    Fixture f;
+    f.run("part.new", {{"name", "Plate"}});
+    json loops = json::array();
+    loops.push_back(json::array({{{"type", "line"}, {"from", {0, 0}}, {"to", {60, 0}}}, {{"type", "line"}, {"from", {60, 0}}, {"to", {60, 40}}},
+                                 {{"type", "line"}, {"from", {60, 40}}, {"to", {0, 40}}}, {{"type", "line"}, {"from", {0, 40}}, {"to", {0, 0}}}}));
+    loops.push_back(json::array({{{"type", "circle"}, {"centre", {30, 20}}, {"radius", 4.0}}}));
+    f.run("part.sketch", {{"body", "b1"}, {"loops", loops}});
+    f.run("part.extrude", {{"body", "b1"}, {"sketch", "s1"}, {"end", 10.0}, {"mode", "new"}});
+
+    const auto svg = dir / "plate.svg";
+    const json r = f.run("part.drawing", {{"body", "b1"}, {"path", svg.string()}});
+    ASSERT_EQ(r["views"].size(), 3u);
+    EXPECT_EQ(r["views"][0]["name"], "front");
+    EXPECT_NEAR(r["views"][0]["width"].get<double>(), 60.0, 1e-3);
+    EXPECT_NEAR(r["views"][0]["height"].get<double>(), 10.0, 1e-3);
+    EXPECT_NEAR(r["views"][1]["height"].get<double>(), 40.0, 1e-3);  // the plan
+    EXPECT_GE(r["views"][1]["dimensions"].get<int>(), 3);            // width, height and the hole's diameter
+    EXPECT_EQ(r["scale"], "2:1");  // the largest standard one that fits an A4 sheet
+    std::ifstream in(svg);
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    EXPECT_NE(text.find("\xC3\x98" "8"), std::string::npos);  // Ø8
+    EXPECT_NE(text.find("stroke-dasharray"), std::string::npos);  // the hole, hidden in the front view
+
+    // PDF and DXF too; no overwrite without being asked.
+    for (const char* ext : {"plate.pdf", "plate.dxf"}) {
+        const auto p = dir / ext;
+        const json w = f.run("part.drawing", {{"body", "b1"}, {"path", p.string()}, {"sheet", "A3"}, {"views", "front,top"}});
+        EXPECT_GT(w["bytes"].get<int>(), 500) << ext;
+        EXPECT_THROW(f.run("part.drawing", {{"body", "b1"}, {"path", p.string()}}), CommandError);
+    }
+    std::ifstream pdf(dir / "plate.pdf", std::ios::binary);
+    char magic[5] = {};
+    pdf.read(magic, 4);
+    EXPECT_EQ(std::string(magic), "%PDF");
+    EXPECT_THROW(f.run("part.drawing", {{"body", "b1"}, {"path", (dir / "x.pdf").string()}, {"views", "diagonal"}}), CommandError);
+}
