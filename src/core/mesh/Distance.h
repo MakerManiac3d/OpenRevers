@@ -21,7 +21,8 @@ public:
     ~MeshDistance();
     /// Signed distance: positive on the side the triangle faces (outside a
     /// closed, outward mesh).
-    double signedDistance(const Vec3d& p) const;
+    /// `face`, when given, receives the face of the input mesh nearest to p.
+    double signedDistance(const Vec3d& p, std::uint32_t* face = nullptr) const;
 
 private:
     struct Impl;
@@ -35,9 +36,12 @@ struct DeviationStats {
     double withinFraction{0};  // share of points within ±tolerance
 };
 
-/// Distances from (at most `maxPoints` of) `points` to `mesh`.
+/// Distances from (at most `maxPoints` of) `points` to `mesh`. `faces`, when
+/// given, receives the nearest face of `mesh` for each point measured. A
+/// `deadband` > 0 counts distances up to it as 0 and takes it off the rest (the
+/// texture of a printed layer, say, that is not an error of the shape).
 DeviationStats deviation(const std::vector<Vec3f>& points, const TriMesh& mesh, double tolerance, std::size_t maxPoints = 200000,
-                         std::vector<double>* distances = nullptr);
+                         std::vector<double>* distances = nullptr, std::vector<std::uint32_t>* faces = nullptr, double deadband = 0.0);
 
 /// The closed and open polylines where a plane cuts a mesh, in the plane's
 /// own coordinates (x along xDir, y along normal × xDir).

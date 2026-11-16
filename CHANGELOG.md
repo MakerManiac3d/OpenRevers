@@ -1,5 +1,15 @@
 # Cambios · Changelog
 
+## 0.14.2 — 16 de noviembre de 2026
+
+- `part.compare` da el error **cara por cara** del modelo (desvío medio, dispersión
+  = textura, percentil 95 y peor caso), de la peor cara a la mejor, y admite
+  `texture`: una banda en mm que no cuenta como error (líneas de capa, grano).
+- Herramientas de CI local (`tools/ci-local.sh`, `tools/ci-local-windows.ps1`,
+  `tools/install-hooks.sh`) y workflow para runners propios (`local.yml`).
+- Arreglo: conversión ambigua `json` → `optional` en el servidor MCP con
+  el compilador de Ubuntu 24.04.
+
 ## 0.14.1 — 14 de noviembre de 2026
 
 - Nuevo comando `mesh.pieces`: lista los trozos separados de un escaneo y,

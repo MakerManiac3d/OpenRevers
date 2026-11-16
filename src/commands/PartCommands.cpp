@@ -1118,6 +1118,8 @@ void registerPartCommands(CommandRegistry& R) {
             "y dónde se agrupan los puntos fuera de ella (zonas: centro, tamaño, parte del escaneo, distancia media), de mayor a menor. Con colorMap, el escaneo se colorea por su distancia en la vista. Los dos deben estar en el mismo sitio (alinea antes el escaneo)."},
            object({{"body", body(kPart)}, {"scan", body({"The scan (a mesh body)", "El escaneo (un cuerpo de malla)"})},
                    {"tolerance", number({"Tolerance", "Tolerancia"}, 0.2, 0.0001, 100.0, "mm")},
+                   {"texture", number({"Surface texture to discount (layer lines, grain): distances up to it count as zero and are taken off the rest (0: none)", "Textura de superficie a descontar (líneas de capa, grano): las distancias hasta ese valor cuentan como cero y se restan al resto (0: ninguna)"}, 0.0, 0.0, 10.0, "mm")},
+                   {"faces", boolean({"Also report the error face by face of the model (systematic offset, scatter = texture, worst case)", "Dar también el error cara por cara del modelo (desvío sistemático, dispersión = textura, peor caso)"}, true)},
                    {"colorMap", boolean({"Colour the scan by its distance in the view", "Colorear el escaneo por su distancia en la vista"}, true)},
                    {"range", number({"Colour scale: full red or blue at ±range (0: five times the tolerance, so the ±tolerance band shows)", "Escala de color: rojo o azul pleno a ±range (0: cinco veces la tolerancia, para que se vea la banda de ±tolerancia)"}, 0, 0, 1000, "mm")}},
                   {"body", "scan"}),
@@ -1130,12 +1132,45 @@ void registerPartCommands(CommandRegistry& R) {
                const double tol = in["tolerance"].get<double>();
                const auto fine = b.solid.tessellate(std::min(0.01, tol / 10));
                std::vector<double> dist;
+               std::vector<std::uint32_t> nearest;
                const auto& V = s.mesh->vertices;
-               const DeviationStats d = deviation(V, fine.mesh, tol, V.size(), &dist);
+               const double texture = in["texture"].get<double>();
+               const DeviationStats d = deviation(V, fine.mesh, tol, V.size(), &dist, &nearest, texture);
                const double pct = 100.0 * d.withinFraction;
                json out{{"body", b.ref()}, {"scan", s.ref()}, {"points", d.points}, {"mean", r4(d.mean)}, {"rms", r4(d.rms)}, {"median", r4(d.median)},
                         {"p90", r4(d.p90)}, {"p95", r4(d.p95)}, {"maxAbs", r4(d.maxAbs)}, {"minSigned", r4(d.minSigned)}, {"maxSigned", r4(d.maxSigned)},
-                        {"tolerance", tol}, {"withinPercent", r4(pct)}};
+                        {"tolerance", tol}, {"texture", texture}, {"withinPercent", r4(pct)}};
+               // Face by face: the mean is the systematic offset of that face; the
+               // standard deviation is its scatter (the texture of the print on a
+               // flat or round face); the worst case is the largest distance.
+               if (in["faces"].get<bool>() && dist.size() == V.size() && nearest.size() == V.size()) {
+                   struct Acc { std::size_t n{0}; double sum{0}, sq{0}, worst{0}; std::vector<double> abs; };
+                   std::map<std::uint32_t, Acc> acc;
+                   for (std::size_t i = 0; i < V.size(); ++i) {
+                       const std::uint32_t face = nearest[i] < fine.faceOf.size() ? fine.faceOf[nearest[i]] : 0;
+                       Acc& a = acc[face];
+                       ++a.n;
+                       a.sum += dist[i];
+                       a.sq += dist[i] * dist[i];
+                       a.worst = std::max(a.worst, std::abs(dist[i]));
+                       a.abs.push_back(std::abs(dist[i]));
+                   }
+                   std::vector<std::pair<std::uint32_t, Acc*>> ranked;
+                   for (auto& [face, a] : acc)
+                       if (a.n >= 20) ranked.push_back({face, &a});
+                   std::sort(ranked.begin(), ranked.end(), [](const auto& x, const auto& y) { return std::abs(x.second->sum) / static_cast<double>(x.second->n) > std::abs(y.second->sum) / static_cast<double>(y.second->n); });
+                   json jf = json::array();
+                   for (std::size_t k = 0; k < ranked.size() && k < 24; ++k) {
+                       const auto& [face, a] = ranked[k];
+                       const double n = static_cast<double>(a->n), mean = a->sum / n;
+                       const double var = std::max(0.0, a->sq / n - mean * mean);
+                       std::sort(a->abs.begin(), a->abs.end());
+                       const ShapeInfo info = b.solid.faceInfo(static_cast<int>(face));
+                       jf.push_back({{"face", face}, {"type", info.type}, {"points", a->n}, {"mean", r4(mean)}, {"scatter", r4(std::sqrt(var))},
+                                     {"p95", r4(a->abs[static_cast<std::size_t>(0.95 * (n - 1))])}, {"worst", r4(a->worst)}});
+                   }
+                   out["faces"] = jf;
+               }
                // Where the points outside the tolerance gather: pieces of the scan's
                // surface outside it on one side, joined along its triangles.
                if (dist.size() == V.size()) {

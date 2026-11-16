@@ -262,6 +262,14 @@ antes (panel de comandos, CLI o agente):
 - `mesh.cast`: lanza uno o varios rayos y da los cruces, las cuerdas (grosor de pared) y los
   huecos.
 
+### Comparar por caras y descontar la textura
+
+`part.compare` da, además de las cifras globales, el error **cara por cara** del modelo: la
+*media* es el desvío sistemático de esa cara (lo que sobra o falta de verdad), la *dispersión*
+es su textura (líneas de capa, grano) y el *peor caso* es la mayor distancia. Salen ordenadas
+de la peor a la mejor. Con `texture` (en mm) esa cantidad no cuenta como error: así se ve el
+fallo de forma sin que lo tape la rugosidad de la impresión.
+
 ### Varias piezas en un mismo escaneo
 
 `mesh.pieces` lista los trozos que ningún triángulo une (varias piezas escaneadas juntas, una

@@ -47,6 +47,7 @@ Vec3d closestOnTriangle(const Vec3d& p, const Vec3d& a, const Vec3d& b, const Ve
 struct MeshDistance::Impl {
     std::vector<std::array<Vec3d, 3>> tri;
     std::vector<Vec3d> normal;
+    std::vector<std::uint32_t> source;  // the face of the input mesh each piece comes from
     Cloud cloud;
     std::unique_ptr<Tree> tree;
 };
@@ -56,10 +57,11 @@ MeshDistance::MeshDistance(const TriMesh& m, double maxEdge) : d_(std::make_uniq
         const auto b = m.bounds();
         maxEdge = std::max(1e-3, 0.01 * static_cast<double>((b.max - b.min).norm()));
     }
-    std::vector<std::array<Vec3d, 3>> todo;
-    for (const Tri& t : m.faces) todo.push_back({m.vertices[t[0]].cast<double>(), m.vertices[t[1]].cast<double>(), m.vertices[t[2]].cast<double>()});
+    std::vector<std::pair<std::array<Vec3d, 3>, std::uint32_t>> todo;
+    std::uint32_t faceNo = 0;
+    for (const Tri& t : m.faces) todo.push_back({{m.vertices[t[0]].cast<double>(), m.vertices[t[1]].cast<double>(), m.vertices[t[2]].cast<double>()}, faceNo++});
     while (!todo.empty()) {
-        auto t = todo.back();
+        auto [t, from] = todo.back();
         todo.pop_back();
         int longest = 0;
         double len = 0;
@@ -72,12 +74,13 @@ MeshDistance::MeshDistance(const TriMesh& m, double maxEdge) : d_(std::make_uniq
             if (n.norm() <= 0) continue;
             d_->tri.push_back(t);
             d_->normal.push_back(n.normalized());
+            d_->source.push_back(from);
             continue;
         }
         const Vec3d mid = 0.5 * (t[longest] + t[(longest + 1) % 3]);
         const Vec3d a = t[longest], b = t[(longest + 1) % 3], c = t[(longest + 2) % 3];
-        todo.push_back({a, mid, c});
-        todo.push_back({mid, b, c});
+        todo.push_back({{a, mid, c}, from});
+        todo.push_back({{mid, b, c}, from});
     }
     d_->cloud.pts.reserve(d_->tri.size());
     for (const auto& t : d_->tri) d_->cloud.pts.push_back(((t[0] + t[1] + t[2]) / 3.0).cast<float>());
@@ -87,7 +90,7 @@ MeshDistance::MeshDistance(const TriMesh& m, double maxEdge) : d_(std::make_uniq
 
 MeshDistance::~MeshDistance() = default;
 
-double MeshDistance::signedDistance(const Vec3d& p) const {
+double MeshDistance::signedDistance(const Vec3d& p, std::uint32_t* face) const {
     if (d_->tri.empty()) return 0;
     constexpr std::size_t K = 32;
     std::array<std::uint32_t, K> idx{};
@@ -97,12 +100,14 @@ double MeshDistance::signedDistance(const Vec3d& p) const {
     std::array<double, K> dist{};
     std::array<Vec3d, K> closest{};
     double best = 1e300;
+    std::size_t bestAt = 0;
     for (std::size_t i = 0; i < n; ++i) {
         const auto& t = d_->tri[idx[i]];
         closest[i] = closestOnTriangle(p, t[0], t[1], t[2]);
         dist[i] = (p - closest[i]).norm();
-        best = std::min(best, dist[i]);
+        if (dist[i] < best) { best = dist[i]; bestAt = i; }
     }
+    if (face) *face = d_->source[idx[bestAt]];
     // When the nearest place is an edge or a corner, several faces are as
     // near: their normals together (a pseudo-normal) tell inside from
     // outside; one of them alone can say the opposite.
@@ -117,13 +122,22 @@ double MeshDistance::signedDistance(const Vec3d& p) const {
     return (side >= 0 ? 1.0 : -1.0) * best;
 }
 
-DeviationStats deviation(const std::vector<Vec3f>& points, const TriMesh& mesh, double tol, std::size_t maxPoints, std::vector<double>* out) {
+DeviationStats deviation(const std::vector<Vec3f>& points, const TriMesh& mesh, double tol, std::size_t maxPoints, std::vector<double>* out,
+                         std::vector<std::uint32_t>* faces, double deadband) {
     DeviationStats s;
     if (points.empty() || mesh.faces.empty()) return s;
     const MeshDistance md(mesh);
     const std::size_t step = std::max<std::size_t>(1, points.size() / std::max<std::size_t>(maxPoints, 1));
     std::vector<double> d;
-    for (std::size_t i = 0; i < points.size(); i += step) d.push_back(md.signedDistance(points[i].cast<double>()));
+    std::vector<std::uint32_t> faceOfPoint;
+    for (std::size_t i = 0; i < points.size(); i += step) {
+        std::uint32_t face = 0;
+        double v = md.signedDistance(points[i].cast<double>(), &face);
+        if (deadband > 0) v = std::abs(v) <= deadband ? 0.0 : v - (v > 0 ? deadband : -deadband);
+        d.push_back(v);
+        if (faces) faceOfPoint.push_back(face);
+    }
+    if (faces) *faces = std::move(faceOfPoint);
     s.points = d.size();
     double sum = 0, sq = 0;
     std::size_t within = 0;

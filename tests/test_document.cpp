@@ -1023,3 +1023,42 @@ TEST(Commands, FindAndSplitThePiecesOfAScan) {
     const json split = f.run("mesh.pieces", {{"body", "b1"}, {"minFaces", 4}, {"split", true}});
     EXPECT_TRUE(split["pieces"][1].contains("body"));
 }
+
+TEST(Commands, CompareFaceByFaceAndDiscountTheTexture) {
+    const auto dir = tempDir("regions");
+    Fixture f;
+    f.run("part.new", {{"name", "Block"}});
+    json loops = json::array();
+    loops.push_back(json::array({{{"type", "line"}, {"from", {0, 0}}, {"to", {30, 0}}}, {{"type", "line"}, {"from", {30, 0}}, {"to", {30, 12}}},
+                                 {{"type", "line"}, {"from", {30, 12}}, {"to", {0, 12}}}, {{"type", "line"}, {"from", {0, 12}}, {"to", {0, 0}}}}));
+    f.run("part.sketch", {{"body", "b1"}, {"loops", loops}});
+    f.run("part.extrude", {{"body", "b1"}, {"sketch", "s1"}, {"end", 3.0}, {"mode", "new"}});
+
+    // A scan whose top is 0.3 mm too high and rippled by ±0.05 (layer lines).
+    TriMesh scan = test::box(30, 12, 3);
+    remeshUniform(scan, 0.5f, 4);
+    for (auto& v : scan.vertices)
+        if (v.z() > 2.9f) v.z() += 0.3f + 0.05f * std::sin(v.x() * 3.14159265f);
+    writeMesh(scan, dir / "scan.stl");
+    f.run("mesh.import", {{"path", (dir / "scan.stl").string()}});
+
+    const json c = f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"tolerance", 0.1}, {"colorMap", false}});
+    ASSERT_TRUE(c.contains("faces"));
+    ASSERT_GE(c["faces"].size(), 1u);
+    const json top = c["faces"][0];  // the worst face first
+    EXPECT_EQ(top["type"], "plane");
+    EXPECT_NEAR(top["mean"].get<double>(), 0.3, 0.05);
+    EXPECT_GT(top["scatter"].get<double>(), 0.02);  // the ripple
+    EXPECT_LT(top["scatter"].get<double>(), 0.06);
+    // The other faces are right: their mean offset is small.
+    for (std::size_t i = 1; i < c["faces"].size(); ++i) EXPECT_LT(std::abs(c["faces"][i]["mean"].get<double>()), 0.1);
+
+    // Discounting 0.1 mm of texture leaves the real error of the top: about 0.2.
+    const json t = f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"tolerance", 0.1}, {"texture", 0.1}, {"colorMap", false}});
+    EXPECT_NEAR(t["faces"][0]["mean"].get<double>(), 0.2, 0.05);
+    // With a 0.25 mm tolerance the top is out of it until the texture is taken off.
+    const double plain = f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"tolerance", 0.25}, {"colorMap", false}})["withinPercent"].get<double>();
+    const double net = f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"tolerance", 0.25}, {"texture", 0.1}, {"colorMap", false}})["withinPercent"].get<double>();
+    EXPECT_GT(net, plain + 10.0);
+    EXPECT_FALSE(f.run("part.compare", {{"body", "b1"}, {"scan", "b2"}, {"faces", false}, {"colorMap", false}}).contains("faces"));
+}
